@@ -1,1 +1,1 @@
-from .drawing import TreeStyle, TreeDrawer, BaseDrawer
+from .drawing import TreeStyle, TreeDrawer, BaseDrawer, VerticalTreeDrawer

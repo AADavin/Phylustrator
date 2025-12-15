@@ -5,6 +5,7 @@ import numpy as np
 import copy
 import os
 from dataclasses import dataclass
+import random  
 
 # --- Helper Functions ---
 def radial_converter(degree, radius, rotation=0):
@@ -99,6 +100,23 @@ class BaseDrawer:
 
         self.d.append(draw.Circle(x, y, style.node_size, fill=b_color))
 
+    def save_figure(self, filename):
+        """
+        Saves the current drawing to a file.
+        Supports .svg, .png, and .pdf depending on drawsvg backend.
+        """
+        if filename.endswith(".svg"):
+            self.d.save_svg(filename)
+        elif filename.endswith(".png"):
+            self.d.save_png(filename)
+        elif filename.endswith(".pdf"):
+            # Requires cairo
+            self.d.save_pdf(filename)
+        else:
+            # Default to SVG if unknown
+            self.d.save_svg(filename + ".svg")
+        print(f"Figure saved to {filename}")
+
 
 class TreeDrawer(BaseDrawer):
     """
@@ -148,8 +166,14 @@ class TreeDrawer(BaseDrawer):
             r = n.dist_to_root * sf
             n.add_feature("coordinates", (n.angle, r))
 
-    def draw(self, branch2color=None):
-        """Standard drawing loop."""
+    def draw(self, branch2color=None, hide_radial_lines=None):
+        """
+        Standard drawing loop.
+        :param hide_radial_lines: List of nodes where the radial (vertical) connection
+                                  to the parent should be skipped.
+        """
+        hidden_set = set(hide_radial_lines) if hide_radial_lines else set()
+
         for n in self.t.traverse("postorder"):
             # 1. Resolve Color
             b_color = self.style.branch_color
@@ -159,55 +183,46 @@ class TreeDrawer(BaseDrawer):
 
             # 2. Draw
             if n.is_leaf():
-                self._draw_leaf_final(n, b_color)
+                self._draw_leaf_final(n, b_color, hide_line=(n in hidden_set))
             else:
-                self._draw_internal_final(n, b_color)
+                self._draw_internal_final(n, b_color, hide_line=(n in hidden_set))
 
-    def _draw_leaf_final(self, n, color):
+    def _draw_leaf_final(self, n, color, hide_line=False):
         x, y = radial_converter(*n.coordinates, self.style.rotation)
-
-        # Branch starts at parent's radius
-        p_angle, p_radius = n.up.coordinates
-
-        # Calculate start point
-        xe, ye = radial_converter(n.angle, p_radius - (self.style.branch_size / 2), self.style.rotation)
-
         self.d.append(draw.Circle(x, y, self.style.leaf_size, fill=self.style.leaf_color))
-        self.d.append(draw.Line(xe, ye, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
 
-    def _draw_internal_final(self, n, color):
+        if not hide_line:
+            p_angle, p_radius = n.up.coordinates
+            xe, ye = radial_converter(n.angle, p_radius - (self.style.branch_size / 2), self.style.rotation)
+            self.d.append(draw.Line(xe, ye, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+
+    def _draw_internal_final(self, n, color, hide_line=False):
         if n.is_root(): return
 
         c1, c2 = n.get_children()
 
-        # We need to draw an arc from child 1 to child 2 at the current radius
-        # Instead of using draw.ArcLine (which handles angles differently),
-        # we calculate the start/end points manually to guarantee alignment.
-
+        # 1. Always Draw Arc (Shoulder) using Node's Color
         start_angle = min(c1.angle, c2.angle)
         end_angle = max(c1.angle, c2.angle)
         _, radius = n.coordinates
 
-        # Get exact coordinates using OUR reliable converter
         sx, sy = radial_converter(start_angle, radius, self.style.rotation)
         ex, ey = radial_converter(end_angle, radius, self.style.rotation)
 
-        # Draw the Arc using SVG Path
-        # A rx ry x-axis-rotation large-arc-flag sweep-flag x y
-        # sweep-flag=1 means Clockwise (which matches our increasing angle logic)
         p = draw.Path(stroke=color, stroke_width=self.style.branch_size, fill="none")
         p.M(sx, sy)
         p.A(radius, radius, 0, 0, 1, ex, ey)
         self.d.append(p)
 
-        # Draw the Node
+        # 2. Always Draw Node Circle
         x, y = radial_converter(n.angle, radius, self.style.rotation)
         self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
 
-        # Radial line to parent
-        p_angle, p_radius = n.up.coordinates
-        xe, ye = radial_converter(n.angle, p_radius - (self.style.branch_size / 2), self.style.rotation)
-        self.d.append(draw.Line(xe, ye, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+        # 3. Draw Radial Line (Only if not hidden)
+        if not hide_line:
+            p_angle, p_radius = n.up.coordinates
+            xe, ye = radial_converter(n.angle, p_radius - (self.style.branch_size / 2), self.style.rotation)
+            self.d.append(draw.Line(xe, ye, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
 
     def highlight_clade(self, node, color="red", opacity=0.3):
         if node.is_leaf(): return
@@ -269,3 +284,376 @@ class TreeDrawer(BaseDrawer):
 
             self.d.append(draw.Text(name, text_size, x_adj, y_adj, text_anchor=anchor, fill=color,
                                     transform=f"rotate({rotation}, {x_adj}, {y_adj})"))
+
+    # --- DECORATION METHODS ---
+
+    def gradient_branch(self, node, colors=("red", "blue"), size=None, opacity=1.0):
+        """
+        Draws ONLY the gradient line for the branch leading to the node.
+        Does not draw nodes or arcs.
+        """
+        if node.is_root(): return
+
+        s_width = size if size else self.style.branch_size
+
+        # Coordinates
+        x_end, y_end = radial_converter(*node.coordinates, self.style.rotation)
+        p_angle, p_radius = node.up.coordinates
+        x_start, y_start = radial_converter(node.angle, p_radius - (self.style.branch_size / 2), self.style.rotation)
+
+        # Create Gradient
+        grad_id = f"grad_{node.name}_{random.randint(0, 99999)}"
+        gradient = draw.LinearGradient(x_start, y_start, x_end, y_end, id=grad_id)
+        gradient.add_stop(0, colors[0], 1)
+        gradient.add_stop(1, colors[1], 1)
+
+        self.d.append(draw.Line(x_start, y_start, x_end, y_end,
+                                stroke=gradient, stroke_width=s_width, stroke_opacity=opacity, fill='none'))
+
+    def highlight_branch(self, node, color="red", size=None, opacity=1.0, include_arc=False):
+        """
+        Overlays a colored line on the branch.
+        :param include_arc: If True, also colors the horizontal 'shoulder' arc if this is an internal node.
+        """
+        if node.is_root(): return
+        s_width = size if size else self.style.branch_size
+
+        # 1. Radial Line (Vertical)
+        x, y = radial_converter(*node.coordinates, self.style.rotation)
+        p_angle, p_radius = node.up.coordinates
+        xe, ye = radial_converter(node.angle, p_radius - (self.style.branch_size / 2), self.style.rotation)
+
+        self.d.append(draw.Line(xe, ye, x, y, stroke=color, stroke_width=s_width, stroke_opacity=opacity, fill='none'))
+
+        # 2. Horizontal Arc (Shoulder) - Optional
+        if include_arc and not node.is_leaf():
+            c1, c2 = node.get_children()
+            start_angle = min(c1.angle, c2.angle)
+            end_angle = max(c1.angle, c2.angle)
+            _, radius = node.coordinates
+
+            # Recalculate Arc points
+            sx, sy = radial_converter(start_angle, radius, self.style.rotation)
+            ex, ey = radial_converter(end_angle, radius, self.style.rotation)
+
+            p = draw.Path(stroke=color, stroke_width=s_width, stroke_opacity=opacity, fill="none")
+            p.M(sx, sy)
+            p.A(radius, radius, 0, 0, 1, ex, ey)
+            self.d.append(p)
+
+
+
+    def add_node_shapes(self, mapping, size=None, stroke="black", stroke_width=1):
+        """
+        Adds circles to specific nodes.
+        :param mapping: Dictionary {node_object: color_string} or {node_name: color_string}
+        """
+        r = size if size else self.style.node_size * 2
+
+        for n in self.t.traverse():
+            # Check if node or node name is in mapping
+            if n in mapping:
+                color = mapping[n]
+            elif n.name in mapping:
+                color = mapping[n.name]
+            else:
+                continue
+
+            x, y = radial_converter(*n.coordinates, self.style.rotation)
+            self.d.append(draw.Circle(x, y, r, fill=color, stroke=stroke, stroke_width=stroke_width))
+
+    def add_leaf_shapes(self, mapping, size=None, padding=10, stroke="black", stroke_width=1):
+        """
+        Adds circles next to the tips (e.g., for showing presence/absence).
+        :param mapping: Dictionary {leaf_name: color_string}
+        """
+        r = size if size else self.style.leaf_size
+
+        for l in self.t.get_leaves():
+            if l.name not in mapping: continue
+
+            color = mapping[l.name]
+            angle, radius = l.coordinates
+
+            # Position is radius + padding
+            x, y = radial_converter(angle, radius + padding, self.style.rotation)
+
+            self.d.append(draw.Circle(x, y, r, fill=color, stroke=stroke, stroke_width=stroke_width))
+
+    def add_ring(self, mapping, width=20, padding=10, stroke="none", opacity=1.0):
+        """
+        Adds a heatmap-style ring outside the tree.
+        :param mapping: Dictionary {leaf_name: color_string}
+        """
+        # Inner and Outer radius of the ring
+        r_inner = self.style.radius + padding
+        r_outer = r_inner + width
+
+        # Iterate over all leaves to ensure the ring is continuous (or has gaps where data is missing)
+        for l in self.t.get_leaves():
+            if l.name not in mapping: continue
+
+            color = mapping[l.name]
+
+            # Calculate the angular wedge for this leaf
+            # Start = angle - half_arc, End = angle + half_arc
+            start_deg = l.angle - (self.arc_leaf / 2)
+            end_deg = l.angle + (self.arc_leaf / 2)
+
+            # Calculate 4 corners of the wedge segment
+            sx_in, sy_in = radial_converter(start_deg, r_inner, self.style.rotation)
+            ex_in, ey_in = radial_converter(end_deg, r_inner, self.style.rotation)
+            sx_out, sy_out = radial_converter(start_deg, r_outer, self.style.rotation)
+            ex_out, ey_out = radial_converter(end_deg, r_outer, self.style.rotation)
+
+            # Draw Segment
+            p = draw.Path(fill=color, fill_opacity=opacity, stroke=stroke)
+            p.M(sx_out, sy_out)
+            p.A(r_outer, r_outer, 0, 0, 1, ex_out, ey_out)  # Outer Arc
+            p.L(ex_in, ey_in)  # Line In
+            p.A(r_inner, r_inner, 0, 0, 0, sx_in, sy_in)  # Inner Arc (Reverse)
+            p.Z()
+            self.d.append(p)
+
+    def add_legend(self, title, mapping, position="top-left", symbol="circle", text_size=12, padding=20):
+        """
+        Adds a legend to the canvas.
+
+        :param title: Title string for the legend.
+        :param mapping: Dictionary {Label: Color} to display.
+        :param position: "top-left", "top-right", "bottom-left", "bottom-right",
+                         or a tuple (x, y) for custom coordinates.
+        :param symbol: "circle", "square", or "line".
+        """
+        # 1. Determine Start Coordinates
+        # (0,0) is center. Top-Left is (-w/2, -h/2).
+        w, h = self.style.width, self.style.height
+
+        if position == "top-left":
+            x = -w / 2 + padding
+            y = -h / 2 + padding
+        elif position == "top-right":
+            x = w / 2 - padding - 150  # Approximate width of legend
+            y = -h / 2 + padding
+        elif position == "bottom-left":
+            x = -w / 2 + padding
+            y = h / 2 - padding - (len(mapping) * text_size * 1.5)
+        elif position == "bottom-right":
+            x = w / 2 - padding - 150
+            y = h / 2 - padding - (len(mapping) * text_size * 1.5)
+        elif isinstance(position, tuple):
+            x, y = position
+        else:
+            x, y = -w / 2 + padding, -h / 2 + padding
+
+        # 2. Draw Group (Optional container, currently just drawing directly)
+
+        # Draw Title
+        self.d.append(draw.Text(title, text_size + 2, x, y + text_size, font_weight="bold", fill="black"))
+        y += (text_size * 2)  # Space after title
+
+        # Draw Items
+        for label, color in mapping.items():
+            # Draw Symbol
+            if symbol == "circle":
+                self.d.append(draw.Circle(x + 5, y - 4, 5, fill=color, stroke="black", stroke_width=0.5))
+            elif symbol == "square":
+                self.d.append(draw.Rectangle(x, y - 8, 10, 10, fill=color, stroke="black", stroke_width=0.5))
+            elif symbol == "line":
+                self.d.append(draw.Line(x, y - 3, x + 15, y - 3, stroke=color, stroke_width=2))
+
+            # Draw Label
+            self.d.append(draw.Text(label, text_size, x + 20, y, fill="black"))
+
+            # Move Down
+            y += (text_size * 1.5)
+
+    def add_text(self, text, x=None, y=None, node=None, radius_offset=0, size=12, color="black", rotation=0,
+                 anchor="middle", font_weight="normal"):
+        """
+        Adds text to the canvas.
+
+        Usage 1 (Manual): provide x and y.
+            drawer.add_text("Figure A", x=-400, y=-400)
+
+        Usage 2 (Smart): provide a node.
+            drawer.add_text("Key Event", node=my_node, radius_offset=20)
+        """
+        # Case 1: Snap to Node
+        if node:
+            angle, radius = node.coordinates
+            # Apply offset (e.g. to put text slightly above/outside the node)
+            calc_x, calc_y = radial_converter(angle, radius + radius_offset, self.style.rotation)
+
+            # If user didn't override x/y, use calculated
+            final_x = x if x is not None else calc_x
+            final_y = y if y is not None else calc_y
+
+        # Case 2: Manual Coordinates
+        else:
+            final_x = x if x is not None else 0
+            final_y = y if y is not None else 0
+
+        self.d.append(draw.Text(text, size, final_x, final_y,
+                                text_anchor=anchor,
+                                font_weight=font_weight,
+                                fill=color,
+                                transform=f"rotate({rotation}, {final_x}, {final_y})"))
+
+
+class VerticalTreeDrawer(BaseDrawer):
+    """
+    Rectangular (Linear) Tree Drawer.
+    """
+
+    def __init__(self, tree, style=None):
+        super().__init__(tree, style)
+        self._calculate_coordinates()
+
+    def _calculate_coordinates(self):
+        # 1. X Axis
+        max_dist = 0
+        for n in self.t.traverse("preorder"):
+            if n.is_root():
+                n.add_feature("dist_to_root", 0)
+            else:
+                n.add_feature("dist_to_root", n.up.dist_to_root + n.dist)
+
+            if n.dist_to_root > max_dist: max_dist = n.dist_to_root
+
+        self.total_length_of_tree = max_dist
+
+        # Add a little "Stem" space for the root
+        available_width = self.style.width - 150
+        sf_x = available_width / max_dist if max_dist > 0 else 0
+        start_x = -self.style.width / 2 + 50
+
+        # 2. Y Axis
+        leaves = self.t.get_leaves()
+        available_height = self.style.height - 100
+        sf_y = available_height / len(leaves)
+        start_y = -self.style.height / 2 + 50
+
+        for i, l in enumerate(leaves):
+            l.add_feature("y_coord", start_y + (i * sf_y))
+
+        for n in self.t.traverse("postorder"):
+            if n.is_leaf(): continue
+            children = n.get_children()
+            mean_y = sum([c.y_coord for c in children]) / len(children)
+            n.add_feature("y_coord", mean_y)
+
+        # 3. Final Coordinates
+        for n in self.t.traverse():
+            x = start_x + (n.dist_to_root * sf_x)
+            n.add_feature("coordinates", (x, n.y_coord))
+
+    def draw(self, branch2color=None, hide_radial_lines=None):
+        hidden_set = set(hide_radial_lines) if hide_radial_lines else set()
+
+        for n in self.t.traverse("postorder"):
+            b_color = self.style.branch_color
+            if branch2color and n in branch2color:
+                b_color = branch2color[n]
+                if b_color == "None": continue
+
+            if n.is_leaf():
+                self._draw_leaf_final(n, b_color, hide_line=(n in hidden_set))
+            else:
+                self._draw_internal_final(n, b_color, hide_line=(n in hidden_set))
+
+    def _draw_leaf_final(self, n, color, hide_line=False):
+        x, y = n.coordinates
+        self.d.append(draw.Circle(x, y, self.style.leaf_size, fill=self.style.leaf_color))
+
+        if not hide_line and not n.is_root():
+            p_x, p_y = n.up.coordinates
+            self.d.append(draw.Line(p_x, y, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+
+    def _draw_internal_final(self, n, color, hide_line=False):
+        # FIX: Do NOT return if root. We still need to draw the vertical bar for children!
+        # if n.is_root(): return  <-- DELETED
+
+        x, y = n.coordinates
+        c1, c2 = n.get_children()
+
+        # 1. Vertical Line (The "Split" bar)
+        min_y = min([c.y_coord for c in n.get_children()])
+        max_y = max([c.y_coord for c in n.get_children()])
+
+        self.d.append(draw.Line(x, min_y, x, max_y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+
+        # 2. Node Circle
+        self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
+
+        # 3. Horizontal Line to Parent (Only if NOT root)
+        if not n.is_root() and not hide_line:
+            p_x, p_y = n.up.coordinates
+            self.d.append(draw.Line(p_x, y, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+
+    # ... (Keep decorations like highlight_branch, gradient_branch, add_leaf_names same as before) ...
+    # Ensure they are indented inside the class
+
+    def highlight_branch(self, node, color="red", size=None, opacity=1.0, include_arc=False):
+        if node.is_root(): return
+        s_width = size if size else self.style.branch_size
+        x, y = node.coordinates
+        p_x, p_y = node.up.coordinates
+        self.d.append(draw.Line(p_x, y, x, y, stroke=color, stroke_width=s_width, stroke_opacity=opacity))
+        if include_arc and not node.is_leaf():
+            min_y = min([c.y_coord for c in node.get_children()])
+            max_y = max([c.y_coord for c in node.get_children()])
+            self.d.append(draw.Line(x, min_y, x, max_y, stroke=color, stroke_width=s_width, stroke_opacity=opacity))
+
+    def gradient_branch(self, node, colors=("red", "blue"), size=None, opacity=1.0):
+        if node.is_root(): return
+        s_width = size if size else self.style.branch_size
+        x, y = node.coordinates
+        p_x, _ = node.up.coordinates
+        grad_id = f"grad_lin_{node.name}_{random.randint(0, 99999)}"
+        gradient = draw.LinearGradient(p_x, y, x, y, id=grad_id)
+        gradient.add_stop(0, colors[0], 1)
+        gradient.add_stop(1, colors[1], 1)
+        self.d.append(draw.Line(p_x, y, x, y, stroke=gradient, stroke_width=s_width, stroke_opacity=opacity))
+
+    def add_leaf_names(self, mapping=None, text_size=12, padding=10, color="black"):
+        for l in self.t.get_leaves():
+            name = l.name
+            if mapping and l.name in mapping:
+                name = mapping[l.name]
+            elif mapping is not None:
+                continue
+            x, y = l.coordinates
+            self.d.append(draw.Text(name, text_size, x + padding, y + (text_size / 3), fill=color, text_anchor="start"))
+
+    def add_text(self, text, x=None, y=None, node=None, offset_x=0, offset_y=0, size=12, color="black",
+                 anchor="middle"):
+        if node:
+            nx, ny = node.coordinates
+            final_x, final_y = nx + offset_x, ny + offset_y
+        else:
+            final_x, final_y = (x if x else 0), (y if y else 0)
+        self.d.append(draw.Text(text, size, final_x, final_y, fill=color, text_anchor=anchor))
+
+    def _draw_internal_final(self, n, color, hide_line=False):
+        x, y = n.coordinates
+
+        # 1. Vertical Line (The "Split" bar)
+        c1, c2 = n.get_children()  # Assuming bifurcating
+        min_y = min([c.y_coord for c in n.get_children()])
+        max_y = max([c.y_coord for c in n.get_children()])
+
+        self.d.append(draw.Line(x, min_y, x, max_y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+
+        # 2. Node Circle
+        self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
+
+        # 3. Horizontal Line to Parent
+        if not n.is_root() and not hide_line:
+            p_x, p_y = n.up.coordinates
+            self.d.append(draw.Line(p_x, y, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+
+        # 4. OPTIONAL: Root Stem
+        elif n.is_root():
+            # Draw a small line to the left (e.g., 20px)
+            self.d.append(draw.Line(x - 20, y, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
