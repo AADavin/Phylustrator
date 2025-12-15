@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phylustrator"
+version = "0.0.1"
+description = "A Python library for easy plotting of phylogenies"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Adrian A. Davin", email = "aaredav@gmail.com"}, 
+]
+dependencies = [
+    "ete3",
+    "drawsvg",
+    "pandas",
+    "numpy",
+    "scipy",
+    "newick"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/AADavin/Phylustrator"  
