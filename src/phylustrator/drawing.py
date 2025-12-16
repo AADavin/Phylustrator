@@ -164,7 +164,7 @@ class BaseDrawer:
         print(f"Figure saved to {filename}")
 
 
-class TreeDrawer(BaseDrawer):
+class RadialTreeDrawer(BaseDrawer):
     """
     Universal Drawer.
     """
@@ -209,7 +209,7 @@ class TreeDrawer(BaseDrawer):
 
         # 3. Final Coordinate Assignment
         for n in self.t.traverse():
-            r = n.dist_to_root * sf
+            r = n.dist_to_root * self.sf
             n.add_feature("coordinates", (n.angle, r))
 
     def draw(self, branch2color=None, hide_radial_lines=None):
@@ -407,6 +407,75 @@ class TreeDrawer(BaseDrawer):
 
             x, y = radial_converter(*n.coordinates, self.style.rotation)
             self.d.append(draw.Circle(x, y, r, fill=color, stroke=stroke, stroke_width=stroke_width))
+
+    def add_transfer_links(self, transfers, color="orange", gradient_colors=None, min_freq=0.0, opacity_scale=1.0,
+                           curve_factor=0.5):
+        """
+        Draws Bezier curves connecting the MIDPOINTS of branches.
+
+        :param gradient_colors: Tuple of two colors ("start_color", "end_color").
+                                If provided, creates a gradient from Donor -> Recipient.
+                                Overrides 'color'.
+        """
+        import random  # Ensure random is imported
+
+        name_to_node = {n.name: n for n in self.t.traverse()}
+
+        for tr in transfers:
+            freq = tr['freq']
+            if freq < min_freq: continue
+
+            # 1. Get Nodes
+            node_from = name_to_node.get(str(tr['from']))
+            node_to = name_to_node.get(str(tr['to']))
+
+            if not node_from or not node_to: continue
+
+            # 2. Calculate Start Point (Midpoint of Donor Branch)
+            f_angle, f_radius = node_from.coordinates
+            if node_from.is_root():
+                start_radius = f_radius
+            else:
+                _, p_radius = node_from.up.coordinates
+                start_radius = (f_radius + p_radius) / 2
+
+            sx, sy = radial_converter(f_angle, start_radius, self.style.rotation)
+
+            # 3. Calculate End Point (Midpoint of Recipient Branch)
+            t_angle, t_radius = node_to.coordinates
+            if node_to.is_root():
+                end_radius = t_radius
+            else:
+                _, p_radius = node_to.up.coordinates
+                end_radius = (t_radius + p_radius) / 2
+
+            ex, ey = radial_converter(t_angle, end_radius, self.style.rotation)
+
+            # 4. Determine Stroke (Solid vs Gradient)
+            if gradient_colors:
+                # Create a unique gradient for this specific line
+                # It runs linearly from Start(sx, sy) to End(ex, ey)
+                grad_id = f"tr_grad_{random.randint(0, 9999999)}"
+                stroke_paint = draw.LinearGradient(sx, sy, ex, ey, id=grad_id)
+                stroke_paint.add_stop(0, gradient_colors[0], 1)  # Start Color
+                stroke_paint.add_stop(1, gradient_colors[1], 1)  # End Color
+            else:
+                stroke_paint = color
+
+            # 5. Calculate Control Points
+            cx1 = sx * (1 - curve_factor)
+            cy1 = sy * (1 - curve_factor)
+            cx2 = ex * (1 - curve_factor)
+            cy2 = ey * (1 - curve_factor)
+
+            # 6. Draw
+            alpha = min(1.0, freq * opacity_scale)
+
+            p = draw.Path(stroke=stroke_paint, stroke_width=self.style.branch_size,
+                          stroke_opacity=alpha, fill="none")
+            p.M(sx, sy)
+            p.C(cx1, cy1, cx2, cy2, ex, ey)
+            self.d.append(p)
 
     def add_leaf_shapes(self, mapping, size=None, padding=10, stroke="black", stroke_width=1):
         """
@@ -685,7 +754,7 @@ class VerticalTreeDrawer(BaseDrawer):
 
         # 3. Final Coordinates
         for n in self.t.traverse():
-            x = start_x + (n.dist_to_root * sf_x)
+            x = start_x + (n.dist_to_root * self.sf_x)
             n.add_feature("coordinates", (x, n.y_coord))
 
     def draw(self, branch2color=None, hide_radial_lines=None):

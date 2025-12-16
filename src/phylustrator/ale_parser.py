@@ -130,3 +130,29 @@ def parse_ale_file(filepath: str) -> ALEData:
         totals=totals,
         branch_stats=df
     )
+
+
+def parse_uts_file(filepath: str) -> List[Dict]:
+    """
+    Parses an ALE .uTs file (Transfers).
+    Returns a list of dicts: [{'from': 'NodeA', 'to': 'NodeB', 'freq': 0.05}, ...]
+    """
+    transfers = []
+    with open(filepath, 'r') as f:
+        for line in f:
+            line = line.strip()
+            # Skip comments or headers
+            if not line or line.startswith("#") or "from" in line:
+                continue
+
+            # Format: from \t to \t freq
+            parts = line.split()
+            if len(parts) >= 3:
+                row = {
+                    "from": parts[0],
+                    "to": parts[1],
+                    "freq": float(parts[2])
+                }
+                transfers.append(row)
+
+    return transfers
