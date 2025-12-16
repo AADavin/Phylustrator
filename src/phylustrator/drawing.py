@@ -100,6 +100,52 @@ class BaseDrawer:
 
         self.d.append(draw.Circle(x, y, style.node_size, fill=b_color))
 
+    def add_scale_bar(self, length=None, label=None, x=None, y=None, color="black", width=2, font_size=12):
+        """
+        Adds a scale bar to the plot.
+
+        :param length: Length in tree units (e.g., 0.1 substitutions).
+                       If None, auto-calculates a round number.
+        :param label: Text label (e.g. "0.1 subst/site"). Auto-generated if None.
+        :param x, y: Position (defaults to bottom-left).
+        """
+        # 1. Determine Length (Auto-calc if missing)
+        if length is None:
+            # Try to find a nice round number (e.g. 0.1, 0.05, 1.0)
+            # Rough logic: 10% of total tree length
+            target = self.total_length_of_tree * 0.1
+            if target == 0: target = 1
+
+            # Round to nearest 1 significant digit
+            import math
+            exponent = math.floor(math.log10(target))
+            length = round(target, -exponent)
+
+        # 2. Calculate Pixel Length
+        px_length = length * self.sf
+
+        # 3. Text Label
+        if label is None:
+            label = f"{length}"
+
+        # 4. Position (Default: Bottom-Left)
+        if x is None:
+            x = -self.style.width / 2 + 50
+        if y is None:
+            y = self.style.height / 2 - 50  # Bottom for SVG (y increases downwards)
+
+        # 5. Draw
+        # Line
+        self.d.append(draw.Line(x, y, x + px_length, y, stroke=color, stroke_width=width))
+
+        # Ticks (Vertical ends)
+        tick_h = 5
+        self.d.append(draw.Line(x, y - tick_h, x, y + tick_h, stroke=color, stroke_width=width))
+        self.d.append(draw.Line(x + px_length, y - tick_h, x + px_length, y + tick_h, stroke=color, stroke_width=width))
+
+        # Label (Centered below line)
+        self.d.append(draw.Text(label, font_size, x + (px_length / 2), y + 20, fill=color, text_anchor="middle"))
+
     def save_figure(self, filename):
         """
         Saves the current drawing to a file.
@@ -143,9 +189,9 @@ class TreeDrawer(BaseDrawer):
 
         # Scaling Factor
         if self.total_length_of_tree > 0:
-            sf = self.style.radius / self.total_length_of_tree
+            self.sf = self.style.radius / self.total_length_of_tree
         else:
-            sf = 0
+            self.sf = 0
 
         # 2. Angles (Standard Uniform Layout)
         leaves = self.t.get_leaves()
@@ -500,6 +546,100 @@ class TreeDrawer(BaseDrawer):
                                 fill=color,
                                 transform=f"rotate({rotation}, {final_x}, {final_y})"))
 
+    def add_heatmap_matrix(self, matrix, columns=None, start_radius=None, ring_width=20, gap=2, cmap=None,
+                               border="none", opacity=1.0):
+        """
+        Draws multiple concentric rings based on a matrix of values.
+
+        :param matrix: Dictionary {leaf_name: {col_name: value}} OR Pandas DataFrame.
+        :param columns: List of column names to plot (defines order). If None, uses all keys.
+        :param start_radius: Radius to start the first ring. Defaults to style.radius + 10.
+        :param ring_width: Width of each individual ring.
+        :param gap: Gap between rings.
+        :param cmap: Dictionary {value: color} or function(value) -> color.
+        """
+        # 1. Handle Input Formats
+        # If pandas DataFrame, convert to dict
+        if hasattr(matrix, "to_dict"):
+            # orient='index' gives {row_label: {col_label: value}}
+            matrix = matrix.to_dict(orient='index')
+            if columns is None:
+                # Get columns from the first row keys
+                first_key = next(iter(matrix))
+                columns = list(matrix[first_key].keys())
+
+        if columns is None:
+            # Fallback for raw dict: collect all unique keys from all rows
+            all_keys = set()
+            for row in matrix.values():
+                all_keys.update(row.keys())
+            columns = sorted(list(all_keys))
+
+        # 2. Determine Start Radius
+        current_radius = start_radius if start_radius else (self.style.radius + 10)
+
+        # 3. Draw Rings Loop
+        for col in columns:
+            # Create a simple mapping for just this column: {leaf: color}
+            col_mapping = {}
+
+            for leaf in self.t.get_leaves():
+                if leaf.name in matrix:
+                    val = matrix[leaf.name].get(col, None)
+
+                    # Resolve Color
+                    if val is None:
+                        continue  # Skip missing data
+
+                    if isinstance(cmap, dict):
+                        color = cmap.get(val, "grey")
+                    elif callable(cmap):
+                        color = cmap(val)
+                    else:
+                        color = str(val)  # Assume value IS the color string
+
+                    col_mapping[leaf.name] = color
+
+            # Draw the single ring using our existing low-level function
+            # We temporarily override style.radius to place the ring correctly
+            # (This is a bit of a hack, but efficient. A cleaner way is to update add_ring to take explicit radius)
+
+            # Better approach: Update add_ring to accept an explicit 'radius_override'
+            # OR just calculate the geometry here. Let's rely on add_ring but we need to modify it slightly
+            # to allow arbitrary start radii, OR just write the geometry here.
+
+            # Let's write the geometry here to keep add_ring simple.
+            self._draw_matrix_ring(col_mapping, current_radius, ring_width, border, opacity)
+
+            # Step outward
+            current_radius += (ring_width + gap)
+
+    def _draw_matrix_ring(self, mapping, r_inner, width, stroke, opacity):
+        """Helper to draw a specific ring at a specific radius."""
+        r_outer = r_inner + width
+
+        for l in self.t.get_leaves():
+            if l.name not in mapping: continue
+
+            color = mapping[l.name]
+
+            # Calculate angles (same logic as add_ring)
+            start_deg = l.angle - (self.arc_leaf / 2)
+            end_deg = l.angle + (self.arc_leaf / 2)
+
+            sx_in, sy_in = radial_converter(start_deg, r_inner, self.style.rotation)
+            ex_in, ey_in = radial_converter(end_deg, r_inner, self.style.rotation)
+            sx_out, sy_out = radial_converter(start_deg, r_outer, self.style.rotation)
+            ex_out, ey_out = radial_converter(end_deg, r_outer, self.style.rotation)
+
+            p = draw.Path(fill=color, fill_opacity=opacity, stroke=stroke)
+            p.M(sx_out, sy_out)
+            p.A(r_outer, r_outer, 0, 0, 1, ex_out, ey_out)
+            p.L(ex_in, ey_in)
+            p.A(r_inner, r_inner, 0, 0, 0, sx_in, sy_in)
+            p.Z()
+            self.d.append(p)
+
 
 class VerticalTreeDrawer(BaseDrawer):
     """
@@ -525,7 +665,7 @@ class VerticalTreeDrawer(BaseDrawer):
 
         # Add a little "Stem" space for the root
         available_width = self.style.width - 150
-        sf_x = available_width / max_dist if max_dist > 0 else 0
+        self.sf = available_width / max_dist if max_dist > 0 else 0
         start_x = -self.style.width / 2 + 50
 
         # 2. Y Axis
@@ -634,6 +774,70 @@ class VerticalTreeDrawer(BaseDrawer):
         else:
             final_x, final_y = (x if x else 0), (y if y else 0)
         self.d.append(draw.Text(text, size, final_x, final_y, fill=color, text_anchor=anchor))
+
+    def add_heatmap_matrix(self, matrix, columns=None, start_x=None, box_width=20, gap=2, cmap=None, border="none",
+                           opacity=1.0):
+        """
+        Draws columns of heatmap boxes to the right of the tree.
+
+        :param start_x: X-coordinate to start the first column.
+                        Defaults to (max_x_of_tree + 10).
+        """
+        # 1. Handle Input Formats (Same as Radial)
+        if hasattr(matrix, "to_dict"):
+            matrix = matrix.to_dict(orient='index')
+            if columns is None:
+                first_key = next(iter(matrix))
+                columns = list(matrix[first_key].keys())
+
+        if columns is None:
+            all_keys = set()
+            for row in matrix.values():
+                all_keys.update(row.keys())
+            columns = sorted(list(all_keys))
+
+        # 2. Determine Start X
+        # Find the furthest tip to know where the tree ends
+        max_tree_x = max([l.coordinates[0] for l in self.t.get_leaves()])
+        current_x = start_x if start_x else (max_tree_x + 10)
+
+        # 3. Draw Columns
+        for col in columns:
+            # We iterate leaves to keep order consistent with tree topology
+            for l in self.t.get_leaves():
+                if l.name not in matrix: continue
+
+                val = matrix[l.name].get(col, None)
+                if val is None: continue
+
+                # Resolve Color
+                if isinstance(cmap, dict):
+                    color = cmap.get(val, "grey")
+                elif callable(cmap):
+                    color = cmap(val)
+                else:
+                    color = str(val)
+
+                # Geometry
+                # Leaf coordinates are (x, y). We use 'current_x' for the box X, and leaf 'y' for box Y.
+                # Center the box on the leaf's Y.
+                lx, ly = l.coordinates
+
+                # Draw Rectangle
+                # x, y, width, height. y is top-left, so we do ly - (box_width/2)
+                self.d.append(draw.Rectangle(
+                    current_x,
+                    ly - (box_width / 2),
+                    box_width,
+                    box_width,
+                    fill=color,
+                    fill_opacity=opacity,
+                    stroke=border,
+                    stroke_width=1
+                ))
+
+            # Step right
+            current_x += (box_width + gap)
 
     def _draw_internal_final(self, n, color, hide_line=False):
         x, y = n.coordinates
