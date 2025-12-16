@@ -82,10 +82,17 @@ class AleRaxParser:
         # ------------------------------------------------
         # We group by 'species_label' and sum the numeric columns.
         # This gives us the data needed to paint the Species Tree (e.g. Total Transfers at Node X).
-        numeric_cols = ["speciations", "duplications", "losses", "transfers", 
+
+        numeric_cols = ["speciations", "duplications", "losses", "transfers",
                         "presence", "origination", "copies", "singletons"]
-        
-        agg_df = df.groupby("species_label")[numeric_cols].sum().reset_index()
+
+        # We assume 'replicate' is just a column to average over
+        per_fam_means = df.groupby(["species_label", "gene_family"])[numeric_cols].mean().reset_index()
+
+        # Step B: Sum across all Gene Families
+        # Group by [Species] and SUM the per-family means
+        # This gives: "Total expected transfers for Species X is sum(GeneA_mean + GeneB_mean ...)"
+        agg_df = per_fam_means.groupby("species_label")[numeric_cols].sum().reset_index()
 
         # 3. Parse Species Tree (Optional but recommended)
         # ------------------------------------------------
