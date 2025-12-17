@@ -187,7 +187,6 @@ class RadialTreeDrawer(BaseDrawer):
                 n.add_feature("dist_to_root", n.up.dist_to_root + n.dist)
 
             if n.dist_to_root > max_dist: max_dist = n.dist_to_root
-                max_dist = n.dist_to_root
 
         self.total_length_of_tree = max_dist
 
