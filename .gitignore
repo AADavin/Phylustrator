@@ -12,6 +12,7 @@ __pycache__/
 *.tar.gz
 *.zip
 data/
+legacy/
 dev_archive/
 ale_results/
 alerax_output/

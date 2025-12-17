@@ -146,22 +146,37 @@ class BaseDrawer:
         # Label (Centered below line)
         self.d.append(draw.Text(label, font_size, x + (px_length / 2), y + 20, fill=color, text_anchor="middle"))
 
-    def save_figure(self, filename):
+    def save_figure(self, filename, scale=1.0):
         """
-        Saves the current drawing to a file.
-        Supports .svg, .png, and .pdf depending on drawsvg backend.
+        Saves the figure.
+        :param filename: Path to save (e.g., "plot.png")
+        :param scale: Resolution multiplier (only for PNG).
+                      scale=1 (default) is ~72 DPI.
+                      scale=4 is ~300 DPI (Print Quality).
         """
         if filename.endswith(".svg"):
             self.d.save_svg(filename)
+            print(f"Saved SVG to {filename}")
+
         elif filename.endswith(".png"):
-            self.d.save_png(filename)
+            try:
+                import cairosvg
+                # Convert the drawing to an SVG string first
+                svg_data = self.d.as_svg()
+                # Use cairosvg directly so we can pass the 'scale' argument
+                cairosvg.svg2png(bytestring=svg_data, write_to=filename, scale=scale)
+                print(f"Saved PNG to {filename} (Scale: {scale}x)")
+            except ImportError:
+                print("Error: 'cairosvg' is missing. Run: conda install -c conda-forge cairo pango")
+
         elif filename.endswith(".pdf"):
-            # Requires cairo
-            self.d.save_pdf(filename)
-        else:
-            # Default to SVG if unknown
-            self.d.save_svg(filename + ".svg")
-        print(f"Figure saved to {filename}")
+            try:
+                import cairosvg
+                svg_data = self.d.as_svg()
+                cairosvg.svg2pdf(bytestring=svg_data, write_to=filename)
+                print(f"Saved PDF to {filename}")
+            except ImportError:
+                print("Error: 'cairosvg' is missing. Run: conda install -c conda-forge cairo pango")
 
 
 class RadialTreeDrawer(BaseDrawer):
@@ -246,8 +261,7 @@ class RadialTreeDrawer(BaseDrawer):
             self.d.append(draw.Line(xe, ye, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
 
     def _draw_internal_final(self, n, color, hide_line=False):
-        if n.is_root(): return
-
+        
         c1, c2 = n.get_children()
 
         # 1. Always Draw Arc (Shoulder) using Node's Color
@@ -263,15 +277,17 @@ class RadialTreeDrawer(BaseDrawer):
         p.A(radius, radius, 0, 0, 1, ex, ey)
         self.d.append(p)
 
-        # 2. Always Draw Node Circle
-        x, y = radial_converter(n.angle, radius, self.style.rotation)
-        self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
+        # 2. Draw Node Circle (ONLY if NOT root) <--- UPDATED
+        # We hide the circle for the root to avoid the "floating dot" look
+        if not n.is_root():
+            x, y = radial_converter(n.angle, radius, self.style.rotation)
+            self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
 
-        # 3. Draw Radial Line (Only if not hidden)
-        if not hide_line:
-            p_angle, p_radius = n.up.coordinates
-            xe, ye = radial_converter(n.angle, p_radius - (self.style.branch_size / 2), self.style.rotation)
-            self.d.append(draw.Line(xe, ye, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+            # 3. Draw Radial Line to Parent
+            if not hide_line:
+                p_angle, p_radius = n.up.coordinates
+                xe, ye = radial_converter(n.angle, p_radius - (self.style.branch_size / 2), self.style.rotation)
+                self.d.append(draw.Line(xe, ye, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
 
     def highlight_clade(self, node, color="red", opacity=0.3):
         if node.is_leaf(): return
@@ -412,13 +428,22 @@ class RadialTreeDrawer(BaseDrawer):
             self.d.append(draw.Circle(x, y, r, fill=color, stroke=stroke, stroke_width=stroke_width))
 
     def add_transfer_links(self, transfers, color="orange", gradient_colors=None, min_freq=0.0, opacity_scale=1.0,
-                           curve_factor=0.5):
+                           curve_factor=0.5, arrows=False, stroke_width=None, vary_width=False):
+        """
+        Draws transfer links on radial tree with optional arrows and dynamic thickness.
+        """
         import random
         name_to_node = {n.name: n for n in self.t.traverse()}
 
-        # Pre-calculate node distances from root (Simulated Time) for fast lookup
-        # We assume n.dist_to_root was calculated in _calculate_coordinates
-        # If not, we can assume n.dist adds up.
+        base_width = stroke_width if stroke_width else self.style.branch_size
+
+        # Prepare Arrow Marker
+        marker = None
+        if arrows:
+            arrow_color = color if not gradient_colors else gradient_colors[1]
+            marker = draw.Marker(-0.1, -0.5, 0.9, 0.5, scale=4, orient='auto')
+            marker.append(draw.Path("M -0.1 -0.5 L 0.9 0 L -0.1 0.5 z", fill=arrow_color))
+            self.d.append(marker)
 
         for tr in transfers:
             freq = tr['freq']
@@ -429,69 +454,34 @@ class RadialTreeDrawer(BaseDrawer):
 
             if not node_from or not node_to: continue
 
-            # --- CALCULATE START RADIUS (Time-aware) ---
+            # --- 1. CALCULATE RADII ---
+            # (Logic remains identical to previous version: Time vs Midpoint)
             f_angle, f_rad_child = node_from.coordinates
+            t_angle, t_rad_child = node_to.coordinates
 
-            # Default to midpoint if no time provided
-            start_radius = f_rad_child  # Placeholder
-
+            # Source Radius
             if 'time' in tr and not node_from.is_root():
-                # We need to map Zombi Time -> Radial Coordinates
-                # 1. Get Parent Radius (Time Start of Branch)
                 _, f_rad_parent = node_from.up.coordinates
-
-                # 2. Get Tree Distance (Time End of Branch)
-                # n.dist_to_root should be available.
-                # Note: We must ensure Zombi Time units match Tree Dist units.
-                # Usually Zombi CompleteTree.nwk branch lengths = Time.
-
                 dist_parent = node_from.up.dist_to_root
                 dist_child = node_from.dist_to_root
-
-                # 3. Interpolate
-                # If Zombi time is absolute (from root = 0)
-                event_time = tr['time']
-
-                # Sanity check: is event_time inside the branch interval?
-                # Sometimes numerical float errors happen, so we clamp.
-                if dist_child > dist_parent:
-                    fraction = (event_time - dist_parent) / (dist_child - dist_parent)
-                    fraction = max(0.0, min(1.0, fraction))  # Clamp 0-1
-
-                    # Map to visual radius
-                    start_radius = f_rad_parent + fraction * (f_rad_child - f_rad_parent)
-                else:
-                    # Zero length branch or root
-                    start_radius = f_rad_child
+                fraction = (tr['time'] - dist_parent) / (dist_child - dist_parent) if dist_child > dist_parent else 0
+                fraction = max(0.0, min(1.0, fraction))
+                start_radius = f_rad_parent + fraction * (f_rad_child - f_rad_parent)
             else:
-                # Fallback to Midpoint
                 if node_from.is_root():
                     start_radius = f_rad_child
                 else:
                     _, p_rad = node_from.up.coordinates
                     start_radius = (f_rad_child + p_rad) / 2
 
-            sx, sy = radial_converter(f_angle, start_radius, self.style.rotation)
-
-            # --- CALCULATE END RADIUS (Target) ---
-            # Ideally, we should also know the ARRIVAL time.
-            # In 'LT' (Leaving Transfer), the arrival is usually instantaneous in Zombi.
-            # So we use the SAME time for the destination branch.
-
-            t_angle, t_rad_child = node_to.coordinates
-
+            # Target Radius
             if 'time' in tr and not node_to.is_root():
                 _, t_rad_parent = node_to.up.coordinates
                 dist_parent = node_to.up.dist_to_root
                 dist_child = node_to.dist_to_root
-                event_time = tr['time']
-
-                if dist_child > dist_parent:
-                    fraction = (event_time - dist_parent) / (dist_child - dist_parent)
-                    fraction = max(0.0, min(1.0, fraction))
-                    end_radius = t_rad_parent + fraction * (t_rad_child - t_rad_parent)
-                else:
-                    end_radius = t_rad_child
+                fraction = (tr['time'] - dist_parent) / (dist_child - dist_parent) if dist_child > dist_parent else 0
+                fraction = max(0.0, min(1.0, fraction))
+                end_radius = t_rad_parent + fraction * (t_rad_child - t_rad_parent)
             else:
                 if node_to.is_root():
                     end_radius = t_rad_child
@@ -499,9 +489,11 @@ class RadialTreeDrawer(BaseDrawer):
                     _, p_rad = node_to.up.coordinates
                     end_radius = (t_rad_child + p_rad) / 2
 
+            # Convert to Cartesian
+            sx, sy = radial_converter(f_angle, start_radius, self.style.rotation)
             ex, ey = radial_converter(t_angle, end_radius, self.style.rotation)
 
-            # --- DRAW (Same as before) ---
+            # --- 2. STYLE ---
             if gradient_colors:
                 grad_id = f"tr_grad_{random.randint(0, 9999999)}"
                 stroke_paint = draw.LinearGradient(sx, sy, ex, ey, id=grad_id)
@@ -510,67 +502,80 @@ class RadialTreeDrawer(BaseDrawer):
             else:
                 stroke_paint = color
 
+            alpha = min(1.0, freq * opacity_scale)
+            current_width = base_width * freq if vary_width else base_width
+
             cx1 = sx * (1 - curve_factor)
             cy1 = sy * (1 - curve_factor)
             cx2 = ex * (1 - curve_factor)
             cy2 = ey * (1 - curve_factor)
 
-            alpha = min(1.0, freq * opacity_scale)
-
-            p = draw.Path(stroke=stroke_paint, stroke_width=self.style.branch_size,
-                          stroke_opacity=alpha, fill="none")
+            p = draw.Path(stroke=stroke_paint, stroke_width=current_width,
+                          stroke_opacity=alpha, fill="none",
+                          marker_end=marker)
             p.M(sx, sy)
             p.C(cx1, cy1, cx2, cy2, ex, ey)
             self.d.append(p)
 
-    def mark_events(self, events, type_filter="D", color="red", shape="circle", size=3):
+    def mark_events(self, events, type_filter=None, shape="circle", color="red", size=5, opacity=1.0):
         """
-        Draws symbols on the branches at the exact event times.
-
-        :param events: List of dicts [{'time': 1.2, 'type': 'D', 'node': 'n1'}, ...]
-        :param type_filter: "D", "L", etc.
+        Marks evolutionary events (Duplications, Losses, etc.) on the tree.
         """
+        # Create a lookup map for fast access
         name_to_node = {n.name: n for n in self.t.traverse()}
 
         for ev in events:
-            if ev.get('type') != type_filter: continue
+            # 1. Filter by type
+            etype = ev.get('type') if isinstance(ev, dict) else getattr(ev, 'type', None)
+            if type_filter and etype != type_filter:
+                continue
 
-            node_name = str(ev['node'])
-            node = name_to_node.get(node_name)
-            if not node or node.is_root(): continue
+            # 2. Get Node (Handle String Names!)
+            raw_node = ev.get('node') if isinstance(ev, dict) else getattr(ev, 'node', None)
 
-            # Interpolate Position
-            # 1. Get Interval
-            _, rad_parent = node.up.coordinates
-            dist_parent = node.up.dist_to_root
-
-            _, rad_child = node.coordinates
-            dist_child = node.dist_to_root
-
-            # 2. Calculate Radius
-            event_time = ev['time']
-            if dist_child > dist_parent:
-                fraction = (event_time - dist_parent) / (dist_child - dist_parent)
-                fraction = max(0.0, min(1.0, fraction))
-
-                final_radius = rad_parent + fraction * (rad_child - rad_parent)
+            # FIX: If raw_node is a string name, look it up!
+            if isinstance(raw_node, str):
+                node = name_to_node.get(raw_node)
             else:
-                final_radius = rad_child
+                node = raw_node
 
-            # 3. Draw
-            x, y = radial_converter(node.angle, final_radius, self.style.rotation)
+            if not node: continue  # Skip if node not found in tree
 
+            # 3. Get Coordinates
+            time = ev.get('time') if isinstance(ev, dict) else getattr(ev, 'time', None)
+
+            # Y coordinate is fixed by the node
+            _, y = node.coordinates
+
+            # X coordinate: Use time if available, otherwise midpoint
+            if time is not None:
+                # Assuming the tree scale matches the time units (Chronogram)
+                x = self.time_to_x(time)
+            else:
+                start_x, _ = node.up.coordinates if node.up else node.coordinates
+                end_x, _ = node.coordinates
+                x = (start_x + end_x) / 2
+
+            # 4. Draw the Shape
             if shape == "circle":
-                self.d.append(draw.Circle(x, y, size, fill=color))
+                self.d.append(draw.Circle(x, y, size, fill=color, fill_opacity=opacity, stroke="none"))
+            elif shape == "square":
+                self.d.append(draw.Rectangle(x - size, y - size, size * 2, size * 2, fill=color, fill_opacity=opacity))
             elif shape == "x":
-                # Draw a small X (e.g. for Losses)
-                self.d.append(draw.Line(x - size, y - size, x + size, y + size, stroke=color, stroke_width=1))
-                self.d.append(draw.Line(x + size, y - size, x - size, y + size, stroke=color, stroke_width=1))
+                # Draw an 'X'
+                s = size
+                p = draw.Path(stroke=color, stroke_width=2, stroke_opacity=opacity, fill="none")
+                p.M(x - s, y - s).L(x + s, y + s)
+                p.M(x - s, y + s).L(x + s, y - s)
+                self.d.append(p)
+            elif shape == "bar":
+                self.d.append(draw.Rectangle(x - 2, y - size, 4, size * 2, fill=color, fill_opacity=opacity))
 
-    def add_leaf_shapes(self, mapping, size=None, padding=10, stroke="black", stroke_width=1):
+    def add_leaf_shapes(self, mapping, shape="circle", size=None, padding=10, stroke="black", stroke_width=1):
         """
-        Adds circles next to the tips (e.g., for showing presence/absence).
+        Adds shapes next to the tips.
         :param mapping: Dictionary {leaf_name: color_string}
+        :param shape: "circle", "square", "triangle"
         """
         r = size if size else self.style.leaf_size
 
@@ -580,10 +585,34 @@ class RadialTreeDrawer(BaseDrawer):
             color = mapping[l.name]
             angle, radius = l.coordinates
 
-            # Position is radius + padding
+            # Position: Move outward by padding
             x, y = radial_converter(angle, radius + padding, self.style.rotation)
 
-            self.d.append(draw.Circle(x, y, r, fill=color, stroke=stroke, stroke_width=stroke_width))
+            # Calculate rotation so shape aligns with the branch
+            # (The angle of the node + the global tree rotation)
+            shape_rotation = angle + self.style.rotation
+
+            if shape == "circle":
+                # Circles don't need rotation
+                self.d.append(draw.Circle(x, y, r, fill=color, stroke=stroke, stroke_width=stroke_width))
+
+            elif shape == "square":
+                # Rectangle centered at x,y
+                # We rotate it around its own center (x,y)
+                self.d.append(draw.Rectangle(x - r, y - r, r * 2, r * 2,
+                                             fill=color, stroke=stroke, stroke_width=stroke_width,
+                                             transform=f"rotate({shape_rotation}, {x}, {y})"))
+
+            elif shape == "triangle":
+                # Triangle pointing OUTWARD (to the right relative to unrotated shape)
+                # Tip at (r, 0), Base at (-r, -r) and (-r, r) relative to center
+                p1_x, p1_y = x + r, y  # Tip
+                p2_x, p2_y = x - r, y - r  # Top Left
+                p3_x, p3_y = x - r, y + r  # Bottom Left
+
+                self.d.append(draw.Lines(p1_x, p1_y, p2_x, p2_y, p3_x, p3_y,
+                                         close=True, fill=color, stroke=stroke, stroke_width=stroke_width,
+                                         transform=f"rotate({shape_rotation}, {x}, {y})"))
 
     def add_ring(self, mapping, width=20, padding=10, stroke="none", opacity=1.0):
         """
@@ -861,12 +890,25 @@ class VerticalTreeDrawer(BaseDrawer):
         return self.root_x + (time * self.sf)
 
     def add_transfer_links(self, transfers, color="orange", gradient_colors=None, min_freq=0.0, opacity_scale=1.0,
-                           curve_factor=0.5):
+                           curve_factor=0.5, arrows=False, stroke_width=None, vary_width=False):
         """
-        Draws strictly vertical transfer lines based on exact time.
+        Draws transfer links with optional arrows and dynamic thickness.
         """
         import random
         name_to_node = {n.name: n for n in self.t.traverse()}
+
+        # Determine Base Width
+        base_width = stroke_width if stroke_width else self.style.branch_size
+
+        # Prepare Arrow Marker (Lazy instantiation)
+        marker = None
+        if arrows:
+            # We create a generic marker.
+            # Note: SVG Markers are tricky with Gradients. We use the solid 'color' for the arrow.
+            arrow_color = color if not gradient_colors else gradient_colors[1]
+            marker = draw.Marker(-0.1, -0.5, 0.9, 0.5, scale=4, orient='auto')
+            marker.append(draw.Path("M -0.1 -0.5 L 0.9 0 L -0.1 0.5 z", fill=arrow_color))
+            self.d.append(marker)
 
         for tr in transfers:
             freq = tr['freq']
@@ -877,31 +919,31 @@ class VerticalTreeDrawer(BaseDrawer):
 
             if not node_from or not node_to: continue
 
-            # --- 1. DETERMINE X (Strictly Vertical) ---
+            # --- 1. COORDINATES (X & Y) ---
             if 'time' in tr:
-                # Use Global Time Axis
                 event_x = self.time_to_x(tr['time'])
-
-                # Sanity Check: Clamp to branch bounds if slight mismatch
-                # (Optional: keeps lines from floating in empty space if time > branch tip)
-                # But generally, trust the Global Time.
-                start_x = event_x
-                end_x = event_x
+                start_x, end_x = event_x, event_x
             else:
-                # Fallback: Midpoint (Only if time is missing)
-                fx, _ = node_from.coordinates
-                tx, _ = node_to.coordinates
-                start_x = fx
-                end_x = tx
-                # Note: This fallback WILL produce slanted lines if fx != tx
-                # But Zombi data should always have 'time'.
+                # Midpoint Fallback
+                if node_from.up:
+                    px, _ = node_from.up.coordinates
+                    cx, _ = node_from.coordinates
+                    start_x = (px + cx) / 2
+                else:
+                    start_x, _ = node_from.coordinates
 
-            # --- 2. DETERMINE Y (Topology) ---
-            _, start_y = node_from.coordinates  # Height of donor branch
-            _, end_y = node_to.coordinates  # Height of recipient branch
+                if node_to.up:
+                    px, _ = node_to.up.coordinates
+                    cx, _ = node_to.coordinates
+                    end_x = (px + cx) / 2
+                else:
+                    end_x, _ = node_to.coordinates
 
-            # --- 3. DRAW ---
-            # Standard Bezier logic, but now Start_X == End_X
+            _, start_y = node_from.coordinates
+            _, end_y = node_to.coordinates
+
+            # --- 2. STYLE & THICKNESS ---
+            # Gradient
             if gradient_colors:
                 grad_id = f"tr_v_{random.randint(0, 9999999)}"
                 stroke_paint = draw.LinearGradient(start_x, start_y, end_x, end_y, id=grad_id)
@@ -910,22 +952,20 @@ class VerticalTreeDrawer(BaseDrawer):
             else:
                 stroke_paint = color
 
+            # Dynamic Properties
             alpha = min(1.0, freq * opacity_scale)
+            current_width = base_width * freq if vary_width else base_width
 
-            # Control Points for Sigmoid (Vertical)
-            # We pull the curve vertically to make it look like a smooth "jump"
+            # --- 3. DRAW ---
             dist_y = end_y - start_y
-            cx1 = start_x + (dist_y * 0.1)  # Tiny horizontal nudge? No, keep it vertical.
-            # actually, for vertical sankey, control points should be:
-            # (start_x, start_y + offset) and (end_x, end_y - offset)
-
             cx1 = start_x
             cy1 = start_y + (dist_y * curve_factor)
             cx2 = end_x
             cy2 = end_y - (dist_y * curve_factor)
 
-            p = draw.Path(stroke=stroke_paint, stroke_width=self.style.branch_size,
-                          stroke_opacity=alpha, fill="none")
+            p = draw.Path(stroke=stroke_paint, stroke_width=current_width,
+                          stroke_opacity=alpha, fill="none",
+                          marker_end=marker)  # Attach Arrow
             p.M(start_x, start_y)
             p.C(cx1, cy1, cx2, cy2, end_x, end_y)
             self.d.append(p)
@@ -946,45 +986,38 @@ class VerticalTreeDrawer(BaseDrawer):
 
     def _draw_leaf_final(self, n, color, hide_line=False):
         x, y = n.coordinates
+
+        # 1. Draw the Leaf Circle (Tip)
         self.d.append(draw.Circle(x, y, self.style.leaf_size, fill=self.style.leaf_color))
 
+        # 2. Draw the Line to Parent (The Branch)
         if not hide_line and not n.is_root():
             p_x, p_y = n.up.coordinates
-            self.d.append(draw.Line(p_x, y, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
 
-    def _draw_internal_final(self, n, color, hide_line=False):
-        # FIX: Do NOT return if root. We still need to draw the vertical bar for children!
-        # if n.is_root(): return  <-- DELETED
+            self.d.append(draw.Line(p_x, y, x, y,
+                                    stroke=color, stroke_width=self.style.branch_size,
+                                    stroke_linecap="round", fill='none'))
 
-        x, y = n.coordinates
-        c1, c2 = n.get_children()
-
-        # 1. Vertical Line (The "Split" bar)
-        min_y = min([c.y_coord for c in n.get_children()])
-        max_y = max([c.y_coord for c in n.get_children()])
-
-        self.d.append(draw.Line(x, min_y, x, max_y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
-
-        # 2. Node Circle
-        self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
-
-        # 3. Horizontal Line to Parent (Only if NOT root)
-        if not n.is_root() and not hide_line:
-            p_x, p_y = n.up.coordinates
-            self.d.append(draw.Line(p_x, y, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
-
-    
+   
 
     def highlight_branch(self, node, color="red", size=None, opacity=1.0, include_arc=False):
         if node.is_root(): return
         s_width = size if size else self.style.branch_size
         x, y = node.coordinates
         p_x, p_y = node.up.coordinates
-        self.d.append(draw.Line(p_x, y, x, y, stroke=color, stroke_width=s_width, stroke_opacity=opacity))
+
+        # FIX: Added stroke_linecap="round"
+        self.d.append(draw.Line(p_x, y, x, y,
+                                stroke=color, stroke_width=s_width, stroke_opacity=opacity,
+                                stroke_linecap="round"))
+
         if include_arc and not node.is_leaf():
             min_y = min([c.y_coord for c in node.get_children()])
             max_y = max([c.y_coord for c in node.get_children()])
-            self.d.append(draw.Line(x, min_y, x, max_y, stroke=color, stroke_width=s_width, stroke_opacity=opacity))
+            # FIX: Added stroke_linecap="round"
+            self.d.append(draw.Line(x, min_y, x, max_y,
+                                    stroke=color, stroke_width=s_width, stroke_opacity=opacity,
+                                    stroke_linecap="round"))
 
     def gradient_branch(self, node, colors=("red", "blue"), size=None, opacity=1.0):
         if node.is_root(): return
@@ -1015,6 +1048,62 @@ class VerticalTreeDrawer(BaseDrawer):
         else:
             final_x, final_y = (x if x else 0), (y if y else 0)
         self.d.append(draw.Text(text, size, final_x, final_y, fill=color, text_anchor=anchor))
+
+    def mark_events(self, events, type_filter=None, shape="circle", color="red", size=5, opacity=1.0):
+        """
+        Marks evolutionary events (Duplications, Losses, etc.) on the tree.
+        """
+        # Create a lookup map for fast access
+        name_to_node = {n.name: n for n in self.t.traverse()}
+
+        for ev in events:
+            # 1. Filter by type
+            etype = ev.get('type') if isinstance(ev, dict) else getattr(ev, 'type', None)
+            if type_filter and etype != type_filter:
+                continue
+
+            # 2. Get Node (Handle String Names!)
+            raw_node = ev.get('node') if isinstance(ev, dict) else getattr(ev, 'node', None)
+
+            # If raw_node is a string name, look it up!
+            if isinstance(raw_node, str):
+                node = name_to_node.get(raw_node)
+            else:
+                node = raw_node
+
+            if not node: continue  # Skip if node not found in tree
+
+            # 3. Get Coordinates
+            # For ALE, time is often None, so we default to the midpoint logic.
+            time = ev.get('time') if isinstance(ev, dict) else getattr(ev, 'time', None)
+
+            # Y coordinate is fixed by the node
+            _, y = node.coordinates
+
+            # X coordinate: Use time if available, otherwise midpoint
+            if time is not None:
+                # Assuming simple linear mapping if a strict chronogram
+                x = time
+            else:
+                # Fallback to Branch Midpoint
+                start_x, _ = node.up.coordinates if node.up else node.coordinates
+                end_x, _ = node.coordinates
+                x = (start_x + end_x) / 2
+
+            # 4. Draw the Shape
+            if shape == "circle":
+                self.d.append(draw.Circle(x, y, size, fill=color, fill_opacity=opacity, stroke="none"))
+            elif shape == "square":
+                self.d.append(draw.Rectangle(x - size, y - size, size * 2, size * 2, fill=color, fill_opacity=opacity))
+            elif shape == "x":
+                # Draw an 'X'
+                s = size
+                p = draw.Path(stroke=color, stroke_width=2, stroke_opacity=opacity, fill="none")
+                p.M(x - s, y - s).L(x + s, y + s)
+                p.M(x - s, y + s).L(x + s, y - s)
+                self.d.append(p)
+            elif shape == "bar":
+                self.d.append(draw.Rectangle(x - 2, y - size, 4, size * 2, fill=color, fill_opacity=opacity))
 
     def add_heatmap_matrix(self, matrix, columns=None, start_x=None, box_width=20, gap=2, cmap=None, border="none",
                            opacity=1.0):
@@ -1080,58 +1169,91 @@ class VerticalTreeDrawer(BaseDrawer):
             # Step right
             current_x += (box_width + gap)
 
-    def mark_events(self, events, type_filter="D", color="red", shape="circle", size=3):
+    def highlight_clade(self, node, color="lightblue", opacity=0.3, padding=10):
         """
-        Draws symbols on the branches at the exact event times (Linear Layout).
+        Draws a shaded rectangle behind a specific clade (subtree).
         """
-        name_to_node = {n.name: n for n in self.t.traverse()}
+        if node.is_leaf(): return
 
-        for ev in events:
-            if ev.get('type') != type_filter: continue
+        # 1. Calculate Bounds
+        # X: From the node itself to the furthest leaf in the clade
+        start_x, _ = node.coordinates
+        leaves = node.get_leaves()
+        max_x = max([l.coordinates[0] for l in leaves])
 
-            node_name = str(ev['node'])
-            node = name_to_node.get(node_name)
-            if not node or node.is_root(): continue
+        # Y: From the top-most leaf to the bottom-most leaf
+        ys = [l.coordinates[1] for l in leaves]
+        min_y = min(ys)
+        max_y = max(ys)
 
-            # 1. Get Coordinates
-            # In Vertical drawer: coordinates = (x, y)
-            x_child, y_child = node.coordinates
-            x_parent, _ = node.up.coordinates  # Parent X is start of branch
+        # 2. Add Padding
+        # Extend slightly above top leaf and below bottom leaf
+        rect_y = min_y - self.style.leaf_size - padding
+        rect_h = (max_y - min_y) + (2 * self.style.leaf_size) + (2 * padding)
 
-            # The branch line sits at y_child height, running from x_parent to x_child
+        # Extend from node X to tip X
+        rect_x = start_x - padding
+        rect_w = (max_x - start_x) + padding + 20  # Extra space for labels
 
-            # 2. Interpolate X based on Time
-            dist_parent = node.up.dist_to_root
-            dist_child = node.dist_to_root
-            event_time = ev['time']
+        # 3. Draw Rectangle
+        self.d.append(draw.Rectangle(
+            rect_x, rect_y, rect_w, rect_h,
+            fill=color,
+            fill_opacity=opacity,
+            stroke="none"
+        ))
 
-            if dist_child > dist_parent:
-                fraction = (event_time - dist_parent) / (dist_child - dist_parent)
-                fraction = max(0.0, min(1.0, fraction))
+    def add_leaf_shapes(self, mapping, shape="circle", size=None, padding=10, stroke="black", stroke_width=1):
+        """
+        Adds shapes next to the tips.
+        :param mapping: Dictionary {leaf_name: color_string}
+        :param shape: "circle", "square", "triangle"
+        """
+        r = size if size else self.style.leaf_size
 
-                final_x = x_parent + fraction * (x_child - x_parent)
-            else:
-                final_x = x_child
+        for l in self.t.get_leaves():
+            if l.name not in mapping: continue
 
-            # 3. Draw
-            # Y is constant (y_child) for horizontal branches
+            color = mapping[l.name]
+            x, y = l.coordinates
+
+            # Center of the shape
+            cx = x + padding
+            cy = y
+
             if shape == "circle":
-                self.d.append(draw.Circle(final_x, y_child, size, fill=color))
-            elif shape == "x":
-                self.d.append(draw.Line(final_x - size, y_child - size, final_x + size, y_child + size, stroke=color,
-                                        stroke_width=1))
-                self.d.append(draw.Line(final_x + size, y_child - size, final_x - size, y_child + size, stroke=color,
-                                        stroke_width=1))
+                self.d.append(draw.Circle(cx, cy, r, fill=color, stroke=stroke, stroke_width=stroke_width))
+
+            elif shape == "square":
+                # Draw square centered at cx, cy
+                self.d.append(draw.Rectangle(cx - r, cy - r, r * 2, r * 2,
+                                             fill=color, stroke=stroke, stroke_width=stroke_width))
+
+            elif shape == "triangle":
+                # Draw triangle pointing right (towards the text)
+                # Points: Top-Left, Bottom-Left, Tip-Right
+                p1 = (cx - r, cy - r)
+                p2 = (cx - r, cy + r)
+                p3 = (cx + r, cy)
+                self.d.append(draw.Lines(p1[0], p1[1], p2[0], p2[1], p3[0], p3[1],
+                                         close=True, fill=color, stroke=stroke, stroke_width=stroke_width))
+
+    def time_to_x(self, time):
+        # For Zombi chronograms, X coordinate usually equals Time exactly.
+        return time
 
     def _draw_internal_final(self, n, color, hide_line=False):
         x, y = n.coordinates
 
         # 1. Vertical Line (The "Split" bar)
-        c1, c2 = n.get_children()  # Assuming bifurcating
+        # Finds the range of Y coordinates to connect the children
         min_y = min([c.y_coord for c in n.get_children()])
         max_y = max([c.y_coord for c in n.get_children()])
 
-        self.d.append(draw.Line(x, min_y, x, max_y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+        # FIX: Added stroke_linecap="round" here
+        self.d.append(draw.Line(x, min_y, x, max_y,
+                                stroke=color, stroke_width=self.style.branch_size,
+                                stroke_linecap="round", fill='none'))
 
         # 2. Node Circle
         self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
@@ -1139,9 +1261,19 @@ class VerticalTreeDrawer(BaseDrawer):
         # 3. Horizontal Line to Parent
         if not n.is_root() and not hide_line:
             p_x, p_y = n.up.coordinates
-            self.d.append(draw.Line(p_x, y, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+            # FIX: Added stroke_linecap="round" here
+            self.d.append(draw.Line(p_x, y, x, y,
+                                    stroke=color, stroke_width=self.style.branch_size,
+                                    stroke_linecap="round", fill='none'))
 
-        # 4. OPTIONAL: Root Stem
+        # 4. Root Stem
         elif n.is_root():
             # Draw a small line to the left (e.g., 20px)
-            self.d.append(draw.Line(x - 20, y, x, y, stroke=color, stroke_width=self.style.branch_size, fill='none'))
+            # FIX: Added stroke_linecap="round" here
+            self.d.append(draw.Line(x - 20, y, x, y,
+                                    stroke=color, stroke_width=self.style.branch_size,
+                                    stroke_linecap="round", fill='none'))
+
+    def time_to_x(self, time):
+        # For Zombi chronograms, X coordinate usually equals Time exactly.
+        return time
