@@ -2,7 +2,7 @@
 
 A libary for easy plotting of phylogenies
 
-![Phylustrator Example](https://dummyimage.com/600x400/fff/000.png&text=Insert+Your+Best+Plot+Here)
+![Phylustrator Example](https://github.com/AADavin/Phylustrator/blob/main/notebooks/basic_vertical_tree.png)
 
 ##  Installation
 
