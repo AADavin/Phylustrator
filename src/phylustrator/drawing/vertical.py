@@ -157,78 +157,130 @@ class VerticalTreeDrawer(BaseDrawer):
             x, y = l.coordinates
             self.d.append(draw.Text(l.name, self.style.font_size, x+padding, y+self.style.font_size/3))
 
-    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.0, 
-                       use_gradient=True, gradient_colors=("purple", "orange"),
-                       color="orange", use_thickness=True, stroke_width=5,
-                       arc_intensity=40, opacity=0.6):
+    def plot_transfers(
+        self,
+        transfers,
+        mode="midpoint",
+        curve_type="C",
+        filter_below=0.0,
+        use_gradient=True,
+        gradient_colors=("purple", "orange"),
+        color="orange",
+        use_thickness=True,
+        stroke_width=5,
+        arc_intensity=40,
+        opacity=0.6,
+    ):
         """
-        Plots horizontal gene transfer events as curved lines.
-        :param curve_type: "C" for a classic bulge (default), "S" for an S-shaped flow.
-        :param arc_intensity: The 'strength' of the curve. For C-curves, positive values 
-                              tuck the bulge toward the root.
+        Plot horizontal gene transfers as curved lines.
+
+        Parameters
+        ----------
+        transfers
+            Either a list of dicts OR a pandas.DataFrame with at least:
+            'from', 'to', 'time' (optional), 'freq' (optional)
+        mode
+            "midpoint" (default) or "time".
+            - midpoint: attach curves to mid-branch positions (old behavior)
+            - time: attach curves at the event time along each endpoint branch using
+                    node.time_from_origin (Zombi parser provides this)
+        curve_type
+            "C" (default) or "S"
         """
+
+        # Accept either list[dict] or pandas DataFrame
+        try:
+            import pandas as pd  # type: ignore
+            if isinstance(transfers, pd.DataFrame):
+                transfers = transfers.to_dict(orient="records")
+        except Exception:
+            pass
+
         name2node = {n.name: n for n in self.t.traverse()}
 
-        # Ensure layout attributes exist (coordinates/y_coord live on nodes)
+        # Ensure layout exists
         any_node = next(self.t.traverse("preorder"))
         if not hasattr(any_node, "coordinates") or not hasattr(any_node, "y_coord"):
             self._calculate_layout()
 
+        def where_from_time(node, tt: float) -> float:
+            parent = node.up
+            if parent is None:
+                return 0.0
+            t0 = float(getattr(parent, "time_from_origin", 0.0))
+            t1 = float(getattr(node, "time_from_origin", t0))
+            denom = (t1 - t0) if abs(t1 - t0) > 1e-12 else 1.0
+            w = (float(tt) - t0) / denom
+            if w < 0.0:
+                return 0.0
+            if w > 1.0:
+                return 1.0
+            return w
+
         for tr in transfers:
-            # 1. Filter by frequency
-            freq = tr.get("freq", 1.0)
+            freq = float(tr.get("freq", 1.0))
             if freq < filter_below:
                 continue
 
-            src, dst = name2node.get(tr["from"]), name2node.get(tr["to"])
-            if not src or not dst:
+            src = name2node.get(tr.get("from"))
+            dst = name2node.get(tr.get("to"))
+            if src is None or dst is None:
                 continue
 
-            # 2. Calculate X-Coordinates (Preserves Midpoint vs. Time options)
-            if mode == "time" and tr.get('time') is not None:
-                x_start = self.root_x + (tr['time'] * self.sf)
-                x_end = x_start
+            # Compute endpoints
+            if (
+                mode == "time"
+                and tr.get("time") is not None
+                and hasattr(src, "time_from_origin")
+                and hasattr(dst, "time_from_origin")
+            ):
+                tt = float(tr["time"])
+                w_src = where_from_time(src, tt)
+                w_dst = where_from_time(dst, tt)
+                x_start, y_start, _ = self._edge_point(src, w_src)
+                x_end, y_end, _ = self._edge_point(dst, w_dst)
             else:
-                src_px = src.up.coordinates[0] if src.up else src.coordinates[0] - 20
-                dst_px = dst.up.coordinates[0] if dst.up else dst.coordinates[0] - 20
-                x_start = (src_px + src.coordinates[0]) / 2
-                x_end = (dst_px + dst.coordinates[0]) / 2
+                # midpoint fallback (old behavior)
+                y_start, y_end = float(src.y_coord), float(dst.y_coord)
+                src_px = src.up.coordinates[0] if src.up else (src.coordinates[0] - 20)
+                dst_px = dst.up.coordinates[0] if dst.up else (dst.coordinates[0] - 20)
+                x_start = (float(src_px) + float(src.coordinates[0])) / 2.0
+                x_end = (float(dst_px) + float(dst.coordinates[0])) / 2.0
 
-            # 3. Path styling
+            # Styling
             width = (stroke_width * freq) if use_thickness else stroke_width
             path = draw.Path(stroke_width=width, fill="none", stroke_opacity=opacity)
 
-            # 4. Color / Gradient Logic
             if use_gradient:
                 grad_id = f"tr_grad_{random.randint(0, 999999)}"
-                grad = draw.LinearGradient(x_start, src.y_coord, x_end, dst.y_coord, id=grad_id)
-                grad.add_stop(0, gradient_colors[0]) 
+                grad = draw.LinearGradient(x_start, y_start, x_end, y_end, id=grad_id)
+                grad.add_stop(0, gradient_colors[0])
                 grad.add_stop(1, gradient_colors[1])
                 self.d.append(grad)
                 path.args["stroke"] = grad
             else:
                 path.args["stroke"] = color
 
-            # 5. Geometry Selection
-            path.M(x_start, src.y_coord)
-            
+            # Geometry
+            path.M(x_start, y_start)
+
             if curve_type.upper() == "S":
-                # S-Curve Logic: Control points pull in opposite directions
                 dx = x_end - x_start
                 sgn = 1 if dx >= 0 else -1
                 arc = abs(arc_intensity)
                 cp1x = x_start + (sgn * arc)
                 cp2x = x_end - (sgn * arc)
-                path.C(cp1x, src.y_coord, cp2x, dst.y_coord, x_end, dst.y_coord)
-            
+                path.C(cp1x, y_start, cp2x, y_end, x_end, y_end)
             else:
-                # C-Curve Logic: Both points pull in the same direction
-                # Using '- arc_intensity' here so that positive values 'tuck' toward root
-                path.C(x_start - arc_intensity, src.y_coord, 
-                       x_end - arc_intensity, dst.y_coord, 
-                       x_end, dst.y_coord)
+                # C-curve
+                path.C(
+                    x_start - arc_intensity, y_start,
+                    x_end   - arc_intensity, y_end,
+                    x_end, y_end
+                )
 
             self.d.append(path)
+
     
     def add_transfer_legend(
         self,

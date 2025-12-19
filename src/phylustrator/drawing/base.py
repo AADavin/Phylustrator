@@ -331,6 +331,27 @@ class BaseDrawer:
         ang = math.degrees(math.atan2(y1 - y0, x1 - x0))
         return x, y, ang
 
+    def _where_from_time(self, node, t: float) -> float:
+        """
+        Map absolute event time t to a [0,1] position along the incoming edge of `node`.
+        Requires node.up.time_from_origin and node.time_from_origin (Zombi parser provides these).
+        """
+        parent = node.up
+        if parent is None:
+            return 0.0
+
+        t0 = float(getattr(parent, "time_from_origin", 0.0))
+        t1 = float(getattr(node, "time_from_origin", t0))
+        denom = (t1 - t0) if abs(t1 - t0) > 1e-12 else 1.0
+
+        w = (float(t) - t0) / denom
+        if w < 0.0:
+            return 0.0
+        if w > 1.0:
+            return 1.0
+        return w
+
+
     def add_branch_shapes(
          self,
          specs: list[dict],

@@ -139,42 +139,95 @@ class RadialTreeDrawer(BaseDrawer):
             anchor = "start" if -90 <= (angle % 360) <= 90 else "end"
             self.d.append(draw.Text(l.name, self.style.font_size, x, y, transform=f"rotate({rot},{x},{y})", text_anchor=anchor))
     
-    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.1, 
-                       use_gradient=True, gradient_colors=("purple", "orange"),
-                       color="orange", use_thickness=True, stroke_width=5,
-                       arc_intensity=40, opacity=0.6):
+    def plot_transfers(
+        self,
+        transfers,
+        mode="midpoint",
+        curve_type="C",
+        filter_below=0.1,
+        use_gradient=True,
+        gradient_colors=("purple", "orange"),
+        color="orange",
+        use_thickness=True,
+        stroke_width=5,
+        arc_intensity=40,
+        opacity=0.6,
+    ):
+        """
+        Plot transfers on a radial tree.
 
-        # Ensure layout attributes exist (rad/angle/xy live on nodes)
+        mode="time" places endpoints at the correct event time along each endpoint branch
+        using node.time_from_origin (from Zombi parser). Otherwise uses midpoint logic.
+        """
+
+        # Accept either list[dict] or pandas DataFrame
+        try:
+            import pandas as pd  # type: ignore
+            if isinstance(transfers, pd.DataFrame):
+                transfers = transfers.to_dict(orient="records")
+        except Exception:
+            pass
+
+        # Ensure layout exists
         any_node = next(self.t.traverse("preorder"))
         if not hasattr(any_node, "rad") or not hasattr(any_node, "angle"):
             self._calculate_layout()
 
         name_to_node = {n.name: n for n in self.t.traverse()}
 
+        def where_from_time(node, tt: float) -> float:
+            parent = node.up
+            if parent is None:
+                return 0.0
+            t0 = float(getattr(parent, "time_from_origin", 0.0))
+            t1 = float(getattr(node, "time_from_origin", t0))
+            denom = (t1 - t0) if abs(t1 - t0) > 1e-12 else 1.0
+            w = (float(tt) - t0) / denom
+            if w < 0.0:
+                return 0.0
+            if w > 1.0:
+                return 1.0
+            return w
+
         for tr in transfers:
-            freq = tr.get("freq", 1.0)
-            if freq < filter_below: continue
+            freq = float(tr.get("freq", 1.0))
+            if freq < filter_below:
+                continue
 
-            src, dst = name_to_node.get(tr['from']), name_to_node.get(tr['to'])
-            if not src or not dst: continue
+            src = name_to_node.get(tr.get("from"))
+            dst = name_to_node.get(tr.get("to"))
+            if src is None or dst is None:
+                continue
 
-            src_angle, dst_angle = src.angle, dst.angle
+            src_angle = float(src.angle)
+            dst_angle = float(dst.angle)
 
-            # Geometry selection: "time" pins both endpoints to the same radius;
-            # otherwise use midpoint along the branch.
-            if mode == "time" and tr.get("time") is not None:
-                r = float(tr["time"]) * self.sf
-                sx, sy = radial_converter(src_angle, r, self.style.rotation)
-                ex, ey = radial_converter(dst_angle, r, self.style.rotation)
-                src_r_mid, dst_r_mid = r, r
+            # Compute endpoints
+            if (
+                mode == "time"
+                and tr.get("time") is not None
+                and hasattr(src, "time_from_origin")
+                and hasattr(dst, "time_from_origin")
+            ):
+                tt = float(tr["time"])
+                w_src = where_from_time(src, tt)
+                w_dst = where_from_time(dst, tt)
+                sx, sy, _ = self._edge_point(src, w_src)
+                ex, ey, _ = self._edge_point(dst, w_dst)
+
+                # radii for control points
+                src_r_mid = (sx * sx + sy * sy) ** 0.5
+                dst_r_mid = (ex * ex + ey * ey) ** 0.5
+
             else:
-                src_r = src.rad
-                dst_r = dst.rad
-                src_parent_r = src.up.rad if src.up else (src_r - 20)
-                dst_parent_r = dst.up.rad if dst.up else (dst_r - 20)
+                # midpoint fallback (old behavior)
+                src_r = float(src.rad)
+                dst_r = float(dst.rad)
+                src_parent_r = float(src.up.rad) if src.up else (src_r - 20.0)
+                dst_parent_r = float(dst.up.rad) if dst.up else (dst_r - 20.0)
 
-                src_r_mid = (src_r + src_parent_r) / 2
-                dst_r_mid = (dst_r + dst_parent_r) / 2
+                src_r_mid = (src_r + src_parent_r) / 2.0
+                dst_r_mid = (dst_r + dst_parent_r) / 2.0
 
                 sx, sy = radial_converter(src_angle, src_r_mid, self.style.rotation)
                 ex, ey = radial_converter(dst_angle, dst_r_mid, self.style.rotation)
@@ -193,6 +246,7 @@ class RadialTreeDrawer(BaseDrawer):
                 path.args["stroke"] = color
 
             path.M(sx, sy)
+
             if curve_type.upper() == "S":
                 c1x, c1y = radial_converter(src_angle, src_r_mid + arc_intensity, self.style.rotation)
                 c2x, c2y = radial_converter(dst_angle, dst_r_mid - arc_intensity, self.style.rotation)
@@ -203,6 +257,7 @@ class RadialTreeDrawer(BaseDrawer):
                 path.C(c1x, c1y, c2x, c2y, ex, ey)
 
             self.d.append(path)
+
     
     def add_transfer_legend(
         self,
