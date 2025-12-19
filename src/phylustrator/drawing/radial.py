@@ -87,20 +87,17 @@ class RadialTreeDrawer(BaseDrawer):
             anchor = "start" if -90 <= (angle % 360) <= 90 else "end"
             self.d.append(draw.Text(l.name, self.style.font_size, x, y, transform=f"rotate({rot},{x},{y})", text_anchor=anchor))
     
-    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.0, 
+    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.1, 
                        use_gradient=True, gradient_colors=("purple", "orange"),
                        color="orange", use_thickness=True, stroke_width=5,
                        arc_intensity=40, opacity=0.6):
-        """
-        Plots horizontal gene transfer events on a radial tree.
-        :param curve_type: 'C' pulls the arc toward the center/root; 'S' creates a flow between branches.
-        """
+
+        # Ensure layout attributes exist (rad/angle/xy live on nodes)
+        any_node = next(self.t.traverse("preorder"))
+        if not hasattr(any_node, "rad") or not hasattr(any_node, "angle"):
+            self._calculate_layout()
+
         name_to_node = {n.name: n for n in self.t.traverse()}
-        
-        # Helper to convert polar (angle, radius) to Cartesian (x, y)
-        def get_cartesian(angle, radius):
-            from .radial import radial_converter
-            return radial_converter(angle, radius, self.style.rotation)
 
         for tr in transfers:
             freq = tr.get("freq", 1.0)
@@ -109,23 +106,27 @@ class RadialTreeDrawer(BaseDrawer):
             src, dst = name_to_node.get(tr['from']), name_to_node.get(tr['to'])
             if not src or not dst: continue
 
-            # 1. Calculate Angles and Radii
-            # Angle is fixed by the node's position; Radius depends on branch length
-            src_angle = src.angle
-            dst_angle = dst.angle
-            
-            src_r = src.radius
-            dst_r = dst.radius
+            src_angle, dst_angle = src.angle, dst.angle
 
-            # Midpoint logic: pull slightly back from the node to the middle of its branch
-            src_r_mid = (src_r + (src.up.radius if src.up else src_r - 20)) / 2
-            dst_r_mid = (dst_r + (dst.up.radius if dst.up else dst_r - 20)) / 2
+            # Geometry selection: "time" pins both endpoints to the same radius;
+            # otherwise use midpoint along the branch.
+            if mode == "time" and tr.get("time") is not None:
+                r = float(tr["time"]) * self.sf
+                sx, sy = radial_converter(src_angle, r, self.style.rotation)
+                ex, ey = radial_converter(dst_angle, r, self.style.rotation)
+                src_r_mid, dst_r_mid = r, r
+            else:
+                src_r = src.rad
+                dst_r = dst.rad
+                src_parent_r = src.up.rad if src.up else (src_r - 20)
+                dst_parent_r = dst.up.rad if dst.up else (dst_r - 20)
 
-            # 2. Get Start/End Cartesian Coordinates
-            sx, sy = get_cartesian(src_angle, src_r_mid)
-            ex, ey = get_cartesian(dst_angle, dst_r_mid)
+                src_r_mid = (src_r + src_parent_r) / 2
+                dst_r_mid = (dst_r + dst_parent_r) / 2
 
-            # 3. Path Styling
+                sx, sy = radial_converter(src_angle, src_r_mid, self.style.rotation)
+                ex, ey = radial_converter(dst_angle, dst_r_mid, self.style.rotation)
+
             width = (stroke_width * freq) if use_thickness else stroke_width
             path = draw.Path(stroke_width=width, fill="none", stroke_opacity=opacity)
 
@@ -139,19 +140,114 @@ class RadialTreeDrawer(BaseDrawer):
             else:
                 path.args["stroke"] = color
 
-            # 4. Geometry Selection
             path.M(sx, sy)
-            
             if curve_type.upper() == "S":
-                # S-Curve: One point pulls outward, one pulls inward
-                cp1x, cp1y = get_cartesian(src_angle, src_r_mid + arc_intensity)
-                cp2x, cp2y = get_cartesian(dst_angle, dst_r_mid - arc_intensity)
-                path.C(cp1x, cp1y, cp2x, cp2y, ex, ey)
-            
+                c1x, c1y = radial_converter(src_angle, src_r_mid + arc_intensity, self.style.rotation)
+                c2x, c2y = radial_converter(dst_angle, dst_r_mid - arc_intensity, self.style.rotation)
+                path.C(c1x, c1y, c2x, c2y, ex, ey)
             else:
-                # C-Curve: Both points pull INWARD (subtract intensity) to "tuck" toward the root
-                cp1x, cp1y = get_cartesian(src_angle, src_r_mid - arc_intensity)
-                cp2x, cp2y = get_cartesian(dst_angle, dst_r_mid - arc_intensity)
-                path.C(cp1x, cp1y, cp2x, cp2y, ex, ey)
+                c1x, c1y = radial_converter(src_angle, src_r_mid - arc_intensity, self.style.rotation)
+                c2x, c2y = radial_converter(dst_angle, dst_r_mid - arc_intensity, self.style.rotation)
+                path.C(c1x, c1y, c2x, c2y, ex, ey)
 
             self.d.append(path)
+    
+    def add_transfer_legend(
+        self,
+        title="Transfer Frequency",
+        colors=("purple", "orange"),
+        low=0.1,
+        high=1.0,
+        source_label="Source",
+        arrival_label="Arrival",
+        show_frequency=False,
+        show_direction=True,
+        margin=20,
+    ):
+        """Add a transfer legend.
+
+        By default this shows *direction* (two solid colors): a "Source" swatch and an
+        "Arrival" swatch. If you also want a frequency scale, set
+        ``show_frequency=True``.
+
+        Parameters
+        ----------
+        colors:
+            Tuple (source_color, arrival_color). These match the gradient endpoints
+            used by ``plot_transfers(..., gradient_colors=...)``.
+        show_frequency:
+            Draws a gradient bar + numeric low/high labels.
+        show_direction:
+            Draws two solid color swatches labelled source/arrival.
+        """
+        if not (show_frequency or show_direction):
+            return
+
+        font_size = 11
+        num_font_size = 9
+        sw = 14
+        gap = 6
+        pad_x = 10
+        top_pad = 10
+        bottom_pad = 10
+        row_h = 18
+        bar_h = 12
+        bar_w = 110
+
+        # Estimate legend width from label lengths (drawsvg doesn't expose text metrics).
+        max_label_len = 0
+        if show_direction:
+            max_label_len = max(len(str(source_label)), len(str(arrival_label)))
+        if show_frequency:
+            max_label_len = max(max_label_len, len(str(title)))
+        est_text_w = max_label_len * font_size * 0.60
+        w = int(pad_x + sw + gap + est_text_w + pad_x)
+        if show_frequency:
+            w = max(w, pad_x + bar_w + pad_x)
+
+        # Height: SVG y-axis increases downward.
+        content_h = top_pad
+        if show_frequency:
+            # title + bar + low/high labels + spacing
+            content_h += (font_size + 4) + bar_h + (num_font_size + 10) + 6
+        if show_direction:
+            content_h += (2 * row_h)
+        content_h += bottom_pad
+        box_h = content_h
+
+        x = -self.style.width / 2 + 30
+        y = self.style.height / 2 - margin - box_h
+
+        # Background
+        self.d.append(
+            draw.Rectangle(x, y, w, box_h, fill="white", stroke="black", stroke_width=1, opacity=0.9)
+        )
+
+        cursor_y = y + top_pad + 2
+
+        # Optional frequency scale
+        if show_frequency:
+            self.d.append(draw.Text(title, font_size, x + 10, cursor_y, font_family="sans-serif", font_weight="bold"))
+            cursor_y += 10
+
+            grad_id = f"legend_transfer_grad_{random.randint(0, 999999)}"
+            grad = draw.LinearGradient(x + 10, cursor_y + bar_h / 2, x + 10 + bar_w, cursor_y + bar_h / 2, id=grad_id)
+            grad.add_stop(0, colors[0])
+            grad.add_stop(1, colors[1])
+            self.d.append(grad)
+            self.d.append(draw.Rectangle(x + 10, cursor_y, bar_w, bar_h, fill=grad))
+
+            # low/high numeric labels
+            self.d.append(draw.Text(f"{low}", num_font_size, x + 10, cursor_y + bar_h + 12, font_family="sans-serif"))
+            self.d.append(draw.Text(f"{high}", num_font_size, x + 10 + bar_w - 15, cursor_y + bar_h + 12, font_family="sans-serif"))
+            cursor_y += bar_h + 24
+
+        # Direction swatches
+        if show_direction:
+            sw = 14
+            self.d.append(draw.Rectangle(x + 10, cursor_y, sw, sw, fill=colors[0]))
+            self.d.append(draw.Text(source_label, font_size, x + 30, cursor_y + 11, font_family="sans-serif"))
+            cursor_y += row_h
+
+            self.d.append(draw.Rectangle(x + 10, cursor_y, sw, sw, fill=colors[1]))
+            self.d.append(draw.Text(arrival_label, font_size, x + 30, cursor_y + 11, font_family="sans-serif"))

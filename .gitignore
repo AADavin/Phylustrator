@@ -17,6 +17,7 @@ dist/
 # Large Data & Archives
 *.tar.gz
 *.zip
+patches/
 data/
 legacy/
 dev_archive/
