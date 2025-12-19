@@ -1,5 +1,6 @@
 import drawsvg as draw
 from dataclasses import dataclass
+from pathlib import Path
 import math
 
 @dataclass
@@ -27,16 +28,83 @@ class BaseDrawer:
         self.total_tree_depth = 0
         self.sf = 1.0 
 
-    def save_figure(self, filename, scale=4.0):
-        if filename.endswith(".svg"):
-            self.d.save_svg(filename)
-        else:
+
+    def _draw_shape_at(
+        self,
+        x: float,
+        y: float,
+        shape: str,
+        fill: str,
+        size: float,
+        stroke: str | None,
+        stroke_width: float,
+        rotation: float = 0.0,
+        opacity: float = 1.0,
+    ) -> None:
+        common = {"fill": fill, "opacity": opacity}
+        if stroke is not None:
+            common["stroke"] = stroke
+            common["stroke_width"] = stroke_width
+
+        shp = str(shape).lower()
+        rot = float(rotation)
+
+        # drawsvg uses SVG transforms; rotate around (x,y)
+        transform = None if rot == 0 else f"rotate({rot},{x},{y})"
+
+        if shp == "circle":
+            self.d.append(draw.Circle(x, y, float(size) / 2.0, **common))
+            return
+
+        if shp == "square":
+            s = float(size)
+            self.d.append(
+                draw.Rectangle(x - s / 2.0, y - s / 2.0, s, s, transform=transform, **common)
+            )
+            return
+
+        if shp == "triangle":
+            s = float(size)
+            h = s * math.sqrt(3) / 2.0
+            p1 = (x, y - (2.0 / 3.0) * h)
+            p2 = (x - s / 2.0, y + (1.0 / 3.0) * h)
+            p3 = (x + s / 2.0, y + (1.0 / 3.0) * h)
+
+            path = draw.Path(transform=transform, **common)
+            path.M(*p1).L(*p2).L(*p3).Z()
+            self.d.append(path)
+            return
+
+        raise ValueError(f"Unknown shape: {shape!r}. Use circle/square/triangle.")
+
+
+
+    def save_svg(self, outpath: str | Path) -> None:
+        outpath = Path(outpath)
+        outpath.parent.mkdir(parents=True, exist_ok=True)
+        self.d.save_svg(str(outpath))
+
+    def save_png(self, outpath: str | Path, scale: float = 1.0) -> None:
+        """
+        Export PNG using CairoSVG (optional dependency).
+        scale>1 increases resolution while keeping same logical size.
+        """
+        try:
             import cairosvg
-            svg_data = self.d.as_svg()
-            if filename.endswith(".png"):
-                cairosvg.svg2png(bytestring=svg_data, write_to=filename, scale=scale)
-            elif filename.endswith(".pdf"):
-                cairosvg.svg2pdf(bytestring=svg_data, write_to=filename)
+        except ImportError as e:
+            raise ImportError(
+                "PNG export requires cairosvg. Install with: pip install 'phylustrator[export]'"
+            ) from e
+
+        outpath = Path(outpath)
+        outpath.parent.mkdir(parents=True, exist_ok=True)
+        
+        svg_text = self.d.as_svg()
+        cairosvg.svg2png(
+            bytestring=svg_text.encode("utf-8"),
+            write_to=str(outpath),
+            scale=scale,
+        )
 
     def add_legend(
         self,
@@ -170,3 +238,150 @@ class BaseDrawer:
 
             self.d.append(draw.Text(str(label), font_size, text_x, y, font_family=font_family, fill="black"))
             y += row_h
+
+    def _leaf_xy(self, leaf, offset: float = 0.0) -> tuple[float, float]:
+        """Return (x, y) coordinates for a leaf.
+
+        Subclasses must implement this. The ``offset`` parameter is in pixels and
+        should move the position away from the leaf tip (e.g., to the right for
+        vertical trees, outward for radial trees).
+        """
+        raise NotImplementedError
+
+
+    def add_leaf_shapes(
+        self,
+        leaves,
+        shape: str = "circle",
+        fill: str = "blue",
+        size: float = 10,
+        stroke: str | None = None,
+        stroke_width: float = 1,
+        offset: float = 0.0,
+        rotation: float = 0.0,
+        orient: str | None = None,   # NEW: "radial" or "tangent" (mainly for radial)
+        opacity: float = 1.0,
+    ):
+        if leaves is None:
+            return
+
+        leaf_nodes = []
+        for item in leaves:
+            if isinstance(item, str):
+                try:
+                    leaf_nodes.append(self.t & item)  # ete3 lookup by name
+                except Exception:
+                    continue
+            else:
+                leaf_nodes.append(item)
+
+        # ensure layout exists once if needed
+        if leaf_nodes:
+            if not hasattr(leaf_nodes[0], "rad") and not hasattr(leaf_nodes[0], "coordinates"):
+                if hasattr(self, "_calculate_layout"):
+                    self._calculate_layout()
+
+        for leaf in leaf_nodes:
+            x, y = self._leaf_xy(leaf, offset=float(offset))
+
+            rot = float(rotation)
+            if orient is not None:
+                o = str(orient).lower().strip()
+                # Default: only radial drawers will have "angle"
+                if hasattr(leaf, "angle"):
+                    base_rot = float(leaf.angle) + float(getattr(self.style, "rotation", 0.0))
+                    if o == "radial":
+                        rot = base_rot
+                    elif o == "tangent":
+                        rot = base_rot + 90.0
+
+            self._draw_shape_at(
+                x=x, y=y,
+                shape=shape,
+                fill=fill,
+                size=size,
+                stroke=stroke,
+                stroke_width=stroke_width,
+                rotation=rot,
+                opacity=opacity,
+            )
+
+    def _node_xy(self, node) -> tuple[float, float]:
+        """Subclasses must implement: x,y coordinates of any node."""
+        raise NotImplementedError
+
+    def _edge_point(self, child, where: float) -> tuple[float, float, float]:
+        """
+        Default edge interpolation: straight line from parent to child.
+        Returns (x,y,angle_degrees_along_edge).
+        Subclasses can override (vertical should).
+        """
+        parent = child.up
+        x0, y0 = self._node_xy(parent)
+        x1, y1 = self._node_xy(child)
+
+        t = max(0.0, min(1.0, float(where)))
+        x = x0 + (x1 - x0) * t
+        y = y0 + (y1 - y0) * t
+
+        ang = math.degrees(math.atan2(y1 - y0, x1 - x0))
+        return x, y, ang
+
+    def add_branch_shapes(
+         self,
+         specs: list[dict],
+         default_where: float = 0.5,
+         orient: str | None = None,  # "along" or "perp"
+         offset: float = 0.0,        # perpendicular offset in px
+     ) -> None:
+         """
+         Add shapes on branches.
+ 
+         Each spec dict can include:
+           branch (str|node), where, shape, fill, size, stroke, stroke_width, rotation, opacity
+         """
+    
+         for s in specs:
+             br = s.get("branch", None)
+             if br is None:
+                 continue
+
+             # resolve
+             if isinstance(br, str):
+                 try:
+                     child = self.t & br
+                 except Exception:
+                     continue
+             else:
+                 child = br
+
+             if child.up is None:
+                 continue  # no parent edge
+
+             where = float(s.get("where", default_where))
+             x, y, edge_ang = self._edge_point(child, where=where)
+
+             # optional perpendicular offset
+             if offset != 0.0:
+                 perp = edge_ang + 90.0
+                 x += float(offset) * math.cos(math.radians(perp))
+                 y += float(offset) * math.sin(math.radians(perp))
+
+             rot = float(s.get("rotation", 0.0))
+             if orient is not None:
+                 o = str(orient).lower().strip()
+                 if o == "along":
+                     rot = edge_ang
+                 elif o == "perp":
+                     rot = edge_ang + 90.0
+
+             self._draw_shape_at(
+                 x=x, y=y,
+                 shape=s.get("shape", "circle"),
+                 fill=s.get("fill", "blue"),
+                 size=float(s.get("size", 10)),
+                 stroke=s.get("stroke", None),
+                 stroke_width=float(s.get("stroke_width", 1)),
+                 rotation=rot,
+                 opacity=float(s.get("opacity", 1.0)),
+             )
