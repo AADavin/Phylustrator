@@ -7,78 +7,43 @@ class VerticalTreeDrawer(BaseDrawer):
         super().__init__(tree, style)
         self._calculate_layout()
 
-    def _leaf_xy(self, leaf, offset: float = 0.0) -> tuple[float, float]:
-        """Return leaf (x, y) in drawing coordinates.
-
-        Notes
-        -----
-        In this drawer, ``node.coordinates`` is always a tuple ``(x, y)``.
-        ``offset`` shifts the marker to the right (+x), in pixels.
-        """
-        if not hasattr(leaf, "coordinates"):
-            self._calculate_layout()
-        x, y = leaf.coordinates
-        return float(x) + float(offset), float(y)
-    
-    def _node_xy(self, node) -> tuple[float, float]:
-        """Return node (x, y) in drawing coordinates.
-
-        Uses ``node.coordinates == (x, y)``.
-        """
+    def _node_xy(self, node):
         if not hasattr(node, "coordinates"):
             self._calculate_layout()
-        x, y = node.coordinates
+        x, y = node.coordinates  # coordinates is (x,y)
         return float(x), float(y)
+
+    def _leaf_xy(self, leaf, offset: float = 0.0):
+        x, y = self._node_xy(leaf)
+        return (x + float(offset), y)
 
     def _edge_point(self, child, where: float):
         """
-        Vertical tree edges are drawn as orthogonal (L-shaped):
-          parent -> (child.x, parent.y) -> child
-        Place markers along this polyline by arc-length fraction.
+        Place markers along the *horizontal* part of the rectangular edge:
+        (x_parent, y_child) -> (x_child, y_child)
+
+        This keeps y constant, so where=0 is at the elbow (NOT on the shared vertical),
+        and where=1 is at the child tip.
         """
-        import math
-
         parent = child.up
-        x0, y0 = self._node_xy(parent)
-        x2, y2 = self._node_xy(child)
-        x1, y1 = x2, y0
+        if parent is None:
+            x, y = self._node_xy(child)
+            return x, y, 0.0
 
-        # segment lengths
-        l01 = abs(x1 - x0) + abs(y1 - y0)
-        l12 = abs(x2 - x1) + abs(y2 - y1)
-        L = l01 + l12 if (l01 + l12) > 0 else 1.0
+        # Ensure layout exists
+        if not hasattr(parent, "coordinates") or not hasattr(child, "coordinates"):
+            self._calculate_layout()
+
+        x_parent, _y_parent = self._node_xy(parent)
+        x_child, y_child = self._node_xy(child)
 
         t = max(0.0, min(1.0, float(where)))
-        d = t * L
+        x = x_parent + (x_child - x_parent) * t
+        y = y_child
 
-        if d <= l01:
-            # on first segment
-            # direction is horizontal or vertical, but here it's mostly horizontal
-            if abs(x1 - x0) >= 1e-9:
-                sign = 1 if x1 > x0 else -1
-                x = x0 + sign * d
-                y = y0
-                ang = 0.0 if sign > 0 else 180.0
-            else:
-                sign = 1 if y1 > y0 else -1
-                x = x0
-                y = y0 + sign * d
-                ang = 90.0 if sign > 0 else -90.0
-            return x, y, ang
-
-        # on second segment
-        d2 = d - l01
-        if abs(y2 - y1) >= 1e-9:
-            sign = 1 if y2 > y1 else -1
-            x = x1
-            y = y1 + sign * d2
-            ang = 90.0 if sign > 0 else -90.0
-        else:
-            sign = 1 if x2 > x1 else -1
-            x = x1 + sign * d2
-            y = y1
-            ang = 0.0 if sign > 0 else 180.0
-        return x, y, ang
+        # Horizontal direction only (no weird rotations)
+        edge_ang = 0.0 if (x_child - x_parent) >= 0 else 180.0
+        return x, y, edge_ang
 
     def _calculate_layout(self):
         # 1. Calculate Distances
