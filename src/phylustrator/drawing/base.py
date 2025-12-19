@@ -1,7 +1,6 @@
 import drawsvg as draw
 from dataclasses import dataclass
 import math
-import random
 
 @dataclass
 class TreeStyle:
@@ -38,15 +37,3 @@ class BaseDrawer:
                 cairosvg.svg2png(bytestring=svg_data, write_to=filename, scale=scale)
             elif filename.endswith(".pdf"):
                 cairosvg.svg2pdf(bytestring=svg_data, write_to=filename)
-
-    def add_scale_bar(self, length=None, label=None, x=None, y=None):
-        if length is None:
-            target = self.total_tree_depth * 0.1
-            exponent = math.floor(math.log10(target)) if target > 0 else 0
-            length = round(target, -exponent)
-        px_length = length * self.sf
-        label = label if label else f"{length}"
-        x = x if x is not None else -self.style.width / 2 + 50
-        y = y if y is not None else self.style.height / 2 - 50
-        self.d.append(draw.Line(x, y, x + px_length, y, stroke="black", stroke_width=2))
-        self.d.append(draw.Text(label, 12, x + (px_length / 2), y + 20, text_anchor="middle"))

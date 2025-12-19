@@ -1,8 +1,14 @@
 # Python garbage
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 .ipynb_checkpoints/
+build/
+dist/
+
+# Mac system files
+.DS_Store
 
 # IDE settings
 .vscode/
@@ -17,5 +23,10 @@ dev_archive/
 ale_results/
 alerax_output/
 
-# Allow specific example data if you want, but generally ignore root 'data'
+# Virtual Environments
+env/
+venv/
+.env/
+
+# Allow specific example data
 !examples/data/

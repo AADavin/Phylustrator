@@ -29,19 +29,39 @@ class RadialTreeDrawer(BaseDrawer):
             n.rad = n.dist_to_root * self.sf
             n.xy = radial_converter(n.angle, n.rad, self.style.rotation)
 
-    def draw(self):
+    def draw(self, branch2color=None, hide_radial_lines=None):
+        """
+        Standard radial drawing loop.
+        :param branch2color: Dictionary {node_object: color_string}
+        :param hide_radial_lines: List of nodes to skip parent connections
+        """
+        hidden_set = set(hide_radial_lines) if hide_radial_lines else set()
+
         for n in self.t.traverse("postorder"):
+            # Resolve Color
+            b_color = self.style.branch_color
+            if branch2color and n in branch2color:
+                b_color = branch2color[n]
+                if b_color == "None": continue
+
             x, y = n.xy
-            if not n.is_root():
+
+            # 1. Radial Line to Parent
+            if not n.is_root() and n not in hidden_set:
                 px, py = radial_converter(n.angle, n.up.rad, self.style.rotation)
-                self.d.append(draw.Line(px, py, x, y, stroke=self.style.branch_color, stroke_width=self.style.branch_size))
+                self.d.append(draw.Line(px, py, x, y, stroke=b_color, stroke_width=self.style.branch_size))
+
+            # 2. Connector Arc and Nodes
             if not n.is_leaf():
                 a1, a2 = n.children[0].angle, n.children[-1].angle
-                p = draw.Path(stroke=self.style.branch_color, stroke_width=self.style.branch_size, fill="none")
+                p = draw.Path(stroke=b_color, stroke_width=self.style.branch_size, fill="none")
                 sx, sy = radial_converter(a1, n.rad, self.style.rotation)
                 ex, ey = radial_converter(a2, n.rad, self.style.rotation)
                 p.M(sx, sy).A(n.rad, n.rad, 0, 0, 1, ex, ey)
                 self.d.append(p)
+                
+                if not n.is_root():
+                    self.d.append(draw.Circle(x, y, self.style.node_size, fill=b_color))
             else:
                 self.d.append(draw.Circle(x, y, self.style.leaf_size, fill=self.style.leaf_color))
 
