@@ -287,13 +287,17 @@ class BaseDrawer:
             rot = float(rotation)
             if orient is not None:
                 o = str(orient).lower().strip()
-                # Default: only radial drawers will have "angle"
-                if hasattr(leaf, "angle"):
-                    base_rot = float(leaf.angle) + float(getattr(self.style, "rotation", 0.0))
-                    if o == "radial":
-                        rot = base_rot
-                    elif o == "tangent":
-                        rot = base_rot + 90.0
+
+                # Use the actual rendered vector (x,y) in the drawing coordinate system.
+                # SVG has y pointing DOWN, so atan2(y, x) yields a clockwise angle.
+                a = math.degrees(math.atan2(y, x))
+
+                # Our triangle path is "pointing up" when rotation=0,
+                # so to point along direction angle 'a' we add +90 degrees.
+                if o == "radial":
+                    rot = a + 90.0
+                elif o == "tangent":
+                    rot = a + 180.0
 
             self._draw_shape_at(
                 x=x, y=y,
