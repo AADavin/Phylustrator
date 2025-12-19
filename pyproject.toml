@@ -22,3 +22,7 @@ dependencies = [
 
 [project.urls]
 "Homepage" = "https://github.com/AADavin/Phylustrator"  
+
+[project.optional-dependencies]
+export = ["cairosvg>=2.5"]
+

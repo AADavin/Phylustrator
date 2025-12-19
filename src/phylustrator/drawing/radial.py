@@ -12,6 +12,24 @@ class RadialTreeDrawer(BaseDrawer):
         super().__init__(tree, style)
         self._calculate_layout()
 
+    def _leaf_xy(self, leaf, offset: float = 0.0) -> tuple[float, float]:
+        """Return leaf (x, y) in drawing coordinates.
+
+        This drawer uses ``origin='center'`` and stores angles in degrees.
+        ``offset`` moves the point outward (increasing radius), in pixels.
+        The returned coordinates match the rotated layout used for drawing.
+        """
+        if not hasattr(leaf, "rad") or not hasattr(leaf, "angle"):
+            self._calculate_layout()
+        r = float(leaf.rad) + float(offset)
+        return radial_converter(leaf.angle, r, self.style.rotation)
+    
+    def _node_xy(self, node) -> tuple[float, float]:
+        """Return node (x, y) in drawing coordinates (matches rotated layout)."""
+        if not hasattr(node, "rad") or not hasattr(node, "angle"):
+            self._calculate_layout()
+        return radial_converter(node.angle, node.rad, self.style.rotation)
+
     def _calculate_layout(self):
         max_dist = 0
         for n in self.t.traverse("preorder"):
