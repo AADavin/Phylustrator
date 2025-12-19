@@ -131,6 +131,11 @@ class VerticalTreeDrawer(BaseDrawer):
         """
         name2node = {n.name: n for n in self.t.traverse()}
 
+        # Ensure layout attributes exist (coordinates/y_coord live on nodes)
+        any_node = next(self.t.traverse("preorder"))
+        if not hasattr(any_node, "coordinates") or not hasattr(any_node, "y_coord"):
+            self._calculate_layout()
+
         for tr in transfers:
             # 1. Filter by frequency
             freq = tr.get("freq", 1.0)
@@ -186,3 +191,21 @@ class VerticalTreeDrawer(BaseDrawer):
                        x_end, dst.y_coord)
 
             self.d.append(path)
+    
+    def add_transfer_legend(self, colors=("purple", "orange"), source_label="Source", donor_label="Donor"):
+        """
+        Adds a legend with solid color blocks for Source and Donor.
+        """
+        x_off = -self.style.width / 2 + 30
+        y_off = self.style.height / 2 - 80
+        
+        # Legend Background
+        self.d.append(draw.Rectangle(x_off, y_off, 120, 60, fill='white', stroke='black', stroke_width=1))
+        
+        # Source Block
+        self.d.append(draw.Rectangle(x_off + 10, y_off + 10, 15, 15, fill=colors[0]))
+        self.d.append(draw.Text(source_label, 12, x_off + 35, y_off + 22, font_family='sans-serif'))
+        
+        # Donor Block
+        self.d.append(draw.Rectangle(x_off + 10, y_off + 35, 15, 15, fill=colors[1]))
+        self.d.append(draw.Text(donor_label, 12, x_off + 35, y_off + 47, font_family='sans-serif'))
