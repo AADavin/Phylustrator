@@ -1,3 +1,4 @@
+from platform import node
 import drawsvg as draw
 import math
 import random
@@ -12,23 +13,56 @@ class RadialTreeDrawer(BaseDrawer):
         super().__init__(tree, style)
         self._calculate_layout()
 
-    def _leaf_xy(self, leaf, offset: float = 0.0) -> tuple[float, float]:
-        """Return leaf (x, y) in drawing coordinates.
+    def _rot_ang(self, ang_deg: float) -> float:
+        # layout angle + style rotation (degrees)
+        return float(ang_deg) + float(getattr(self.style, "rotation", 0.0))
 
-        This drawer uses ``origin='center'`` and stores angles in degrees.
-        ``offset`` moves the point outward (increasing radius), in pixels.
-        The returned coordinates match the rotated layout used for drawing.
-        """
-        if not hasattr(leaf, "rad") or not hasattr(leaf, "angle"):
+
+    def _node_xy(self, node):
+        if not (hasattr(node, "rad") and hasattr(node, "angle")):
+            self._calculate_layout()
+        r = float(node.rad)
+        ang = self._rot_ang(node.angle)
+        th = math.radians(ang)
+        return (r * math.cos(th), r * math.sin(th))
+
+
+    def _leaf_xy(self, leaf, offset: float = 0.0):
+        if not (hasattr(leaf, "rad") and hasattr(leaf, "angle")):
             self._calculate_layout()
         r = float(leaf.rad) + float(offset)
-        return radial_converter(leaf.angle, r, self.style.rotation)
-    
-    def _node_xy(self, node) -> tuple[float, float]:
-        """Return node (x, y) in drawing coordinates (matches rotated layout)."""
-        if not hasattr(node, "rad") or not hasattr(node, "angle"):
+        ang = self._rot_ang(leaf.angle)
+        th = math.radians(ang)
+        return (r * math.cos(th), r * math.sin(th))
+
+
+    def _edge_point(self, child, where: float):
+        """
+        Place a point along the drawn branch centerline (radial segment at CHILD angle).
+        where=0 => (r=parent.rad, angle=child.angle)
+        where=1 => (r=child.rad,  angle=child.angle)
+        """
+        parent = child.up
+        if parent is None:
+            x, y = self._node_xy(child)
+            return x, y, 0.0
+
+        if not (hasattr(parent, "rad") and hasattr(child, "rad") and hasattr(child, "angle")):
             self._calculate_layout()
-        return radial_converter(node.angle, node.rad, self.style.rotation)
+
+        r0 = float(parent.rad)
+        r1 = float(child.rad)
+        t = max(0.0, min(1.0, float(where)))
+        r = r0 + (r1 - r0) * t
+
+        ang = self._rot_ang(child.angle)
+        th = math.radians(ang)
+        x = r * math.cos(th)
+        y = r * math.sin(th)
+
+        # orientation "along" the branch direction
+        edge_ang = ang if (r1 - r0) >= 0 else (ang + 180.0)
+        return x, y, edge_ang
 
     def _calculate_layout(self):
         max_dist = 0

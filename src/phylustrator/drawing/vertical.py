@@ -32,53 +32,44 @@ class VerticalTreeDrawer(BaseDrawer):
 
     def _edge_point(self, child, where: float):
         """
-        Vertical tree edges are drawn as orthogonal (L-shaped):
-          parent -> (child.x, parent.y) -> child
-        Place markers along this polyline by arc-length fraction.
+        Vertical edges are drawn as an L:
+        parent (x0,y0) -> (x_child, y0) -> child (x_child, y_child)
+        Place marker at fraction 'where' along that polyline (by length).
         """
-        import math
-
         parent = child.up
+        if parent is None:
+            x, y = self._node_xy(child)
+            return x, y, 0.0
+
         x0, y0 = self._node_xy(parent)
         x2, y2 = self._node_xy(child)
         x1, y1 = x2, y0
 
-        # segment lengths
-        l01 = abs(x1 - x0) + abs(y1 - y0)
-        l12 = abs(x2 - x1) + abs(y2 - y1)
-        L = l01 + l12 if (l01 + l12) > 0 else 1.0
+        l1 = abs(x1 - x0) + abs(y1 - y0)
+        l2 = abs(x2 - x1) + abs(y2 - y1)
+        L = l1 + l2 if (l1 + l2) > 1e-12 else 1.0
 
         t = max(0.0, min(1.0, float(where)))
         d = t * L
 
-        if d <= l01:
-            # on first segment
-            # direction is horizontal or vertical, but here it's mostly horizontal
-            if abs(x1 - x0) >= 1e-9:
+        if d <= l1:
+            # first segment
+            if abs(x1 - x0) > 1e-12:
                 sign = 1 if x1 > x0 else -1
-                x = x0 + sign * d
-                y = y0
-                ang = 0.0 if sign > 0 else 180.0
+                return (x0 + sign * d, y0, 0.0 if sign > 0 else 180.0)
             else:
                 sign = 1 if y1 > y0 else -1
-                x = x0
-                y = y0 + sign * d
-                ang = 90.0 if sign > 0 else -90.0
-            return x, y, ang
+                return (x0, y0 + sign * d, 90.0 if sign > 0 else -90.0)
 
-        # on second segment
-        d2 = d - l01
-        if abs(y2 - y1) >= 1e-9:
+        # second segment
+        d2 = d - l1
+        if abs(y2 - y1) > 1e-12:
             sign = 1 if y2 > y1 else -1
-            x = x1
-            y = y1 + sign * d2
-            ang = 90.0 if sign > 0 else -90.0
+            return (x1, y1 + sign * d2, 90.0 if sign > 0 else -90.0)
         else:
             sign = 1 if x2 > x1 else -1
-            x = x1 + sign * d2
-            y = y1
-            ang = 0.0 if sign > 0 else 180.0
-        return x, y, ang
+            return (x1 + sign * d2, y1, 0.0 if sign > 0 else 180.0)
+
 
     def _calculate_layout(self):
         # 1. Calculate Distances
