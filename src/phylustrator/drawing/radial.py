@@ -86,3 +86,72 @@ class RadialTreeDrawer(BaseDrawer):
             rot = angle if -90 <= (angle % 360) <= 90 else angle - 180
             anchor = "start" if -90 <= (angle % 360) <= 90 else "end"
             self.d.append(draw.Text(l.name, self.style.font_size, x, y, transform=f"rotate({rot},{x},{y})", text_anchor=anchor))
+    
+    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.0, 
+                       use_gradient=True, gradient_colors=("purple", "orange"),
+                       color="orange", use_thickness=True, stroke_width=5,
+                       arc_intensity=40, opacity=0.6):
+        """
+        Plots horizontal gene transfer events on a radial tree.
+        :param curve_type: 'C' pulls the arc toward the center/root; 'S' creates a flow between branches.
+        """
+        name_to_node = {n.name: n for n in self.t.traverse()}
+        
+        # Helper to convert polar (angle, radius) to Cartesian (x, y)
+        def get_cartesian(angle, radius):
+            from .radial import radial_converter
+            return radial_converter(angle, radius, self.style.rotation)
+
+        for tr in transfers:
+            freq = tr.get("freq", 1.0)
+            if freq < filter_below: continue
+
+            src, dst = name_to_node.get(tr['from']), name_to_node.get(tr['to'])
+            if not src or not dst: continue
+
+            # 1. Calculate Angles and Radii
+            # Angle is fixed by the node's position; Radius depends on branch length
+            src_angle = src.angle
+            dst_angle = dst.angle
+            
+            src_r = src.radius
+            dst_r = dst.radius
+
+            # Midpoint logic: pull slightly back from the node to the middle of its branch
+            src_r_mid = (src_r + (src.up.radius if src.up else src_r - 20)) / 2
+            dst_r_mid = (dst_r + (dst.up.radius if dst.up else dst_r - 20)) / 2
+
+            # 2. Get Start/End Cartesian Coordinates
+            sx, sy = get_cartesian(src_angle, src_r_mid)
+            ex, ey = get_cartesian(dst_angle, dst_r_mid)
+
+            # 3. Path Styling
+            width = (stroke_width * freq) if use_thickness else stroke_width
+            path = draw.Path(stroke_width=width, fill="none", stroke_opacity=opacity)
+
+            if use_gradient:
+                grad_id = f"tr_grad_{random.randint(0, 999999)}"
+                grad = draw.LinearGradient(sx, sy, ex, ey, id=grad_id)
+                grad.add_stop(0, gradient_colors[0])
+                grad.add_stop(1, gradient_colors[1])
+                self.d.append(grad)
+                path.args["stroke"] = grad
+            else:
+                path.args["stroke"] = color
+
+            # 4. Geometry Selection
+            path.M(sx, sy)
+            
+            if curve_type.upper() == "S":
+                # S-Curve: One point pulls outward, one pulls inward
+                cp1x, cp1y = get_cartesian(src_angle, src_r_mid + arc_intensity)
+                cp2x, cp2y = get_cartesian(dst_angle, dst_r_mid - arc_intensity)
+                path.C(cp1x, cp1y, cp2x, cp2y, ex, ey)
+            
+            else:
+                # C-Curve: Both points pull INWARD (subtract intensity) to "tuck" toward the root
+                cp1x, cp1y = get_cartesian(src_angle, src_r_mid - arc_intensity)
+                cp2x, cp2y = get_cartesian(dst_angle, dst_r_mid - arc_intensity)
+                path.C(cp1x, cp1y, cp2x, cp2y, ex, ey)
+
+            self.d.append(path)

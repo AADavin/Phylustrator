@@ -119,48 +119,70 @@ class VerticalTreeDrawer(BaseDrawer):
             x, y = l.coordinates
             self.d.append(draw.Text(l.name, self.style.font_size, x+padding, y+self.style.font_size/3))
 
-    def mark_events(self, events, type_filter=None, shape="circle", color="red", size=5):
+    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.0, 
+                       use_gradient=True, gradient_colors=("purple", "orange"),
+                       color="orange", use_thickness=True, stroke_width=5,
+                       arc_intensity=40, opacity=0.6):
+        """
+        Plots horizontal gene transfer events as curved lines.
+        :param curve_type: "C" for a classic bulge (default), "S" for an S-shaped flow.
+        :param arc_intensity: The 'strength' of the curve. For C-curves, positive values 
+                              tuck the bulge toward the root.
+        """
         name2node = {n.name: n for n in self.t.traverse()}
-        for ev in events:
-            if type_filter and ev.get('type') != type_filter: continue
-            node = name2node.get(ev.get('node'))
-            if not node: continue
-            
-            # Support both Zombi (time) and midpoint logic
-            if ev.get('time') is not None:
-                x = self.root_x + (ev['time'] * self.sf)
-            else:
-                x = (node.up.coordinates[0] + node.coordinates[0]) / 2
-                
-            y = node.y_coord
-            if shape == "circle": self.d.append(draw.Circle(x, y, size, fill=color))
-            elif shape == "square": self.d.append(draw.Rectangle(x-size, y-size, size*2, size*2, fill=color))
-            elif shape == "x":
-                p = draw.Path(stroke=color, stroke_width=2).M(x-size, y-size).L(x+size, y+size).M(x-size, y+size).L(x+size, y-size)
-                self.d.append(p)
 
-    def add_transfer_links(self, transfers, gradient_colors=("purple", "orange"), stroke_width=2, arrows=True):
-        name2node = {n.name: n for n in self.t.traverse()}
         for tr in transfers:
-            src, dst = name2node.get(tr['from']), name2node.get(tr['to'])
-            if not src or not dst: continue
-            
-            x = self.root_x + (tr['time'] * self.sf)
-            path = draw.Path(stroke_width=stroke_width, fill="none", stroke_opacity=0.6)
-            
-            if gradient_colors:
-                grad_id = f"tr_{random.randint(0,9999)}"
-                grad = draw.LinearGradient(x, src.y_coord, x, dst.y_coord, id=grad_id)
-                grad.add_stop(0, gradient_colors[0]).add_stop(1, gradient_colors[1])
-                self.d.append(grad)
-                path.args['stroke'] = grad
-            else:
-                path.args['stroke'] = "orange"
+            # 1. Filter by frequency
+            freq = tr.get("freq", 1.0)
+            if freq < filter_below:
+                continue
 
-            path.M(x, src.y_coord).C(x+50, src.y_coord, x+50, dst.y_coord, x, dst.y_coord)
-            if arrows:
-                marker = draw.Marker(9, 5, 2, 2, scale=2, orient="auto")
-                marker.append(draw.Path("M 0 0 L 10 5 L 0 10 z", fill=gradient_colors[1] if gradient_colors else "orange"))
-                self.d.append(marker)
-                path.args['marker_end'] = marker
+            src, dst = name2node.get(tr["from"]), name2node.get(tr["to"])
+            if not src or not dst:
+                continue
+
+            # 2. Calculate X-Coordinates (Preserves Midpoint vs. Time options)
+            if mode == "time" and tr.get('time') is not None:
+                x_start = self.root_x + (tr['time'] * self.sf)
+                x_end = x_start
+            else:
+                src_px = src.up.coordinates[0] if src.up else src.coordinates[0] - 20
+                dst_px = dst.up.coordinates[0] if dst.up else dst.coordinates[0] - 20
+                x_start = (src_px + src.coordinates[0]) / 2
+                x_end = (dst_px + dst.coordinates[0]) / 2
+
+            # 3. Path styling
+            width = (stroke_width * freq) if use_thickness else stroke_width
+            path = draw.Path(stroke_width=width, fill="none", stroke_opacity=opacity)
+
+            # 4. Color / Gradient Logic
+            if use_gradient:
+                grad_id = f"tr_grad_{random.randint(0, 999999)}"
+                grad = draw.LinearGradient(x_start, src.y_coord, x_end, dst.y_coord, id=grad_id)
+                grad.add_stop(0, gradient_colors[0]) 
+                grad.add_stop(1, gradient_colors[1])
+                self.d.append(grad)
+                path.args["stroke"] = grad
+            else:
+                path.args["stroke"] = color
+
+            # 5. Geometry Selection
+            path.M(x_start, src.y_coord)
+            
+            if curve_type.upper() == "S":
+                # S-Curve Logic: Control points pull in opposite directions
+                dx = x_end - x_start
+                sgn = 1 if dx >= 0 else -1
+                arc = abs(arc_intensity)
+                cp1x = x_start + (sgn * arc)
+                cp2x = x_end - (sgn * arc)
+                path.C(cp1x, src.y_coord, cp2x, dst.y_coord, x_end, dst.y_coord)
+            
+            else:
+                # C-Curve Logic: Both points pull in the same direction
+                # Using '- arc_intensity' here so that positive values 'tuck' toward root
+                path.C(x_start - arc_intensity, src.y_coord, 
+                       x_end - arc_intensity, dst.y_coord, 
+                       x_end, dst.y_coord)
+
             self.d.append(path)
