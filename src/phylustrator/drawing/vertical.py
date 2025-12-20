@@ -147,8 +147,13 @@ class VerticalTreeDrawer(BaseDrawer):
         x, y = node.coordinates
         px, _ = node.up.coordinates
         grad_id = f"grad_{random.randint(0,9999)}"
+        
         grad = draw.LinearGradient(px, y, x, y, id=grad_id)
-        grad.add_stop(0, colors[0]).add_stop(1, colors[1])
+        
+        # Split these into two separate calls
+        grad.add_stop(0, colors[0])
+        grad.add_stop(1, colors[1])
+        
         self.d.append(grad)
         self.d.append(draw.Line(px, y, x, y, stroke=grad, stroke_width=s_width))
 

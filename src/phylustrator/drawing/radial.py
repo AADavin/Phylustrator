@@ -134,11 +134,31 @@ class RadialTreeDrawer(BaseDrawer):
     def add_leaf_names(self, padding=15):
         for l in self.t.get_leaves():
             angle = l.angle + self.style.rotation
-            x, y = radial_converter(l.angle, self.style.radius + padding, self.style.rotation)
-            rot = angle if -90 <= (angle % 360) <= 90 else angle - 180
-            anchor = "start" if -90 <= (angle % 360) <= 90 else "end"
-            self.d.append(draw.Text(l.name, self.style.font_size, x, y, transform=f"rotate({rot},{x},{y})", text_anchor=anchor))
-    
+            ang_mod = angle % 360.0
+
+            # SVG y-axis is downward, so the "right side" includes angles near 360 as well
+            right_side = (ang_mod <= 90.0) or (ang_mod >= 270.0)
+
+            # place at leaf tip radius, not at a fixed style.radius
+            x, y = radial_converter(l.angle, float(l.rad) + float(padding), self.style.rotation)
+
+            rot = angle if right_side else (angle - 180.0)
+            anchor = "start" if right_side else "end"
+
+            self.d.append(
+                draw.Text(
+                    l.name,
+                    self.style.font_size,
+                    x,
+                    y,
+                    transform=f"rotate({rot},{x},{y})",
+                    text_anchor=anchor,
+                    dominant_baseline="middle",
+                    font_family=self.style.font_family,
+                )
+            )
+
+
     def plot_transfers(
         self,
         transfers,
@@ -353,3 +373,123 @@ class RadialTreeDrawer(BaseDrawer):
 
             self.d.append(draw.Rectangle(x + 10, cursor_y, sw, sw, fill=colors[1]))
             self.d.append(draw.Text(arrival_label, font_size, x + 30, cursor_y + 11, font_family="sans-serif"))
+
+    def add_ring_heatmap(
+        self,
+        values,
+        width: float = 20.0,
+        padding: float = 10.0,
+        vmin: float | None = None,
+        vmax: float | None = None,
+        low_color: str = "#f7fbff",
+        high_color: str = "#08306b",
+        missing_color: str = "white",
+    ):
+        """Add a numeric heatmap ring around the radial tree.
+
+        Parameters
+        ----------
+        values:
+            Mapping leaf_name -> numeric value, OR a pandas Series, OR a DataFrame with columns
+            ["leaf", "value"] (any column names are fine if you pass a dict instead).
+        width:
+            Ring thickness in px.
+        padding:
+            Distance outward from the tree radius.
+        vmin, vmax:
+            Normalization bounds. If None, computed from provided values.
+        low_color, high_color:
+            Gradient endpoints (hex colors).
+        missing_color:
+            Fill used if a leaf is missing from the values.
+        """
+        # ---- normalize inputs to dict[str, float] ----
+        if hasattr(values, "to_dict") and not isinstance(values, dict):
+            # pandas Series
+            values = values.to_dict()
+
+        if hasattr(values, "columns") and hasattr(values, "to_dict") and not isinstance(values, dict):
+            # DataFrame-like: try common formats
+            cols = list(values.columns)
+            if len(cols) >= 2:
+                leaf_col, val_col = cols[0], cols[1]
+                values = dict(zip(values[leaf_col].astype(str), values[val_col].astype(float)))
+            else:
+                values = {}
+
+        if not isinstance(values, dict):
+            raise TypeError("values must be a dict, pandas Series, or a DataFrame with 2 columns.")
+
+        # ---- helpers for color interpolation ----
+        def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+            h = h.lstrip("#")
+            return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+        def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+            return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+        def _lerp(a: float, b: float, t: float) -> float:
+            return a + (b - a) * t
+
+        c0 = _hex_to_rgb(low_color)
+        c1 = _hex_to_rgb(high_color)
+
+        def _lerp_color(t: float) -> str:
+            t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+            r = int(_lerp(c0[0], c1[0], t))
+            g = int(_lerp(c0[1], c1[1], t))
+            b = int(_lerp(c0[2], c1[2], t))
+            return _rgb_to_hex((r, g, b))
+
+        # ---- determine vmin/vmax from provided numeric values ----
+        vals = []
+        for k, v in values.items():
+            try:
+                vals.append(float(v))
+            except Exception:
+                continue
+
+        if not vals:
+            return
+
+        if vmin is None:
+            vmin = min(vals)
+        if vmax is None:
+            vmax = max(vals)
+        if float(vmax) == float(vmin):
+            vmax = float(vmin) + 1e-12
+
+        vmin = float(vmin)
+        vmax = float(vmax)
+
+        # ---- ring geometry (same as add_ring) ----
+        r_in = float(self.style.radius) + float(padding)
+        r_out = r_in + float(width)
+
+        for l in self.t.get_leaves():
+            name = str(l.name)
+            if name not in values:
+                fill = missing_color
+            else:
+                try:
+                    v = float(values[name])
+                    tnorm = (v - vmin) / (vmax - vmin)
+                    fill = _lerp_color(tnorm)
+                except Exception:
+                    fill = missing_color
+
+            a1, a2 = l.angle - self.angle_step / 2.0, l.angle + self.angle_step / 2.0
+            p = draw.Path(fill=fill, stroke="none")
+
+            s_i_x, s_i_y = radial_converter(a1, r_in, self.style.rotation)
+            e_i_x, e_i_y = radial_converter(a2, r_in, self.style.rotation)
+            s_o_x, s_o_y = radial_converter(a1, r_out, self.style.rotation)
+            e_o_x, e_o_y = radial_converter(a2, r_out, self.style.rotation)
+
+            p.M(s_o_x, s_o_y)\
+             .A(r_out, r_out, 0, 0, 1, e_o_x, e_o_y)\
+             .L(e_i_x, e_i_y)\
+             .A(r_in, r_in, 0, 0, 0, s_i_x, s_i_y)\
+             .Z()
+
+            self.d.append(p)

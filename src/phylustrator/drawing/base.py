@@ -468,3 +468,100 @@ class BaseDrawer:
                 rotation=rot,
                 opacity=float(s.get("opacity", 1.0)),
             )
+
+    def add_colorbar(
+        self,
+        vmin: float,
+        vmax: float,
+        low_color: str = "#f7fbff",
+        high_color: str = "#08306b",
+        label: str | None = None,
+        ticks: list[float] | None = None,
+        n_steps: int = 60,
+        bar_width: float = 18.0,
+        bar_height: float = 180.0,
+        margin: float = 18.0,
+        x_offset: float = 0.0,
+        y_offset: float = 0.0,
+        label_pad: float = 10.0,
+        tick_pad: float = 12.0,
+        font_size: int | None = None,
+        font_family: str | None = None,
+        stroke: str = "black",
+        stroke_width: float = 1.0,
+    ):
+        """Add a vertical colorbar to the drawing (top-right by default).
+
+        You can reposition with x_offset / y_offset (in px), relative to top-right anchor.
+        Coordinates assume drawsvg Drawing(origin='center').
+        """
+        def _hex_to_rgb(h: str) -> tuple[int, int, int]:
+            h = h.lstrip("#")
+            return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+        def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+            return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+        def _lerp(a: float, b: float, t: float) -> float:
+            return a + (b - a) * t
+
+        c0 = _hex_to_rgb(low_color)
+        c1 = _hex_to_rgb(high_color)
+
+        def _lerp_color(t: float) -> str:
+            t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
+            r = int(_lerp(c0[0], c1[0], t))
+            g = int(_lerp(c0[1], c1[1], t))
+            b = int(_lerp(c0[2], c1[2], t))
+            return _rgb_to_hex((r, g, b))
+
+        fs = int(font_size) if font_size is not None else int(self.style.font_size)
+        ff = font_family if font_family is not None else self.style.font_family
+
+        # anchor top-right (origin is center)
+        x0 = float(self.style.width) / 2.0 - float(margin) - float(bar_width) + float(x_offset)
+        y_top = -float(self.style.height) / 2.0 + float(margin) + float(y_offset)
+
+        # outline box
+        self.d.append(draw.Rectangle(
+            x0, y_top, bar_width, bar_height,
+            fill="none", stroke=stroke, stroke_width=stroke_width
+        ))
+
+        # gradient fill as stacked rectangles
+        steps = max(2, int(n_steps))
+        step_h = float(bar_height) / steps
+        for i in range(steps):
+            t = i / (steps - 1)
+            fill = _lerp_color(1.0 - t)  # high at top
+            y = y_top + i * step_h
+            self.d.append(draw.Rectangle(x0, y, bar_width, step_h + 0.5, fill=fill, stroke="none"))
+
+        # default ticks
+        if ticks is None:
+            ticks = [vmin, (vmin + vmax) / 2.0, vmax]
+
+        # tick marks + labels (right side)
+        for tv in ticks:
+            frac = 0.0 if vmax == vmin else (float(tv) - float(vmin)) / (float(vmax) - float(vmin))
+            frac = 0.0 if frac < 0.0 else (1.0 if frac > 1.0 else frac)
+
+            y = y_top + (1.0 - frac) * float(bar_height)
+            self.d.append(draw.Line(
+                x0 + bar_width, y,
+                x0 + bar_width + 6, y,
+                stroke=stroke, stroke_width=stroke_width
+            ))
+            self.d.append(draw.Text(
+                str(tv), fs,
+                x0 + bar_width + float(tick_pad), y + fs * 0.35,
+                font_family=ff
+            ))
+
+        # label (above)
+        if label:
+            self.d.append(draw.Text(
+                label, fs,
+                x0 + bar_width / 2.0, y_top - float(label_pad),
+                center=True, font_family=ff
+            ))
