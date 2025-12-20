@@ -2,7 +2,8 @@
 
 A libary for easy plotting of phylogenies
 
-![Phylustrator Example](https://github.com/AADavin/Phylustrator/blob/main//basic_vertical_tree.png)
+![Phylustrator Example](https://github.com/AADavin/Phylustrator/blob/main/examples/figures/vertical_tree.png))
+![Phylustrator Example](https://github.com/AADavin/Phylustrator/blob/main/examples/figures/radial_tree.png))
 
 ##  Installation
 
