@@ -157,6 +157,54 @@ class VerticalTreeDrawer(BaseDrawer):
             x, y = l.coordinates
             self.d.append(draw.Text(l.name, self.style.font_size, x+padding, y+self.style.font_size/3))
 
+
+    def add_time_axis(
+        self,
+        ticks: list[float],
+        label: str = "Time",
+        tick_size: float = 6.0,
+        padding: float = 20.0,
+        y_offset: float = 0.0,
+        root_stub: float = 20.0,   # <- matches VerticalTreeDrawer.draw() root stub
+        stroke: str = "black",
+        stroke_width: float = 2.0,
+        font_size: int | None = None,
+        font_family: str | None = None,
+    ) -> None:
+        """Add a time axis below the tree (vertical layout only).
+
+        The x-coordinate is interpreted as time via: x = root_x + time * sf.
+        """
+        any_node = next(self.t.traverse("preorder"))
+        if not hasattr(any_node, "coordinates") or not hasattr(any_node, "y_coord"):
+            self._calculate_layout()
+
+        fs = int(font_size) if font_size is not None else int(self.style.font_size)
+        ff = font_family if font_family is not None else self.style.font_family
+
+        max_y = max(float(l.y_coord) for l in self.t.get_leaves())
+        y = max_y + float(padding) + float(y_offset)
+
+        x0 = float(self.root_x)
+        x1 = x0 + float(self.total_tree_depth) * float(self.sf)
+
+        # axis line: start where the drawn root stub starts
+        ax0 = x0 - float(root_stub)
+        ax1 = x1
+        self.d.append(draw.Line(ax0, y, ax1, y, stroke=stroke, stroke_width=stroke_width))
+
+        # ticks + labels (ticks are still defined with time=0 at root_x)
+        for tt in ticks:
+            x = x0 + float(tt) * float(self.sf)
+            self.d.append(draw.Line(x, y, x, y + tick_size, stroke=stroke, stroke_width=stroke_width))
+            self.d.append(draw.Text(str(tt), fs, x, y + tick_size + fs, center=True, font_family=ff))
+
+        # axis label
+        self.d.append(
+            draw.Text(label, fs, (ax0 + ax1) / 2.0, y + tick_size + 2.5 * fs, center=True, font_family=ff)
+        )
+
+
     def plot_transfers(
         self,
         transfers,
@@ -187,14 +235,9 @@ class VerticalTreeDrawer(BaseDrawer):
         curve_type
             "C" (default) or "S"
         """
-
-        # Accept either list[dict] or pandas DataFrame
-        try:
-            import pandas as pd  # type: ignore
-            if isinstance(transfers, pd.DataFrame):
-                transfers = transfers.to_dict(orient="records")
-        except Exception:
-            pass
+        # Accept either list[dict] or a DataFrame-like object (e.g. pandas.DataFrame)
+        if hasattr(transfers, "to_dict") and hasattr(transfers, "columns"):
+            transfers = transfers.to_dict(orient="records")
 
         name2node = {n.name: n for n in self.t.traverse()}
 

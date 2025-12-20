@@ -159,14 +159,9 @@ class RadialTreeDrawer(BaseDrawer):
         mode="time" places endpoints at the correct event time along each endpoint branch
         using node.time_from_origin (from Zombi parser). Otherwise uses midpoint logic.
         """
-
-        # Accept either list[dict] or pandas DataFrame
-        try:
-            import pandas as pd  # type: ignore
-            if isinstance(transfers, pd.DataFrame):
-                transfers = transfers.to_dict(orient="records")
-        except Exception:
-            pass
+        # Accept either list[dict] or a DataFrame-like object (e.g. pandas.DataFrame)
+        if hasattr(transfers, "to_dict") and hasattr(transfers, "columns"):
+            transfers = transfers.to_dict(orient="records")
 
         # Ensure layout exists
         any_node = next(self.t.traverse("preorder"))

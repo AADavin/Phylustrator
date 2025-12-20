@@ -239,14 +239,61 @@ class BaseDrawer:
             self.d.append(draw.Text(str(label), font_size, text_x, y, font_family=font_family, fill="black"))
             y += row_h
 
-    def _leaf_xy(self, leaf, offset: float = 0.0) -> tuple[float, float]:
-        """Return (x, y) coordinates for a leaf.
+    
+    def add_scale_bar(
+         self,
+         length: float,
+         label: str | None = None,
+         x: float | None = None,
+         y: float | None = None,
+         stroke: str = "black",
+         stroke_width: float = 2.0,
+         tick_size: float = 6.0,
+         font_size: int | None = None,
+         font_family: str | None = None,
+         padding: float = 10.0,
+     ) -> None:
+         """Add a simple scale bar (tree-length legend).
 
-        Subclasses must implement this. The ``offset`` parameter is in pixels and
-        should move the position away from the leaf tip (e.g., to the right for
-        vertical trees, outward for radial trees).
-        """
-        raise NotImplementedError
+         Parameters
+         ----------
+         length
+             Length in *tree units* (same units used to scale branches).
+         label
+             Text label. If None, uses the numeric length.
+         x, y
+             Anchor position (left end) in drawing coordinates. If omitted, places the
+             bar near the bottom-left with padding.
+         """
+         px = float(length) * float(self.sf)
+         if label is None:
+             label = str(length)
+
+         if x is None:
+             x = -float(self.style.width) / 2.0 + float(padding)
+         if y is None:
+             y = float(self.style.height) / 2.0 - float(padding)
+
+         fs = int(font_size) if font_size is not None else int(self.style.font_size)
+         ff = font_family if font_family is not None else self.style.font_family
+
+         # main bar
+         self.d.append(draw.Line(x, y, x + px, y, stroke=stroke, stroke_width=stroke_width))
+         # end ticks
+         self.d.append(draw.Line(x, y - tick_size / 2.0, x, y + tick_size / 2.0, stroke=stroke, stroke_width=stroke_width))
+         self.d.append(draw.Line(x + px, y - tick_size / 2.0, x + px, y + tick_size / 2.0, stroke=stroke, stroke_width=stroke_width))
+
+         # label above the bar
+         self.d.append(draw.Text(label, fs, x + px / 2.0, y - tick_size - 2, center=True, font_family=ff))
+
+    def _leaf_xy(self, leaf, offset: float = 0.0) -> tuple[float, float]:
+            """Return (x, y) coordinates for a leaf.
+
+            Subclasses must implement this. The ``offset`` parameter is in pixels and
+            should move the position away from the leaf tip (e.g., to the right for
+            vertical trees, outward for radial trees).
+            """
+            raise NotImplementedError
 
 
     def add_leaf_shapes(
@@ -354,59 +401,70 @@ class BaseDrawer:
 
     def add_branch_shapes(
          self,
-         specs: list[dict],
+         specs,
+
          default_where: float = 0.5,
          orient: str | None = None,  # "along" or "perp"
          offset: float = 0.0,        # perpendicular offset in px
      ) -> None:
-         """
+        """
          Add shapes on branches.
  
          Each spec dict can include:
            branch (str|node), where, shape, fill, size, stroke, stroke_width, rotation, opacity
-         """
+        """
     
-         for s in specs:
-             br = s.get("branch", None)
-             if br is None:
-                 continue
+         
+         # Accept either list[dict] or a DataFrame-like object (e.g. pandas.DataFrame)
+        if hasattr(specs, "to_dict") and hasattr(specs, "columns"):
+            specs = specs.to_dict(orient="records")
 
-             # resolve
-             if isinstance(br, str):
-                 try:
-                     child = self.t & br
-                 except Exception:
-                     continue
-             else:
-                 child = br
+        for s in specs:
+            br = s.get("branch", None)
+            if br is None:
+                continue
 
-             if child.up is None:
-                 continue  # no parent edge
+            # resolve
+            if isinstance(br, str):
+                try:
+                    child = self.t & br
+                except Exception:
+                    continue
+            else:
+                child = br
 
-             where = float(s.get("where", default_where))
-             x, y, edge_ang = self._edge_point(child, where=where)
+            if child.up is None:
+                continue  # no parent edge
 
-             # optional perpendicular offset
-             if offset != 0.0:
-                 perp = edge_ang + 90.0
-                 x += float(offset) * math.cos(math.radians(perp))
-                 y += float(offset) * math.sin(math.radians(perp))
+            if "where" in s and s.get("where") is not None:
+                where = float(s.get("where"))
+            elif "time" in s and s.get("time") is not None and hasattr(child, "time_from_origin") and hasattr(child.up, "time_from_origin"):
+                 where = float(self._where_from_time(child, float(s.get("time"))))
+            else:
+                where = float(default_where)
+            x, y, edge_ang = self._edge_point(child, where=where)
 
-             rot = float(s.get("rotation", 0.0))
-             if orient is not None:
-                 o = str(orient).lower().strip()
-                 if o == "along":
-                     rot = edge_ang
-                 elif o == "perp":
-                     rot = edge_ang + 90.0
+            # optional perpendicular offset
+            if offset != 0.0:
+                perp = edge_ang + 90.0
+                x += float(offset) * math.cos(math.radians(perp))
+                y += float(offset) * math.sin(math.radians(perp))
 
-             self._draw_shape_at(
-                 x=x, y=y,
-                 shape=s.get("shape", "circle"),
-                 fill=s.get("fill", "blue"),
-                 size=float(s.get("size", 10)),
-                 stroke=s.get("stroke", None),
-                 stroke_width=float(s.get("stroke_width", 1)),
-                 rotation=rot,
-                 opacity=float(s.get("opacity", 1.0)),
-             )
+            rot = float(s.get("rotation", 0.0))
+            if orient is not None:
+                o = str(orient).lower().strip()
+                if o == "along":
+                    rot = edge_ang
+                elif o == "perp":
+                    rot = edge_ang + 90.0
+
+            self._draw_shape_at(
+                x=x, y=y,
+                shape=s.get("shape", "circle"),
+                fill=s.get("fill", "blue"),
+                size=float(s.get("size", 10)),
+                stroke=s.get("stroke", None),
+                stroke_width=float(s.get("stroke_width", 1)),
+                rotation=rot,
+                opacity=float(s.get("opacity", 1.0)),
+            )
