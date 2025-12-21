@@ -423,3 +423,81 @@ class VerticalTreeDrawer(BaseDrawer):
 
             self.d.append(draw.Rectangle(x + 10, cursor_y, sw, sw, fill=colors[1]))
             self.d.append(draw.Text(arrival_label, 11, x + 30, cursor_y + 11, font_family="sans-serif"))
+
+
+    def add_heatmap(
+            self,
+            values,
+            width: float = 20.0,
+            offset: float = 10.0,
+            vmin: float | None = None,
+            vmax: float | None = None,
+            low_color: str = "#f7fbff",
+            high_color: str = "#08306b",
+            missing_color: str = "white",
+            border_color: str = "none",
+            border_width: float = 0.5
+        ):
+            """Add a vertical heatmap strip next to the tree tips."""
+            # Normalize inputs (same as radial)
+            if hasattr(values, "to_dict") and not isinstance(values, dict):
+                values = values.to_dict()
+            if hasattr(values, "columns") and hasattr(values, "to_dict") and not isinstance(values, dict):
+                cols = list(values.columns)
+                if len(cols) >= 2:
+                    values = dict(zip(values[cols[0]].astype(str), values[cols[1]].astype(float)))
+                else:
+                    values = {}
+            
+            # Helper: Hex to RGB & Lerp
+            def _hex_to_rgb(h): return tuple(int(h.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
+            def _rgb_to_hex(rgb): return "#{:02x}{:02x}{:02x}".format(*rgb)
+            
+            vals = [float(v) for v in values.values() if isinstance(v, (int, float))]
+            if not vals: return
+            
+            vmin = vmin if vmin is not None else min(vals)
+            vmax = vmax if vmax is not None else max(vals)
+            if vmax == vmin: vmax = vmin + 1e-12
+            
+            c0, c1 = _hex_to_rgb(low_color), _hex_to_rgb(high_color)
+            
+            # Calculate X position
+            # Find the furthest visual element (leaves or existing heatmap) to append this one
+            max_x = max(l.coordinates[0] for l in self.t.get_leaves())
+            start_x = max_x + offset
+
+            y_step = 0
+            leaves = self.t.get_leaves()
+            if len(leaves) > 1:
+                y_step = abs(leaves[1].y_coord - leaves[0].y_coord)
+            else:
+                y_step = 20 # Fallback
+
+            for l in leaves:
+                name = str(l.name)
+                if name not in values:
+                    fill = missing_color
+                else:
+                    try:
+                        t = (float(values[name]) - vmin) / (vmax - vmin)
+                        t = max(0.0, min(1.0, t))
+                        r = int(c0[0] + (c1[0]-c0[0])*t)
+                        g = int(c0[1] + (c1[1]-c0[1])*t)
+                        b = int(c0[2] + (c1[2]-c0[2])*t)
+                        fill = _rgb_to_hex((r,g,b))
+                    except:
+                        fill = missing_color
+                
+                # Draw rect centered on leaf Y
+                # Height is usually the step size (so they touch), or slightly smaller
+                rect_h = y_step
+                self.d.append(draw.Rectangle(
+                    start_x, 
+                    l.y_coord - rect_h/2, 
+                    width, 
+                    rect_h, 
+                    fill=fill, 
+                    stroke=border_color, 
+                    stroke_width=border_width
+                ))
