@@ -45,7 +45,11 @@ class VerticalTreeDrawer(BaseDrawer):
         edge_ang = 0.0 if (x_child - x_parent) >= 0 else 180.0
         return x, y, edge_ang
 
-    def _calculate_layout(self):
+    def _calculate_layout(self, max_width=None):
+        """
+        Calculates tree coordinates. 
+        :param max_width: If provided, scales the tree to this width instead of the style width.
+        """
         # 1. Calculate Distances
         max_dist = 0
         for n in self.t.traverse("preorder"):
@@ -54,14 +58,15 @@ class VerticalTreeDrawer(BaseDrawer):
         
         self.total_tree_depth = max_dist
         
-        # Padding for labels and centering
+        # 2. Handle Scaling and Margins
         horizontal_padding = 100 
-        self.sf = (self.style.width - (horizontal_padding * 2)) / max_dist if max_dist > 0 else 1
+        target_width = max_width if max_width is not None else self.style.width
+        self.sf = (target_width - (horizontal_padding * 2)) / max_dist if max_dist > 0 else 1
         
         # Center the root X based on padding
         self.root_x = -self.style.width / 2 + horizontal_padding
 
-        # 2. Calculate Vertical Positions
+        # 3. Calculate Vertical Positions
         leaves = self.t.get_leaves()
         y_padding = 100
         y_step = (self.style.height - (y_padding * 2)) / max(len(leaves)-1, 1)
@@ -76,8 +81,13 @@ class VerticalTreeDrawer(BaseDrawer):
                 n.y_coord = sum(c.y_coord for c in n.children) / len(n.children)
                 n.coordinates = (self.root_x + (n.dist_to_root * self.sf), n.y_coord)
 
-    def draw(self, branch2color=None):
-        """Draws the tree. Accepts branch2color dict {node: color_string}."""
+    def draw(self, branch2color=None, right_margin=200):
+        """
+        Draws the tree while reserving space on the right for images.
+        """
+        # 1. Re-run layout calculation with the reserved right margin
+        self._calculate_layout(max_width=self.style.width - right_margin)
+
         for n in self.t.traverse("postorder"):
             x, y = n.coordinates
             
@@ -86,17 +96,19 @@ class VerticalTreeDrawer(BaseDrawer):
             if branch2color and n in branch2color:
                 color = branch2color[n]
 
-            # 1. Horizontal branch
+            # 2. Horizontal branch
             if not n.is_root():
                 px, py = n.up.coordinates
                 self.d.append(draw.Line(px, y, x, y, stroke=color, 
                                         stroke_width=self.style.branch_size, stroke_linecap="round"))
             else:
+                # Root "handle"
                 self.d.append(draw.Line(x - 20, y, x, y, stroke=color, stroke_width=self.style.branch_size))
 
-            # 2. Vertical connector
+            # 3. Vertical connector
             if not n.is_leaf():
-                y_min, y_max = min(c.y_coord for c in n.children), max(c.y_coord for c in n.children)
+                y_min = min(c.y_coord for c in n.children)
+                y_max = max(c.y_coord for c in n.children)
                 self.d.append(draw.Line(x, y_min, x, y_max, stroke=color, 
                                         stroke_width=self.style.branch_size, stroke_linecap="round"))
                 self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
@@ -540,3 +552,51 @@ class VerticalTreeDrawer(BaseDrawer):
                     stroke=border_color, 
                     stroke_width=border_width
                 ))
+
+
+    def add_leaf_images(self, image_dir, extension=".png", width=40, height=40, offset=10, rotation=0):
+        """
+        Adds PNG images to the right of each leaf node with a rotation option.
+        :param rotation: Degrees to rotate the image (clockwise).
+        """
+        import os
+        import base64
+
+        # 1. Coordinate check: Ensure we have the latest positions
+        if not hasattr(self.t, 'coordinates'):
+            self._calculate_layout()
+
+        for leaf in self.t.get_leaves():
+            lx, ly = leaf.coordinates
+            
+            # 2. Coordinate Math
+            img_x = lx + offset
+            img_y = ly - (height / 2)
+
+            img_path = os.path.join(image_dir, f"{leaf.name}{extension}")
+            
+            if os.path.exists(img_path):
+                # 3. Manual Embedding
+                with open(img_path, "rb") as img_file:
+                    encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
+                    data_uri = f"data:image/png;base64,{encoded_string}"
+                
+                # 4. Rotation Logic
+                # We rotate around the center of the image (img_x + width/2, img_y + height/2)
+                transform_str = ""
+                if rotation != 0:
+                    center_x = img_x + (width / 2)
+                    center_y = img_y + (height / 2)
+                    transform_str = f"rotate({rotation}, {center_x}, {center_y})"
+
+                # Create the image object
+                img_obj = draw.Image(
+                    img_x, img_y, 
+                    width, height, 
+                    path=data_uri,
+                    transform=transform_str # Apply the rotation transform
+                )
+                
+                self.d.append(img_obj)
+            else:
+                print(f"MISSING IMAGE: No file at {img_path}")
