@@ -439,7 +439,8 @@ class VerticalTreeDrawer(BaseDrawer):
             border_width: float = 0.5
         ):
             """Add a vertical heatmap strip next to the tree tips."""
-            # Normalize inputs (same as radial)
+            
+            # 1. Normalize values to dict
             if hasattr(values, "to_dict") and not isinstance(values, dict):
                 values = values.to_dict()
             if hasattr(values, "columns") and hasattr(values, "to_dict") and not isinstance(values, dict):
@@ -448,11 +449,40 @@ class VerticalTreeDrawer(BaseDrawer):
                     values = dict(zip(values[cols[0]].astype(str), values[cols[1]].astype(float)))
                 else:
                     values = {}
+
+            # 2. Helper: Parse Color (Hex or Name) to RGB Tuple
+            def _to_rgb(color_str):
+                color_str = str(color_str).strip()
+                
+                # Handle Hex (e.g., #FF0000 or #F00)
+                if color_str.startswith("#"):
+                    h = color_str.lstrip("#")
+                    if len(h) == 3: # Expand shorthand #fff -> #ffffff
+                        h = "".join([c*2 for c in h])
+                    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+                
+                # Handle Basic Names
+                # (Simple lookup to avoid dependencies like matplotlib)
+                common_names = {
+                    "white": (255, 255, 255), "black": (0, 0, 0),
+                    "red": (255, 0, 0),       "green": (0, 128, 0),
+                    "blue": (0, 0, 255),      "orange": (255, 165, 0),
+                    "purple": (128, 0, 128),  "yellow": (255, 255, 0),
+                    "gray": (128, 128, 128),  "grey": (128, 128, 128),
+                    "cyan": (0, 255, 255),    "magenta": (255, 0, 255),
+                    "lime": (0, 255, 0),      "darkgreen": (0, 100, 0),
+                    "navy": (0, 0, 128),      "teal": (0, 128, 128)
+                }
+                if color_str.lower() in common_names:
+                    return common_names[color_str.lower()]
+                
+                # Fallback if unknown name
+                raise ValueError(f"Heatmap interpolation needs Hex codes (e.g. '#ff0000'). Unknown name: '{color_str}'")
+
+            def _rgb_to_hex(rgb): 
+                return "#{:02x}{:02x}{:02x}".format(*rgb)
             
-            # Helper: Hex to RGB & Lerp
-            def _hex_to_rgb(h): return tuple(int(h.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
-            def _rgb_to_hex(rgb): return "#{:02x}{:02x}{:02x}".format(*rgb)
-            
+            # 3. Prepare data
             vals = [float(v) for v in values.values() if isinstance(v, (int, float))]
             if not vals: return
             
@@ -460,43 +490,52 @@ class VerticalTreeDrawer(BaseDrawer):
             vmax = vmax if vmax is not None else max(vals)
             if vmax == vmin: vmax = vmin + 1e-12
             
-            c0, c1 = _hex_to_rgb(low_color), _hex_to_rgb(high_color)
+            # Convert start/end colors to RGB for math
+            c0 = _to_rgb(low_color)
+            c1 = _to_rgb(high_color)
             
+            # 4. Draw Rectangles
             # Calculate X position
-            # Find the furthest visual element (leaves or existing heatmap) to append this one
             max_x = max(l.coordinates[0] for l in self.t.get_leaves())
             start_x = max_x + offset
 
-            y_step = 0
             leaves = self.t.get_leaves()
+            # Calculate height of each block (distance between leaves)
             if len(leaves) > 1:
-                y_step = abs(leaves[1].y_coord - leaves[0].y_coord)
+                y_coords = sorted([l.y_coord for l in leaves])
+                # Estimate step size from the smallest difference (handles irregular trees better)
+                diffs = [y_coords[i+1] - y_coords[i] for i in range(len(y_coords)-1)]
+                y_step = min(diffs) if diffs else 20
+                # If step is tiny (overlap), use average
+                if y_step < 1: 
+                    y_step = abs(leaves[1].y_coord - leaves[0].y_coord)
             else:
-                y_step = 20 # Fallback
+                y_step = 20 
 
             for l in leaves:
                 name = str(l.name)
-                if name not in values:
-                    fill = missing_color
-                else:
-                    try:
-                        t = (float(values[name]) - vmin) / (vmax - vmin)
-                        t = max(0.0, min(1.0, t))
-                        r = int(c0[0] + (c1[0]-c0[0])*t)
-                        g = int(c0[1] + (c1[1]-c0[1])*t)
-                        b = int(c0[2] + (c1[2]-c0[2])*t)
-                        fill = _rgb_to_hex((r,g,b))
-                    except:
-                        fill = missing_color
+                fill = missing_color
                 
-                # Draw rect centered on leaf Y
-                # Height is usually the step size (so they touch), or slightly smaller
-                rect_h = y_step
+                if name in values:
+                    try:
+                        val = float(values[name])
+                        # Interpolate
+                        t = (val - vmin) / (vmax - vmin)
+                        t = max(0.0, min(1.0, t))
+                        
+                        r = int(c0[0] + (c1[0]-c0[0]) * t)
+                        g = int(c0[1] + (c1[1]-c0[1]) * t)
+                        b = int(c0[2] + (c1[2]-c0[2]) * t)
+                        fill = _rgb_to_hex((r,g,b))
+                    except Exception:
+                        pass # Keep missing_color
+                
+                # Center rectangle on leaf Y
                 self.d.append(draw.Rectangle(
                     start_x, 
-                    l.y_coord - rect_h/2, 
+                    l.y_coord - y_step/2, 
                     width, 
-                    rect_h, 
+                    y_step, 
                     fill=fill, 
                     stroke=border_color, 
                     stroke_width=border_width

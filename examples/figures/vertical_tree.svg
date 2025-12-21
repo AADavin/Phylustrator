@@ -2,11 +2,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="600" height="600" viewBox="-300.0 -300.0 600 600">
 <defs>
-<linearGradient x1="8.727793967364448" y1="-36.84210526315788" x2="168.22151399318432" y2="-36.84210526315788" gradientUnits="userSpaceOnUse" id="grad_7173">
+<linearGradient x1="8.727793967364448" y1="-36.84210526315788" x2="168.22151399318432" y2="-36.84210526315788" gradientUnits="userSpaceOnUse" id="grad_9966">
 <stop offset="0" stop-color="purple" />
 <stop offset="1" stop-color="red" />
 </linearGradient>
-<linearGradient x1="142.6461556009097" y1="-115.78947368421052" x2="172.4708675580145" y2="-200.0" gradientUnits="userSpaceOnUse" id="tr_grad_2395">
+<linearGradient x1="142.6461556009097" y1="-115.78947368421052" x2="172.4708675580145" y2="-200.0" gradientUnits="userSpaceOnUse" id="tr_grad_651498">
 <stop offset="0" stop-color="purple" />
 <stop offset="1" stop-color="orange" />
 </linearGradient>
@@ -141,10 +141,10 @@
 <circle cx="30.74487935902792" cy="-168.42105263157893" r="7.0" fill="purple" opacity="1.0" />
 <rect x="80.2927761167615" y="-125.78947368421052" width="124.70675896829641" height="62.10526315789474" fill="orange" fill-opacity="0.4" stroke="none" />
 <path d="M20.117109749332172,126.31578947368422 L100.30315941084893,126.31578947368422" stroke="blue" stroke-width="5" stroke-linecap="round" />
-<use xlink:href="#grad_7173" />
-<path d="M8.727793967364448,-36.84210526315788 L168.22151399318432,-36.84210526315788" stroke="url(#grad_7173)" stroke-width="6" />
-<use xlink:href="#tr_grad_2395" />
-<path d="M142.6461556009097,-115.78947368421052 C102.64615560090971,-115.78947368421052,132.4708675580145,-200.0,172.4708675580145,-200.0" stroke-width="3.0" fill="none" stroke-opacity="0.6" stroke="url(#tr_grad_2395)" />
+<use xlink:href="#grad_9966" />
+<path d="M8.727793967364448,-36.84210526315788 L168.22151399318432,-36.84210526315788" stroke="url(#grad_9966)" stroke-width="6" />
+<use xlink:href="#tr_grad_651498" />
+<path d="M142.6461556009097,-115.78947368421052 C102.64615560090971,-115.78947368421052,132.4708675580145,-200.0,172.4708675580145,-200.0" stroke-width="3.0" fill="none" stroke-opacity="0.6" stroke="url(#tr_grad_651498)" />
 <path d="M-220.0,240.0 L200.0,240.0" stroke="black" stroke-width="2.0" />
 <path d="M-200.0,240.0 L-200.0,246.0" stroke="black" stroke-width="2.0" />
 <text x="-200.0" y="258.0" font-size="12" font-family="Arial" text-anchor="middle" dominant-baseline="central">0</text>

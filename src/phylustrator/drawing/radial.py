@@ -493,3 +493,82 @@ class RadialTreeDrawer(BaseDrawer):
              .Z()
 
             self.d.append(p)
+
+
+    def highlight_clade(self, node, color="lightblue", opacity=0.3, padding=10):
+            """Draws a shaded sector (pie slice) behind a specific clade."""
+            if node.is_leaf(): return 
+            
+            leaves = node.get_leaves()
+            angles = [l.angle for l in leaves]
+            
+            # Define Angular bounds
+            # We extend by half a step to cover the "gap" between this clade and neighbors
+            min_ang = min(angles) - (self.angle_step / 2.0)
+            max_ang = max(angles) + (self.angle_step / 2.0)
+            
+            # Define Radial bounds
+            # Inner: from the node itself (or root 0 if you want full pie)
+            # Outer: furthest leaf + padding
+            r_inner = float(node.rad)
+            r_outer = max(float(l.rad) for l in leaves) + padding
+            
+            # Convert to SVG Arc Path
+            # Move to Inner Start -> Line to Outer Start -> Arc to Outer End -> Line to Inner End -> Arc to Inner Start
+            sx_in, sy_in = radial_converter(min_ang, r_inner, self.style.rotation)
+            ex_in, ey_in = radial_converter(max_ang, r_inner, self.style.rotation)
+            
+            sx_out, sy_out = radial_converter(min_ang, r_outer, self.style.rotation)
+            ex_out, ey_out = radial_converter(max_ang, r_outer, self.style.rotation)
+            
+            # Large arc flag (0 or 1) depending on if angle > 180
+            angle_diff = max_ang - min_ang
+            large_arc = 1 if angle_diff > 180 else 0
+            
+            path = draw.Path(fill=color, fill_opacity=opacity, stroke="none")
+            path.M(sx_in, sy_in)\
+                .L(sx_out, sy_out)\
+                .A(r_outer, r_outer, 0, large_arc, 1, ex_out, ey_out)\
+                .L(ex_in, ey_in)\
+                .A(r_inner, r_inner, 0, large_arc, 0, sx_in, sy_in)\
+                .Z()
+                
+            self.d.append(path)
+
+
+    def add_time_axis(
+            self,
+            ticks: list[float],
+            label: str = "Time",
+            tick_size: float = 0, # Usually 0 for radial rings
+            label_angle: float = 90, # Angle where text labels appear
+            stroke: str = "#ccc",
+            stroke_width: float = 1.0,
+            stroke_dasharray: str = "4,2", # Dashed lines look better for grids
+            font_size: int = 10,
+        ):
+            """Add concentric rings representing time/distance."""
+            
+            for t in ticks:
+                r = t * self.sf
+                
+                # 1. Draw the ring (circle)
+                # If tree is full 360, use Circle. If partial, use Arc (omitted for brevity, assuming 360 usually)
+                self.d.append(draw.Circle(0, 0, r, fill="none", stroke=stroke, 
+                                        stroke_width=stroke_width, stroke_dasharray=stroke_dasharray))
+                
+                # 2. Draw the label
+                # We place the label at 'label_angle'
+                lx, ly = radial_converter(label_angle, r, 0) # rotation=0 so angle is absolute
+                
+                # Simple background rect for readability? (Optional)
+                self.d.append(draw.Text(str(t), font_size, lx, ly, 
+                                        fill="black", stroke="white", stroke_width=0.5, paint_order="stroke",
+                                        text_anchor="middle", dominant_baseline="middle", font_family="Arial"))
+
+            # Axis Title? (Optional, maybe placed at the outermost tick)
+            if ticks:
+                max_r = max(ticks) * self.sf
+                lx, ly = radial_converter(label_angle, max_r + 20, 0)
+                self.d.append(draw.Text(label, font_size + 2, lx, ly, 
+                                        font_weight="bold", text_anchor="middle", dominant_baseline="middle"))
