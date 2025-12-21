@@ -600,3 +600,58 @@ class VerticalTreeDrawer(BaseDrawer):
                 self.d.append(img_obj)
             else:
                 print(f"MISSING IMAGE: No file at {img_path}")
+
+
+    def add_ancestral_images(self, image_dir, extension=".png", width=40, height=40, rotation=0, omit=None):
+            """
+            Adds PNG images centered on ancestral (internal) nodes.
+            :param rotation: Degrees to rotate the image (clockwise).
+            """
+            import os
+            import base64
+
+            # 1. Coordinate check: Ensure we have the latest positions
+            if not hasattr(self.t, 'coordinates'):
+                self._calculate_layout()
+
+            # Traverse all nodes but filter for internal ones
+            for node in self.t.traverse():
+                if not node.is_leaf():
+
+                    if omit and node.name in omit:
+                        continue # Skip omitted names
+                    
+                    nx, ny = node.coordinates #
+                    
+                    # 2. Centering Math
+                    # To make the center of the image coincide with the node,
+                    # we subtract half the width/height from the top-left anchor.
+                    img_x = nx - (width / 2)
+                    img_y = ny - (height / 2)
+
+                    img_path = os.path.join(image_dir, f"{node.name}{extension}")
+                    
+                    if os.path.exists(img_path):
+                        # 3. Manual Embedding
+                        with open(img_path, "rb") as img_file:
+                            encoded_string = base64.b64encode(img_file.read()).decode('utf-8')
+                            data_uri = f"data:image/png;base64,{encoded_string}"
+                        
+                        # 4. Rotation Logic (Centered)
+                        transform_str = ""
+                        if rotation != 0:
+                            transform_str = f"rotate({rotation}, {nx}, {ny})"
+
+                        # Create the image object centered on (nx, ny)
+                        img_obj = draw.Image(
+                            img_x, img_y, 
+                            width, height, 
+                            path=data_uri,
+                            transform=transform_str
+                        )
+                        
+                        self.d.append(img_obj)
+                    else:
+                        # Optional: Print warning for missing ancestral names
+                        # print(f"MISSING ANCESTRAL IMAGE: {img_path}")
+                        pass
