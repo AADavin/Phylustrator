@@ -565,3 +565,128 @@ class BaseDrawer:
                 x0 + bar_width / 2.0, y_top - float(label_pad),
                 center=True, font_family=ff
             ))
+
+    def add_node_shapes(
+        self,
+        nodes,
+        shape: str = "circle",
+        fill: str = "red",
+        size: float = 10.0,
+        stroke: str | None = None,
+        stroke_width: float = 1.0,
+        rotation: float = 0.0,
+        dx: float = 0.0,
+        dy: float = 0.0,
+        missing: str = "ignore",  # "ignore" or "raise"
+    ) -> None:
+        """Draw shapes centered on (ancestral) nodes.
+
+        Parameters
+        ----------
+        nodes
+            Either:
+            - list of node names (str) or ete3 Node objects
+            - OR a list of dict specs with keys:
+            {"node": <name_or_node>, "shape": ..., "fill": ..., "size": ..., "stroke": ..., "stroke_width": ..., "rotation": ..., "dx": ..., "dy": ...}
+        shape
+            "circle", "square", or "triangle" (ignored when using dict specs per-node).
+        rotation
+            Degrees. For triangles/squares; circle ignores it.
+        dx, dy
+            Pixel offsets to nudge the marker.
+        missing
+            What to do if a node name is not found: "ignore" or "raise".
+        """
+        # allow list[dict] specs
+        if isinstance(nodes, list) and nodes and isinstance(nodes[0], dict):
+            for s in nodes:
+                n = s.get("node", None)
+                if n is None:
+                    continue
+                self._add_one_node_shape(
+                    node=n,
+                    shape=str(s.get("shape", shape)),
+                    fill=str(s.get("fill", fill)),
+                    size=float(s.get("size", size)),
+                    stroke=s.get("stroke", stroke),
+                    stroke_width=float(s.get("stroke_width", stroke_width)),
+                    rotation=float(s.get("rotation", rotation)),
+                    dx=float(s.get("dx", dx)),
+                    dy=float(s.get("dy", dy)),
+                    missing=missing,
+                )
+            return
+
+        # uniform style for all nodes
+        for n in nodes:
+            self._add_one_node_shape(
+                node=n,
+                shape=shape,
+                fill=fill,
+                size=size,
+                stroke=stroke,
+                stroke_width=stroke_width,
+                rotation=rotation,
+                dx=dx,
+                dy=dy,
+                missing=missing,
+            )
+
+
+    def _add_one_node_shape(
+        self,
+        node,
+        shape: str,
+        fill: str,
+        size: float,
+        stroke: str | None,
+        stroke_width: float,
+        rotation: float,
+        dx: float,
+        dy: float,
+        missing: str,
+    ) -> None:
+        """Internal helper: draw one node marker centered at node coordinates."""
+        # resolve node
+        n = node
+        if isinstance(node, str):
+            hits = self.t.search_nodes(name=node)
+            if not hits:
+                if missing == "raise":
+                    raise ValueError(f"Node '{node}' not found in tree.")
+                return
+            n = hits[0]
+
+        x, y = self._node_xy(n)
+        x += float(dx)
+        y += float(dy)
+
+        shp = str(shape).lower()
+        half = float(size) / 2.0
+
+        common = {"fill": fill}
+        if stroke is not None:
+            common["stroke"] = stroke
+            common["stroke_width"] = float(stroke_width)
+
+        if shp == "circle":
+            self.d.append(draw.Circle(x, y, half, **common))
+            return
+
+        if shp == "square":
+            rect = draw.Rectangle(x - half, y - half, float(size), float(size), **common)
+            if rotation:
+                rect.args["transform"] = f"rotate({float(rotation)},{x},{y})"
+            self.d.append(rect)
+            return
+
+        if shp == "triangle":
+            # Up-pointing triangle centered at (x,y)
+            p = draw.Path(**common)
+            p.M(x, y - half).L(x - half, y + half).L(x + half, y + half).Z()
+            if rotation:
+                p.args["transform"] = f"rotate({float(rotation)},{x},{y})"
+            self.d.append(p)
+            return
+
+        raise ValueError(f"Unknown shape '{shape}'. Use: circle, square, triangle.")
