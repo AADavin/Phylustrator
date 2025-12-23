@@ -182,44 +182,103 @@ class VerticalTreeDrawer(BaseDrawer):
         tick_size: float = 6.0,
         padding: float = 20.0,
         y_offset: float = 0.0,
-        root_stub: float = 20.0,   # <- matches VerticalTreeDrawer.draw() root stub
+        root_stub: float = 20.0,
         stroke: str = "black",
         stroke_width: float = 2.0,
         font_size: int | None = None,
         font_family: str | None = None,
+        # --- grid options ---
+        grid: bool = False,
+        grid_stroke: str = "#cccccc",
+        grid_stroke_width: float = 1.0,
+        grid_opacity: float = 0.5,
+        # --- NEW: custom tick labels ---
+        tick_labels: dict[float, str] | None = None,
     ) -> None:
-        """Add a time axis below the tree (vertical layout only).
-
-        The x-coordinate is interpreted as time via: x = root_x + time * sf.
         """
+        Draw a horizontal time axis. Optionally draw vertical grid lines at each tick
+        across the tree.
+
+        tick_labels lets you display labels that differ from the numeric tick positions,
+        e.g. show "-2" at tick position 2.0 (backwards time).
+        """
+        if not ticks:
+            return
+
+        # Ensure layout exists
         any_node = next(self.t.traverse("preorder"))
         if not hasattr(any_node, "coordinates") or not hasattr(any_node, "y_coord"):
             self._calculate_layout()
 
-        fs = int(font_size) if font_size is not None else int(self.style.font_size)
+        sf = float(self.sf)
+
+        # Font defaults
+        fs = font_size if font_size is not None else self.style.font_size
         ff = font_family if font_family is not None else self.style.font_family
 
-        max_y = max(float(l.y_coord) for l in self.t.get_leaves())
-        y = max_y + float(padding) + float(y_offset)
+        # Tree vertical extent
+        leaves = self.t.get_leaves()
+        min_y = min(float(l.y_coord) for l in leaves)
+        max_y = max(float(l.y_coord) for l in leaves)
 
-        x0 = float(self.root_x)
-        x1 = x0 + float(self.total_tree_depth) * float(self.sf)
+        # Place axis below the tree
+        y_axis = max_y + float(padding) + float(y_offset)
 
-        # axis line: start where the drawn root stub starts
-        ax0 = x0 - float(root_stub)
-        ax1 = x1
-        self.d.append(draw.Line(ax0, y, ax1, y, stroke=stroke, stroke_width=stroke_width))
+        # Axis X range
+        x_left = float(self.root_x) - float(root_stub)
+        x_right = float(self.root_x) + (max(float(t) for t in ticks) * sf)
 
-        # ticks + labels (ticks are still defined with time=0 at root_x)
+        # Baseline
+        self.d.append(draw.Line(
+            x_left, y_axis,
+            x_right, y_axis,
+            stroke=stroke,
+            stroke_width=stroke_width,
+        ))
+
+        tick_labels = tick_labels or {}
+
+        # Ticks (+ optional vertical grid lines)
         for tt in ticks:
-            x = x0 + float(tt) * float(self.sf)
-            self.d.append(draw.Line(x, y, x, y + tick_size, stroke=stroke, stroke_width=stroke_width))
-            self.d.append(draw.Text(str(tt), fs, x, y + tick_size + fs, center=True, font_family=ff))
+            tt = float(tt)
+            x = float(self.root_x) + tt * sf
 
-        # axis label
-        self.d.append(
-            draw.Text(label, fs, (ax0 + ax1) / 2.0, y + tick_size + 2.5 * fs, center=True, font_family=ff)
-        )
+            if grid:
+                self.d.append(draw.Line(
+                    x, min_y,
+                    x, max_y,
+                    stroke=grid_stroke,
+                    stroke_width=grid_stroke_width,
+                    stroke_opacity=grid_opacity,
+                ))
+
+            self.d.append(draw.Line(
+                x, y_axis,
+                x, y_axis + float(tick_size),
+                stroke=stroke,
+                stroke_width=stroke_width,
+            ))
+
+            text = tick_labels.get(tt, str(tt))
+            self.d.append(draw.Text(
+                text,
+                fs,
+                x,
+                y_axis + float(tick_size) + fs,
+                center=True,
+                font_family=ff,
+            ))
+
+        # Axis label
+        self.d.append(draw.Text(
+            label,
+            fs,
+            (x_left + x_right) / 2.0,
+            y_axis + float(tick_size) + fs * 2.2,
+            center=True,
+            font_family=ff,
+        ))
+
 
 
     def plot_transfers(
@@ -620,7 +679,7 @@ class VerticalTreeDrawer(BaseDrawer):
 
                     if omit and node.name in omit:
                         continue # Skip omitted names
-                    
+
                     nx, ny = node.coordinates #
                     
                     # 2. Centering Math
@@ -655,3 +714,36 @@ class VerticalTreeDrawer(BaseDrawer):
                         # Optional: Print warning for missing ancestral names
                         # print(f"MISSING ANCESTRAL IMAGE: {img_path}")
                         pass
+
+    def plot_continuous_variable(self, node_to_rgb, size=None):
+            """
+            Colors branches using a gradient based on RGB values at each node.
+            :param node_to_rgb: Dictionary mapping node names or objects to (r, g, b) tuples.
+            :param size: Thickness of the branches.
+            """
+            def _to_hex(rgb):
+                return '#%02x%02x%02x' % (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+            for node in self.t.traverse():
+                if node.is_root():
+                    continue
+                    
+                parent = node.up
+                
+                # Get RGB for current node and its parent
+                # Supporting both node objects and node names as keys
+                color_child = node_to_rgb.get(node) or node_to_rgb.get(node.name)
+                color_parent = node_to_rgb.get(parent) or node_to_rgb.get(parent.name)
+
+                if color_child and color_parent:
+                    # Use the existing gradient_branch logic
+                    self.gradient_branch(
+                        node, 
+                        colors=(_to_hex(color_parent), _to_hex(color_child)), 
+                        size=size
+                    )
+                else:
+                    # Fallback to standard highlighting if data is missing
+                    self.highlight_branch(node, color=self.style.branch_color, size=size)
+                    # Fallback to standard highlighting if data is missing
+                    self.highlight_branch(node, color=self.style.branch_color, size=size)
