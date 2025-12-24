@@ -169,10 +169,137 @@ class VerticalTreeDrawer(BaseDrawer):
         self.d.append(grad)
         self.d.append(draw.Line(px, y, x, y, stroke=grad, stroke_width=s_width))
 
-    def add_leaf_names(self, padding=10):
+    def plot_continuous_variable(self, node_to_rgb, size=None):
+        """
+        Colors branches using a gradient based on RGB values at each node.
+        Also recolors vertical connectors (internal-node elbows) so they are not left black.
+        :param node_to_rgb: Dict mapping node names or objects to (r, g, b) tuples.
+        :param size: Thickness of the branches.
+        """
+        def _to_hex(rgb):
+            return '#%02x%02x%02x' % (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+        s_width = size if size is not None else self.style.branch_size
+
+        # 1) Horizontal segments: parent -> child as a gradient
+        for node in self.t.traverse():
+            if node.is_root():
+                continue
+
+            parent = node.up
+
+            color_child = node_to_rgb.get(node) or node_to_rgb.get(node.name)
+            color_parent = node_to_rgb.get(parent) or node_to_rgb.get(parent.name)
+
+            if color_child is not None and color_parent is not None:
+                self.gradient_branch(
+                    node,
+                    colors=(_to_hex(color_parent), _to_hex(color_child)),
+                    size=s_width,
+                )
+            else:
+                # fallback
+                self.highlight_branch(node, color=self.style.branch_color, size=s_width)
+
+        # 2) Vertical connectors: redraw them on top with the internal node's color
+        for n in self.t.traverse("postorder"):
+            if n.is_leaf():
+                continue
+
+            col = node_to_rgb.get(n) or node_to_rgb.get(n.name)
+            if col is None:
+                continue
+
+            x, y = n.coordinates
+            y_min = min(c.y_coord for c in n.children)
+            y_max = max(c.y_coord for c in n.children)
+
+            self.d.append(draw.Line(
+                x, y_min, x, y_max,
+                stroke=_to_hex(col),
+                stroke_width=s_width,
+                stroke_linecap="round"
+            ))
+            # optional: recolor the node dot too
+            self.d.append(draw.Circle(x, y, self.style.node_size, fill=_to_hex(col)))
+
+
+    def add_leaf_names(
+        self, 
+        font_size=None, 
+        color=None, 
+        font_family=None, 
+        rotation=0, 
+        padding=10
+    ):
+        """
+        Adds leaf labels where the center of the text is aligned with the leaf tip.
+        """
+        fs = font_size if font_size is not None else self.style.font_size
+        ff = font_family if font_family is not None else self.style.font_family
+        text_color = color if color is not None else "black"
+
         for l in self.t.get_leaves():
             x, y = l.coordinates
-            self.d.append(draw.Text(l.name, self.style.font_size, x+padding, y+self.style.font_size/3))
+            
+            # The anchor point is the leaf tip + padding
+            tx = x + padding
+            ty = y 
+
+            # Rotate around the center (tx, ty)
+            transform = f"rotate({rotation}, {tx}, {ty})" if rotation != 0 else ""
+
+            self.d.append(draw.Text(
+                l.name, 
+                fs, 
+                tx, 
+                ty, 
+                fill=text_color, 
+                font_family=ff,
+                transform=transform,
+                text_anchor="middle",      # Centers horizontally
+                dominant_baseline="middle" # Centers vertically
+            ))
+    
+    def add_node_names(
+        self, 
+        font_size=None, 
+        color="gray", 
+        font_family=None, 
+        x_offset=-15, 
+        y_offset=-10,
+        rotation=0
+    ):
+        """
+        Adds labels to internal nodes centered on the offset coordinate.
+        """
+        fs = font_size if font_size is not None else self.style.font_size * 0.8
+        ff = font_family if font_family is not None else self.style.font_family
+
+        for n in self.t.traverse():
+            if not n.is_leaf():
+                if not n.name:
+                    continue
+                    
+                x, y = n.coordinates
+                
+                # Apply offsets to the center point
+                tx = x + x_offset
+                ty = y + y_offset
+
+                transform = f"rotate({rotation}, {tx}, {ty})" if rotation != 0 else ""
+
+                self.d.append(draw.Text(
+                    n.name, 
+                    fs, 
+                    tx, 
+                    ty, 
+                    fill=color, 
+                    font_family=ff,
+                    transform=transform,
+                    text_anchor="middle",      # Centers horizontally
+                    dominant_baseline="middle" # Centers vertically
+                ))
 
 
     def add_time_axis(
