@@ -154,74 +154,23 @@ class VerticalTreeDrawer(BaseDrawer):
         self.d.append(draw.Line(px, y, x, y, stroke=color, stroke_width=s_width, stroke_linecap="round"))
 
     def gradient_branch(self, node, colors=("red", "blue"), size=None):
-        if node.is_root(): return
-        s_width = size if size else self.style.branch_size
-        x, y = node.coordinates
-        px, _ = node.up.coordinates
-        grad_id = f"grad_{random.randint(0,9999)}"
-        
-        grad = draw.LinearGradient(px, y, x, y, id=grad_id)
-        
-        # Split these into two separate calls
-        grad.add_stop(0, colors[0])
-        grad.add_stop(1, colors[1])
-        
-        self.d.append(grad)
-        self.d.append(draw.Line(px, y, x, y, stroke=grad, stroke_width=s_width))
-
-    def plot_continuous_variable(self, node_to_rgb, size=None):
-        """
-        Colors branches using a gradient based on RGB values at each node.
-        Also recolors vertical connectors (internal-node elbows) so they are not left black.
-        :param node_to_rgb: Dict mapping node names or objects to (r, g, b) tuples.
-        :param size: Thickness of the branches.
-        """
-        def _to_hex(rgb):
-            return '#%02x%02x%02x' % (int(rgb[0]), int(rgb[1]), int(rgb[2]))
-
-        s_width = size if size is not None else self.style.branch_size
-
-        # 1) Horizontal segments: parent -> child as a gradient
-        for node in self.t.traverse():
-            if node.is_root():
-                continue
-
-            parent = node.up
-
-            color_child = node_to_rgb.get(node) or node_to_rgb.get(node.name)
-            color_parent = node_to_rgb.get(parent) or node_to_rgb.get(parent.name)
-
-            if color_child is not None and color_parent is not None:
-                self.gradient_branch(
-                    node,
-                    colors=(_to_hex(color_parent), _to_hex(color_child)),
-                    size=s_width,
-                )
-            else:
-                # fallback
-                self.highlight_branch(node, color=self.style.branch_color, size=s_width)
-
-        # 2) Vertical connectors: redraw them on top with the internal node's color
-        for n in self.t.traverse("postorder"):
-            if n.is_leaf():
-                continue
-
-            col = node_to_rgb.get(n) or node_to_rgb.get(n.name)
-            if col is None:
-                continue
-
-            x, y = n.coordinates
-            y_min = min(c.y_coord for c in n.children)
-            y_max = max(c.y_coord for c in n.children)
-
-            self.d.append(draw.Line(
-                x, y_min, x, y_max,
-                stroke=_to_hex(col),
-                stroke_width=s_width,
-                stroke_linecap="round"
-            ))
-            # optional: recolor the node dot too
-            self.d.append(draw.Circle(x, y, self.style.node_size, fill=_to_hex(col)))
+            if node.is_root(): 
+                return
+                
+            s_width = size if size else self.style.branch_size
+            x, y = node.coordinates
+            px, _ = node.up.coordinates
+            
+            # FIX: Use the node's memory address (id(node)) to ensure a 
+            # truly unique ID for this specific branch segment.
+            grad_id = f"grad_{id(node)}"
+            
+            grad = draw.LinearGradient(px, y, x, y, id=grad_id)
+            grad.add_stop(0, colors[0])
+            grad.add_stop(1, colors[1])
+            
+            self.d.append(grad)
+            self.d.append(draw.Line(px, y, x, y, stroke=grad, stroke_width=s_width))
 
 
     def add_leaf_names(
@@ -843,34 +792,56 @@ class VerticalTreeDrawer(BaseDrawer):
                         pass
 
     def plot_continuous_variable(self, node_to_rgb, size=None):
-            """
-            Colors branches using a gradient based on RGB values at each node.
-            :param node_to_rgb: Dictionary mapping node names or objects to (r, g, b) tuples.
-            :param size: Thickness of the branches.
-            """
-            def _to_hex(rgb):
-                return '#%02x%02x%02x' % (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+        """
+        Colors branches using a gradient based on RGB values at each node.
+        Also recolors vertical connectors so they are not left black.
+        node_to_rgb can map node.name OR node objects to (r,g,b).
+        """
+        def _to_hex(rgb):
+            return '#%02x%02x%02x' % (int(rgb[0]), int(rgb[1]), int(rgb[2]))
 
-            for node in self.t.traverse():
-                if node.is_root():
-                    continue
-                    
-                parent = node.up
-                
-                # Get RGB for current node and its parent
-                # Supporting both node objects and node names as keys
-                color_child = node_to_rgb.get(node) or node_to_rgb.get(node.name)
-                color_parent = node_to_rgb.get(parent) or node_to_rgb.get(parent.name)
+        s_width = size if size is not None else self.style.branch_size
 
-                if color_child and color_parent:
-                    # Use the existing gradient_branch logic
-                    self.gradient_branch(
-                        node, 
-                        colors=(_to_hex(color_parent), _to_hex(color_child)), 
-                        size=size
-                    )
-                else:
-                    # Fallback to standard highlighting if data is missing
-                    self.highlight_branch(node, color=self.style.branch_color, size=size)
-                    # Fallback to standard highlighting if data is missing
-                    self.highlight_branch(node, color=self.style.branch_color, size=size)
+        # 1) Gradient on horizontal segments (parent -> child)
+        for node in self.t.traverse():
+            if node.is_root():
+                continue
+
+            parent = node.up
+            c_child = node_to_rgb.get(node) or node_to_rgb.get(node.name)
+            c_parent = node_to_rgb.get(parent) or node_to_rgb.get(parent.name)
+
+            if (c_child is not None) and (c_parent is not None):
+                self.gradient_branch(
+                    node,
+                    colors=(_to_hex(c_parent), _to_hex(c_child)),
+                    size=s_width,
+                )
+            else:
+                self.highlight_branch(node, color=self.style.branch_color, size=s_width)
+
+        # 2) Re-draw vertical connectors using the internal node's color
+        # This covers the "elbows" that are currently appearing as black lines
+        for n in self.t.traverse("postorder"):
+            if n.is_leaf():
+                continue
+
+            # Get the color for the internal node
+            col = node_to_rgb.get(n) or node_to_rgb.get(n.name)
+            if col is None:
+                continue
+
+            x, y = n.coordinates
+            # Vertical span of all children
+            y_min = min(c.y_coord for c in n.children)
+            y_max = max(c.y_coord for c in n.children)
+
+            self.d.append(draw.Line(
+                x, y_min, x, y_max,
+                stroke=_to_hex(col),
+                stroke_width=s_width,
+                stroke_linecap="round"
+            ))
+
+            # Optional: Overwrite the internal-node dot with the same color
+            self.d.append(draw.Circle(x, y, self.style.node_size, fill=_to_hex(col)))
