@@ -398,14 +398,69 @@ class BaseDrawer:
             return 1.0
         return w
 
+    def add_title(
+        self,
+        text: str,
+        fontsize: int = 24,
+        position: str = "top",
+        pad: float = 40.0,
+        rotation: float = 0.0,
+        color: str = "black",
+        font_weight: str = "bold"
+    ) -> None:
+        """
+        Adds a title to the canvas relative to the edges.
+
+        Parameters
+        ----------
+        text: The string to display.
+        fontsize: Size of the font.
+        position: "top", "bottom", "left", or "right".
+        pad: Padding from the edge of the canvas.
+        rotation: Degrees to rotate the text.
+        color: Text color.
+        font_weight: "normal" or "bold".
+        """
+        w, h = self.style.width, self.style.height
+        
+        # Default center of canvas
+        tx, ty = 0, 0
+
+        # Calculate anchor based on position
+        if position == "top":
+            ty = -h / 2 + pad
+        elif position == "bottom":
+            ty = h / 2 - pad
+        elif position == "left":
+            tx = -w / 2 + pad
+        elif position == "right":
+            tx = w / 2 - pad
+
+        # Create the text element
+        # Note: drawsvg origin='center' is used here
+        title_obj = draw.Text(
+            text,
+            fontsize,
+            tx,
+            ty,
+            fill=color,
+            font_family=getattr(self.style, "font_family", "Arial"),
+            font_weight=font_weight,
+            text_anchor="middle",
+            dominant_baseline="middle",
+            transform=f"rotate({rotation},{tx},{ty})" if rotation != 0 else None
+        )
+        
+        self.d.append(title_obj)
+
 
     def add_branch_shapes(
          self,
          specs,
-
          default_where: float = 0.5,
-         orient: str | None = None,  # "along" or "perp"
-         offset: float = 0.0,        # perpendicular offset in px
+         orient: str | None = None,  
+         offset: float = 0.0,        
+         **kwargs  # <--- Added to handle extra arguments like stroke_color
      ) -> None:
         """
          Add shapes on branches.
@@ -413,8 +468,6 @@ class BaseDrawer:
          Each spec dict can include:
            branch (str|node), where, shape, fill, size, stroke, stroke_width, rotation, opacity
         """
-    
-         
          # Accept either list[dict] or a DataFrame-like object (e.g. pandas.DataFrame)
         if hasattr(specs, "to_dict") and hasattr(specs, "columns"):
             specs = specs.to_dict(orient="records")
@@ -424,7 +477,7 @@ class BaseDrawer:
             if br is None:
                 continue
 
-            # resolve
+            # resolve node
             if isinstance(br, str):
                 try:
                     child = self.t & br
@@ -436,12 +489,14 @@ class BaseDrawer:
             if child.up is None:
                 continue  # no parent edge
 
+            # Determine position along the branch
             if "where" in s and s.get("where") is not None:
                 where = float(s.get("where"))
             elif "time" in s and s.get("time") is not None and hasattr(child, "time_from_origin") and hasattr(child.up, "time_from_origin"):
                  where = float(self._where_from_time(child, float(s.get("time"))))
             else:
                 where = float(default_where)
+            
             x, y, edge_ang = self._edge_point(child, where=where)
 
             # optional perpendicular offset
@@ -450,6 +505,7 @@ class BaseDrawer:
                 x += float(offset) * math.cos(math.radians(perp))
                 y += float(offset) * math.sin(math.radians(perp))
 
+            # Handle rotation
             rot = float(s.get("rotation", 0.0))
             if orient is not None:
                 o = str(orient).lower().strip()
@@ -458,6 +514,7 @@ class BaseDrawer:
                 elif o == "perp":
                     rot = edge_ang + 90.0
 
+            # Draw the shape using internal helper
             self._draw_shape_at(
                 x=x, y=y,
                 shape=s.get("shape", "circle"),
