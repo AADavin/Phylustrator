@@ -2,6 +2,13 @@ import drawsvg as draw
 from dataclasses import dataclass
 from pathlib import Path
 import math
+import io
+import re
+
+try:
+    import cairosvg
+except ImportError:
+    cairosvg = None
 
 @dataclass
 class TreeStyle:
@@ -78,32 +85,62 @@ class BaseDrawer:
         raise ValueError(f"Unknown shape: {shape!r}. Use circle/square/triangle.")
 
 
+    def _get_rotated_svg(self, rotation: float) -> str:
+            """
+            Internal helper: Wraps the current drawing in a new SVG 
+            transformed to handle rotation and resize the canvas.
+            """
+            original_svg = self.d.as_svg()
+            
+            if rotation == 0:
+                return original_svg
 
-    def save_svg(self, outpath: str | Path) -> None:
+            # 1. CLEANUP: Strip XML declaration and DOCTYPE from the inner SVG
+            #    because they are only allowed at the very start of a file.
+            original_svg = re.sub(r'<\?xml.*?\?>', '', original_svg)
+            original_svg = re.sub(r'<!DOCTYPE.*?>', '', original_svg)
+
+            # 2. Calculate new canvas dimensions to prevent clipping
+            w, h = self.style.width, self.style.height
+            rad = math.radians(rotation)
+            new_w = abs(w * math.cos(rad)) + abs(h * math.sin(rad))
+            new_h = abs(w * math.sin(rad)) + abs(h * math.cos(rad))
+
+            # 3. Wrap cleaned SVG in a group <g> with center rotation
+            return (
+                f'<svg xmlns="http://www.w3.org/2000/svg" '
+                f'width="{new_w}" height="{new_h}" viewBox="0 0 {new_w} {new_h}">\n'
+                f'  <g transform="translate({new_w/2}, {new_h/2}) '
+                f'rotate({rotation}) translate({-w/2}, {-h/2})">\n'
+                f'    {original_svg}\n'
+                f'  </g>\n'
+                f'</svg>'
+            )
+
+    def save_svg(self, outpath: str | Path, rotation: float = 0.0) -> None:
         outpath = Path(outpath)
         outpath.parent.mkdir(parents=True, exist_ok=True)
-        self.d.save_svg(str(outpath))
+        
+        svg_content = self._get_rotated_svg(rotation)
+        
+        with open(outpath, "w", encoding="utf-8") as f:
+            f.write(svg_content)
 
-    def save_png(self, outpath: str | Path, scale: float = 1.0) -> None:
-        """
-        Export PNG using CairoSVG (optional dependency).
-        scale>1 increases resolution while keeping same logical size.
-        """
-        try:
-            import cairosvg
-        except ImportError as e:
+    def save_png(self, outpath: str | Path, scale: float = 1.0, rotation: float = 0.0) -> None:
+        if cairosvg is None:
             raise ImportError(
-                "PNG export requires cairosvg. Install with: pip install 'phylustrator[export]'"
-            ) from e
+                "PNG export requires 'cairosvg'. Please install it via pip."
+            )
 
         outpath = Path(outpath)
         outpath.parent.mkdir(parents=True, exist_ok=True)
         
-        svg_text = self.d.as_svg()
+        svg_content = self._get_rotated_svg(rotation)
+        
         cairosvg.svg2png(
-            bytestring=svg_text.encode("utf-8"),
+            bytestring=svg_content.encode("utf-8"),
             write_to=str(outpath),
-            scale=scale,
+            scale=scale
         )
 
     def add_legend(
