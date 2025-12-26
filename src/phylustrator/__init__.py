@@ -10,7 +10,6 @@ from .parsers import (
     parse_zombi,
     
     # ALE
-    ALEParser, 
     ALEData, 
     parse_uts_file, 
     parse_ale_file, 

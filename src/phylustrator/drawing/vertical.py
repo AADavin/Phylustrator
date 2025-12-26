@@ -81,7 +81,7 @@ class VerticalTreeDrawer(BaseDrawer):
                 n.y_coord = sum(c.y_coord for c in n.children) / len(n.children)
                 n.coordinates = (self.root_x + (n.dist_to_root * self.sf), n.y_coord)
 
-    def draw(self, branch2color=None, right_margin=200):
+    def draw(self, branch2color=None, right_margin=0):
         """
         Draws the tree while reserving space on the right for images.
         """
@@ -845,3 +845,93 @@ class VerticalTreeDrawer(BaseDrawer):
 
             # Optional: Overwrite the internal-node dot with the same color
             self.d.append(draw.Circle(x, y, self.style.node_size, fill=_to_hex(col)))
+
+    def plot_categorical_trait(
+        self, 
+        data, 
+        value_col, 
+        node_col="Node", 
+        palette=None, 
+        size=None,
+        default_color="black"
+        ):
+        """
+        Colors branches based on categorical data using GRADIENTS for transitions.
+        
+        :param data: pandas DataFrame containing node names and values.
+        :param value_col: The name of the column with the category (e.g., "X").
+        :param node_col: The name of the column with node names (default "Node").
+        :param palette: Dictionary mapping values -> hex colors. 
+                        Example: {0: "red", 1: "blue"}
+        :param size: Thickness of the branches.
+        """
+        # 1. Parse Data into a dictionary: { "NodeName": value }
+        if hasattr(data, "to_dict"): 
+            # Map Node Name -> Category Value
+            mapping = dict(zip(data[node_col].astype(str), data[value_col]))
+        else:
+            mapping = data
+
+        # 2. Define Default Palette if none provided
+        if palette is None:
+            defaults = ["#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#FFFF33"]
+            unique_vals = sorted(list(set(mapping.values())))
+            palette = {val: defaults[i % len(defaults)] for i, val in enumerate(unique_vals)}
+
+        s_width = size if size is not None else self.style.branch_size
+
+        # Helper to safely get color hex string
+        def get_color(n):
+            val = mapping.get(n.name)
+            return palette.get(val, default_color)
+
+        # 3. Draw Branches
+        for node in self.t.traverse():
+            if node.is_root(): 
+                continue
+
+            c_node = get_color(node)
+            c_parent = get_color(node.up)
+
+            # --- HORIZONTAL BRANCH ---
+            if c_node != c_parent:
+                # Different colors? Use Gradient!
+                # We reuse your existing gradient_branch function
+                self.gradient_branch(
+                    node, 
+                    colors=(c_parent, c_node), 
+                    size=s_width
+                )
+            else:
+                # Same color? Solid line.
+                x, y = node.coordinates
+                px, _ = node.up.coordinates # parent X, child Y (rectangular elbow)
+                self.d.append(draw.Line(
+                    px, y, x, y, 
+                    stroke=c_node, 
+                    stroke_width=s_width, 
+                    stroke_linecap="round"
+                ))
+
+        # 4. Draw Vertical Connectors (Elbows) & Nodes
+        # These take the color of the internal node itself
+        for n in self.t.traverse("postorder"):
+            if n.is_leaf():
+                continue
+
+            color = get_color(n)
+            
+            x, y = n.coordinates
+            y_min = min(c.y_coord for c in n.children)
+            y_max = max(c.y_coord for c in n.children)
+
+            # Vertical Line
+            self.d.append(draw.Line(
+                x, y_min, x, y_max,
+                stroke=color,
+                stroke_width=s_width,
+                stroke_linecap="round"
+            ))
+            
+            # Node Circle (covers the join)
+            self.d.append(draw.Circle(x, y, self.style.node_size, fill=color))
