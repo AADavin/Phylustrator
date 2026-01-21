@@ -506,36 +506,18 @@ class RadialTreeDrawer(BaseDrawer):
             if not n.is_leaf():
                 x, y = self._node_xy(n); self.drawing.append(draw.Circle(x, y, self.style.node_r, fill=get_color(n)))
 
-    def add_categorical_legend(self, palette, title="Legend", x=None, y=None, font_size=14, r=6):
-        if x is None: x = -self.style.width / 2 + 30
-        if y is None: y = -self.style.height / 2 + 30
-        self.drawing.append(draw.Text(title, font_size + 2, x, y, font_weight="bold", 
-                                      font_family=self.style.font_family, text_anchor="start"))
-        curr_y = y + font_size * 1.5
-        for label, color in palette.items():
-            self.drawing.append(draw.Circle(x + r, curr_y, r, fill=color))
-            self.drawing.append(draw.Text(str(label), font_size, x + r*2.5, curr_y, 
-                                          font_family=self.style.font_family, text_anchor="start", dominant_baseline="middle"))
-            curr_y += font_size * 1.4
-
     def add_transfer_legend(self, colors=("purple", "orange"), labels=("Departure", "Arrival"), x=None, y=None, font_size=14):
+        """
+        Adds a legend specifically for Horizontal Gene Transfers.
+        """
         palette = {labels[0]: colors[0], labels[1]: colors[1]}
         self.add_categorical_legend(palette, title="Transfer Event", x=x, y=y, font_size=font_size)
 
-    def add_color_bar(self, low_color, high_color, vmin, vmax, title="", x=None, y=None, width=100, height=15, font_size=12):
-        if x is None: x = -self.style.width / 2 + 30
-        if y is None: y = self.style.height / 2 - 60
-        gid = generate_id("cb_grad")
-        grad = draw.LinearGradient(x, y, x + width, y, id=gid)
-        grad.add_stop(0, low_color); grad.add_stop(1, high_color)
-        self.drawing.append(grad)
-        if title:
-            self.drawing.append(draw.Text(title, font_size, x, y - 10, font_weight="bold", text_anchor="start"))
-        self.drawing.append(draw.Rectangle(x, y, width, height, fill=grad, stroke="black", stroke_width=0.5))
-        self.drawing.append(draw.Text(f"{vmin:.2g}", font_size - 2, x, y + height + 12, text_anchor="start"))
-        self.drawing.append(draw.Text(f"{vmax:.2g}", font_size - 2, x + width, y + height + 12, text_anchor="end"))
-
     def add_leaf_images(self, image_dir, extension=".png", width=40, height=40, offset=10):
+        """
+        Places images next to leaf tips in the radial layout.
+        """
+        self._pre_flight_check()
         for leaf in self.t.get_leaves():
             lx, ly = self._leaf_xy(leaf, offset=offset)
             path = os.path.join(image_dir, f"{leaf.name}{extension}")
@@ -545,9 +527,14 @@ class RadialTreeDrawer(BaseDrawer):
                 self.drawing.append(draw.Image(lx - width/2, ly - height/2, width, height, path=uri))
 
     def add_ancestral_images(self, image_dir, extension=".png", width=40, height=40, omit=None):
+        """
+        Places images at internal node positions in the radial layout.
+        """
+        self._pre_flight_check()
         for node in self.t.traverse():
             if not node.is_leaf():
                 if omit and node.name in omit: continue
+
                 nx, ny = self._node_xy(node)
                 path = os.path.join(image_dir, f"{node.name}{extension}")
                 if os.path.exists(path):
@@ -555,17 +542,6 @@ class RadialTreeDrawer(BaseDrawer):
                         uri = f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
                     self.drawing.append(draw.Image(nx - width/2, ny - height/2, width, height, path=uri))
 
-    def add_title(self, text, font_size=24, position="top", pad=40.0, color="black", weight="bold"):
-        w, h = self.style.width, self.style.height
-        tx, ty = 0, 0
-        if position == "top": ty = -h/2 + pad
-        elif position == "bottom": ty = h/2 - pad
-        elif position == "left": tx = -w/2 + pad
-        elif position == "right": tx = w/2 - pad
-        self.drawing.append(draw.Text(
-            text, font_size, tx, ty, fill=color, font_weight=weight,
-            font_family=self.style.font_family, text_anchor="middle", dominant_baseline="middle"
-        ))
     def add_scale_bar(self, length, label=None, x=None, y=None, stroke="black", stroke_width=2.0):
         """
         Adds a physical scale bar representing a distance value.
