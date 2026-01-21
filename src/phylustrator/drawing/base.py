@@ -2,8 +2,10 @@ import drawsvg as draw
 from dataclasses import dataclass
 from pathlib import Path
 import math
-import io
 import re
+import os
+import base64
+from ..utils import to_hex, to_rgb, lerp_color, generate_id
 
 try:
     import cairosvg
@@ -12,775 +14,260 @@ except ImportError:
 
 @dataclass
 class TreeStyle:
+    """
+    Configuration object for visual styling parameters.
+
+    Attributes:
+        width (int): Total width of the SVG canvas.
+        height (int): Total height of the SVG canvas.
+        radius (int): Maximum radius for radial trees.
+        degrees (int): Angular span for radial trees (usually 360).
+        rotation (int): Global rotation offset for the layout.
+        margin (float): Padding between the tree and the canvas edge.
+        root_stub_length (float): Length of the line preceding the root node.
+        leaf_r (float): Radius of markers at leaf tips.
+        leaf_color (str): Default color for leaf markers.
+        branch_stroke_width (float): Default thickness for tree branches.
+        branch_color (str): Default color for tree branches.
+        node_r (float): Radius of markers at internal nodes.
+        font_size (int): Default size for text elements.
+        font_family (str): Default font family for text elements.
+    """
     width: int = 1000
     height: int = 1000
     radius: int = 400
     degrees: int = 360
     rotation: int = -90
-    leaf_size: int = 5
+    margin: float = 100.0
+    root_stub_length: float = 20.0
+    leaf_r: float = 5.0
     leaf_color: str = "black"
-    branch_size: int = 2
+    branch_stroke_width: float = 2.0
     branch_color: str = "black"
-    node_size: int = 2
+    node_r: float = 2.0
     font_size: int = 12
     font_family: str = "Arial"
 
 class BaseDrawer:
+    """
+    Abstract base class providing shared UI and export functionality for all tree drawers.
+    
+    This class handles the initialization of the drawsvg Drawing object, coordinate 
+    independency for UI elements (legends, titles), and high-resolution exports.
+    """
     def __init__(self, tree, style=None):
+        """
+        Initializes the BaseDrawer.
+
+        Args:
+            tree (ete3.Tree): The tree object to render.
+            style (TreeStyle, optional): Style configuration. Defaults to a standard TreeStyle.
+        """
         self.t = tree
         self.style = style if style else TreeStyle()
-        self.d = draw.Drawing(self.style.width, self.style.height, origin='center')
-        self.d.append(draw.Rectangle(-self.style.width/2, -self.style.height/2, 
-                                     self.style.width, self.style.height, fill="white"))
+        self.drawing = draw.Drawing(self.style.width, self.style.height, origin='center')
+        self.drawing.append(draw.Rectangle(-self.style.width/2, -self.style.height/2, 
+                                           self.style.width, self.style.height, fill="white"))
+        
+        # Notebook compatibility alias
+        self.d = self.drawing
+        
         self.total_tree_depth = 0
         self.sf = 1.0 
+        self._layout_calculated = False
 
+    def _pre_flight_check(self):
+        """Internal helper to ensure layout math is performed before drawing elements."""
+        if not self._layout_calculated:
+            self._calculate_layout()
+            self._layout_calculated = True
 
-    def _draw_shape_at(
-        self,
-        x: float,
-        y: float,
-        shape: str,
-        fill: str,
-        size: float,
-        stroke: str | None,
-        stroke_width: float,
-        rotation: float = 0.0,
-        opacity: float = 1.0,
-    ) -> None:
+    def _calculate_layout(self):
+        """Must be implemented by subclasses to set node positions."""
+        raise NotImplementedError
+
+    def _draw_shape_at(self, x, y, shape, fill, r, stroke=None, stroke_width=1.0, rotation=0, opacity=1.0):
+        """
+        Low-level helper to draw geometric markers on the canvas.
+
+        Args:
+            x (float): Cartesian X coordinate.
+            y (float): Cartesian Y coordinate.
+            shape (str): Shape type ('circle', 'square', 'triangle').
+            fill (str): Fill color hex or name.
+            r (float): Radius/Half-size of the shape.
+            stroke (str, optional): Border color.
+            stroke_width (float): Border thickness.
+            rotation (float): Rotation in degrees.
+            opacity (float): Transparency (0.0 to 1.0).
+        """
         common = {"fill": fill, "opacity": opacity}
-        if stroke is not None:
+        if stroke:
             common["stroke"] = stroke
             common["stroke_width"] = stroke_width
 
         shp = str(shape).lower()
-        rot = float(rotation)
-
-        # drawsvg uses SVG transforms; rotate around (x,y)
-        transform = None if rot == 0 else f"rotate({rot},{x},{y})"
+        transform = f"rotate({rotation},{x},{y})" if rotation != 0 else None
 
         if shp == "circle":
-            self.d.append(draw.Circle(x, y, float(size) / 2.0, **common))
-            return
+            self.drawing.append(draw.Circle(x, y, float(r), **common))
+        elif shp == "square":
+            side = float(r) * 2.0
+            self.drawing.append(draw.Rectangle(x - r, y - r, side, side, transform=transform, **common))
+        elif shp == "triangle":
+            side = float(r) * 2.0
+            h = side * math.sqrt(3) / 2.0
+            p1, p2, p3 = (x, y - h*2/3), (x - side/2, y + h/3), (x + side/2, y + h/3)
+            path = draw.Path(transform=transform, **common).M(*p1).L(*p2).L(*p3).Z()
+            self.drawing.append(path)
 
-        if shp == "square":
-            s = float(size)
-            self.d.append(
-                draw.Rectangle(x - s / 2.0, y - s / 2.0, s, s, transform=transform, **common)
-            )
-            return
+    def save_svg(self, outpath, rotation=0):
+        """
+        Exports the current drawing to an SVG file.
 
-        if shp == "triangle":
-            s = float(size)
-            h = s * math.sqrt(3) / 2.0
-            p1 = (x, y - (2.0 / 3.0) * h)
-            p2 = (x - s / 2.0, y + (1.0 / 3.0) * h)
-            p3 = (x + s / 2.0, y + (1.0 / 3.0) * h)
-
-            path = draw.Path(transform=transform, **common)
-            path.M(*p1).L(*p2).L(*p3).Z()
-            self.d.append(path)
-            return
-
-        raise ValueError(f"Unknown shape: {shape!r}. Use circle/square/triangle.")
-
-
-    def _get_rotated_svg(self, rotation: float) -> str:
-            """
-            Internal helper: Wraps the current drawing in a new SVG 
-            transformed to handle rotation and resize the canvas.
-            """
-            original_svg = self.d.as_svg()
-            
-            if rotation == 0:
-                return original_svg
-
-            # 1. CLEANUP: Strip XML declaration and DOCTYPE from the inner SVG
-            #    because they are only allowed at the very start of a file.
-            original_svg = re.sub(r'<\?xml.*?\?>', '', original_svg)
-            original_svg = re.sub(r'<!DOCTYPE.*?>', '', original_svg)
-
-            # 2. Calculate new canvas dimensions to prevent clipping
-            w, h = self.style.width, self.style.height
-            rad = math.radians(rotation)
-            new_w = abs(w * math.cos(rad)) + abs(h * math.sin(rad))
-            new_h = abs(w * math.sin(rad)) + abs(h * math.cos(rad))
-
-            # 3. Wrap cleaned SVG in a group <g> with center rotation
-            return (
-                f'<svg xmlns="http://www.w3.org/2000/svg" '
-                f'width="{new_w}" height="{new_h}" viewBox="0 0 {new_w} {new_h}">\n'
-                f'  <g transform="translate({new_w/2}, {new_h/2}) '
-                f'rotate({rotation}) translate({-w/2}, {-h/2})">\n'
-                f'    {original_svg}\n'
-                f'  </g>\n'
-                f'</svg>'
-            )
-
-    def save_svg(self, outpath: str | Path, rotation: float = 0.0) -> None:
+        Args:
+            outpath (str|Path): Path to save the file.
+            rotation (float): Rotation to apply to the final exported group.
+        """
+        self._pre_flight_check()
         outpath = Path(outpath)
         outpath.parent.mkdir(parents=True, exist_ok=True)
-        
-        svg_content = self._get_rotated_svg(rotation)
-        
+        svg_content = self._get_rotated_svg_content(rotation)
         with open(outpath, "w", encoding="utf-8") as f:
             f.write(svg_content)
 
-    def save_png(self, outpath: str | Path, scale: float = 1.0, rotation: float = 0.0) -> None:
-        if cairosvg is None:
-            raise ImportError(
-                "PNG export requires 'cairosvg'. Please install it via pip."
-            )
+    def save_png(self, outpath, dpi=300, scale=None, rotation=0):
+        """
+        Exports the current drawing to a high-resolution PNG file.
 
+        Args:
+            outpath (str|Path): Path to save the file.
+            dpi (int): Target dots-per-inch for the export. Defaults to 300.
+            scale (float, optional): Direct scaling factor. Overrides DPI if provided.
+            rotation (float): Rotation to apply to the final export.
+        """
+        if cairosvg is None:
+            raise ImportError("PNG export requires 'cairosvg'. Install via 'pip install phylustrator[export]'")
+        
+        self._pre_flight_check()
         outpath = Path(outpath)
         outpath.parent.mkdir(parents=True, exist_ok=True)
         
-        svg_content = self._get_rotated_svg(rotation)
-        
-        cairosvg.svg2png(
-            bytestring=svg_content.encode("utf-8"),
-            write_to=str(outpath),
-            scale=scale
-        )
-
-    def add_legend(
-        self,
-        title: str,
-        mapping: dict,
-        position="top-left",
-        symbol: str = "circle",
-        text_size: int | None = None,
-        padding: int = 20,
-        box_padding: int = 10,
-        box_fill: str = "white",
-        box_opacity: float = 0.9,
-        box_stroke: str = "black",
-        box_stroke_width: float = 1.0,
-        symbol_size: int = 10,
-        row_gap: int = 6,
-    ):
-        """Add a simple categorical legend.
-
-        Coordinates follow the library convention: origin at canvas center.
-
-        Parameters
-        ----------
-        title:
-            Legend title.
-        mapping:
-            Dict of {label: color}.
-        position:
-            "top-left", "top-right", "bottom-left", "bottom-right", or (x, y) tuple
-            specifying the *top-left* corner of the legend box.
-        symbol:
-            "circle", "square", or "line".
-        """
-        if not mapping:
-            return
-
-        font_size = int(text_size) if text_size is not None else int(self.style.font_size)
-        font_family = getattr(self.style, "font_family", "Arial")
-
-        # --- Size estimation (SVG has no font metrics here, so we approximate) ---
-        # Typical monospace-ish heuristic: average character ~0.6*font_size
-        def est_width(s: str) -> float:
-            return 0.6 * font_size * len(str(s))
-
-        max_label_w = max([est_width(title)] + [est_width(k) for k in mapping.keys()])
-        content_w = symbol_size + 8 + max_label_w
-        n_rows = len(mapping)
-        title_h = font_size + 4
-        row_h = font_size + row_gap
-        content_h = title_h + (n_rows * row_h)
-        box_w = content_w + 2 * box_padding
-        box_h = content_h + 2 * box_padding
-
-        w, h = self.style.width, self.style.height
-
-        # --- Anchor (top-left of legend box) ---
-        if isinstance(position, tuple) and len(position) == 2:
-            x0, y0 = position
-        elif position == "top-left":
-            x0, y0 = -w / 2 + padding, -h / 2 + padding
-        elif position == "top-right":
-            x0, y0 = w / 2 - padding - box_w, -h / 2 + padding
-        elif position == "bottom-left":
-            x0, y0 = -w / 2 + padding, h / 2 - padding - box_h
-        elif position == "bottom-right":
-            x0, y0 = w / 2 - padding - box_w, h / 2 - padding - box_h
-        else:
-            x0, y0 = -w / 2 + padding, -h / 2 + padding
-
-        # Background box
-        self.d.append(
-            draw.Rectangle(
-                x0,
-                y0,
-                box_w,
-                box_h,
-                fill=box_fill,
-                opacity=box_opacity,
-                stroke=box_stroke,
-                stroke_width=box_stroke_width,
-            )
-        )
-
-        # Title
-        tx = x0 + box_padding
-        ty = y0 + box_padding + font_size
-        self.d.append(
-            draw.Text(
-                title,
-                font_size + 1,
-                tx,
-                ty,
-                font_family=font_family,
-                font_weight="bold",
-                fill="black",
-            )
-        )
-
-        # Rows
-        y = ty + (font_size + row_gap)
-        sym_x = x0 + box_padding + symbol_size / 2
-        text_x = x0 + box_padding + symbol_size + 8
-        for label, color in mapping.items():
-            if symbol == "circle":
-                self.d.append(
-                    draw.Circle(sym_x, y - font_size * 0.35, symbol_size / 2, fill=color, stroke="black", stroke_width=0.5)
-                )
-            elif symbol == "square":
-                self.d.append(
-                    draw.Rectangle(
-                        sym_x - symbol_size / 2,
-                        y - font_size * 0.85,
-                        symbol_size,
-                        symbol_size,
-                        fill=color,
-                        stroke="black",
-                        stroke_width=0.5,
-                    )
-                )
-            elif symbol == "line":
-                self.d.append(
-                    draw.Line(
-                        sym_x - symbol_size / 2,
-                        y - font_size * 0.5,
-                        sym_x + symbol_size / 2,
-                        y - font_size * 0.5,
-                        stroke=color,
-                        stroke_width=2,
-                    )
-                )
-
-            self.d.append(draw.Text(str(label), font_size, text_x, y, font_family=font_family, fill="black"))
-            y += row_h
-
-    
-    def add_scale_bar(
-         self,
-         length: float,
-         label: str | None = None,
-         x: float | None = None,
-         y: float | None = None,
-         stroke: str = "black",
-         stroke_width: float = 2.0,
-         tick_size: float = 6.0,
-         font_size: int | None = None,
-         font_family: str | None = None,
-         padding: float = 10.0,
-     ) -> None:
-         """Add a simple scale bar (tree-length legend).
-
-         Parameters
-         ----------
-         length
-             Length in *tree units* (same units used to scale branches).
-         label
-             Text label. If None, uses the numeric length.
-         x, y
-             Anchor position (left end) in drawing coordinates. If omitted, places the
-             bar near the bottom-left with padding.
-         """
-         px = float(length) * float(self.sf)
-         if label is None:
-             label = str(length)
-
-         if x is None:
-             x = -float(self.style.width) / 2.0 + float(padding)
-         if y is None:
-             y = float(self.style.height) / 2.0 - float(padding)
-
-         fs = int(font_size) if font_size is not None else int(self.style.font_size)
-         ff = font_family if font_family is not None else self.style.font_family
-
-         # main bar
-         self.d.append(draw.Line(x, y, x + px, y, stroke=stroke, stroke_width=stroke_width))
-         # end ticks
-         self.d.append(draw.Line(x, y - tick_size / 2.0, x, y + tick_size / 2.0, stroke=stroke, stroke_width=stroke_width))
-         self.d.append(draw.Line(x + px, y - tick_size / 2.0, x + px, y + tick_size / 2.0, stroke=stroke, stroke_width=stroke_width))
-
-         # label above the bar
-         self.d.append(draw.Text(label, fs, x + px / 2.0, y - tick_size - 2, center=True, font_family=ff))
-
-    def _leaf_xy(self, leaf, offset: float = 0.0) -> tuple[float, float]:
-            """Return (x, y) coordinates for a leaf.
-
-            Subclasses must implement this. The ``offset`` parameter is in pixels and
-            should move the position away from the leaf tip (e.g., to the right for
-            vertical trees, outward for radial trees).
-            """
-            raise NotImplementedError
-
-
-    def add_leaf_shapes(
-        self,
-        leaves,
-        shape: str = "circle",
-        fill: str = "blue",
-        size: float = 10,
-        stroke: str | None = None,
-        stroke_width: float = 1,
-        offset: float = 0.0,
-        rotation: float = 0.0,
-        orient: str | None = None,   # NEW: "radial" or "tangent" (mainly for radial)
-        opacity: float = 1.0,
-    ):
-        if leaves is None:
-            return
-
-        leaf_nodes = []
-        for item in leaves:
-            if isinstance(item, str):
-                try:
-                    leaf_nodes.append(self.t & item)  # ete3 lookup by name
-                except Exception:
-                    continue
-            else:
-                leaf_nodes.append(item)
-
-        # ensure layout exists once if needed
-        if leaf_nodes:
-            if not hasattr(leaf_nodes[0], "rad") and not hasattr(leaf_nodes[0], "coordinates"):
-                if hasattr(self, "_calculate_layout"):
-                    self._calculate_layout()
-
-        for leaf in leaf_nodes:
-            x, y = self._leaf_xy(leaf, offset=float(offset))
-
-            rot = float(rotation)
-            if orient is not None:
-                o = str(orient).lower().strip()
-
-                # Use the actual rendered vector (x,y) in the drawing coordinate system.
-                # SVG has y pointing DOWN, so atan2(y, x) yields a clockwise angle.
-                a = math.degrees(math.atan2(y, x))
-
-                # Our triangle path is "pointing up" when rotation=0,
-                # so to point along direction angle 'a' we add +90 degrees.
-                if o == "radial":
-                    rot = a + 90.0
-                elif o == "tangent":
-                    rot = a + 180.0
-
-            self._draw_shape_at(
-                x=x, y=y,
-                shape=shape,
-                fill=fill,
-                size=size,
-                stroke=stroke,
-                stroke_width=stroke_width,
-                rotation=rot,
-                opacity=opacity,
-            )
-
-    def _node_xy(self, node) -> tuple[float, float]:
-        """Subclasses must implement: x,y coordinates of any node."""
-        raise NotImplementedError
-
-    def _edge_point(self, child, where: float) -> tuple[float, float, float]:
-        """
-        Default edge interpolation: straight line from parent to child.
-        Returns (x,y,angle_degrees_along_edge).
-        Subclasses can override (vertical should).
-        """
-        parent = child.up
-        x0, y0 = self._node_xy(parent)
-        x1, y1 = self._node_xy(child)
-
-        t = max(0.0, min(1.0, float(where)))
-        x = x0 + (x1 - x0) * t
-        y = y0 + (y1 - y0) * t
-
-        ang = math.degrees(math.atan2(y1 - y0, x1 - x0))
-        return x, y, ang
-
-    def _where_from_time(self, node, t: float) -> float:
-        """
-        Map absolute event time t to a [0,1] position along the incoming edge of `node`.
-        Requires node.up.time_from_origin and node.time_from_origin (Zombi parser provides these).
-        """
-        parent = node.up
-        if parent is None:
-            return 0.0
-
-        t0 = float(getattr(parent, "time_from_origin", 0.0))
-        t1 = float(getattr(node, "time_from_origin", t0))
-        denom = (t1 - t0) if abs(t1 - t0) > 1e-12 else 1.0
-
-        w = (float(t) - t0) / denom
-        if w < 0.0:
-            return 0.0
-        if w > 1.0:
-            return 1.0
-        return w
-
-    def add_title(
-        self,
-        text: str,
-        fontsize: int = 24,
-        position: str = "top",
-        pad: float = 40.0,
-        rotation: float = 0.0,
-        color: str = "black",
-        font_weight: str = "bold"
-    ) -> None:
-        """
-        Adds a title to the canvas relative to the edges.
-
-        Parameters
-        ----------
-        text: The string to display.
-        fontsize: Size of the font.
-        position: "top", "bottom", "left", or "right".
-        pad: Padding from the edge of the canvas.
-        rotation: Degrees to rotate the text.
-        color: Text color.
-        font_weight: "normal" or "bold".
-        """
-        w, h = self.style.width, self.style.height
-        
-        # Default center of canvas
-        tx, ty = 0, 0
-
-        # Calculate anchor based on position
-        if position == "top":
-            ty = -h / 2 + pad
-        elif position == "bottom":
-            ty = h / 2 - pad
-        elif position == "left":
-            tx = -w / 2 + pad
-        elif position == "right":
-            tx = w / 2 - pad
-
-        # Create the text element
-        # Note: drawsvg origin='center' is used here
-        title_obj = draw.Text(
-            text,
-            fontsize,
-            tx,
-            ty,
-            fill=color,
-            font_family=getattr(self.style, "font_family", "Arial"),
-            font_weight=font_weight,
-            text_anchor="middle",
-            dominant_baseline="middle",
-            transform=f"rotate({rotation},{tx},{ty})" if rotation != 0 else None
-        )
-        
-        self.d.append(title_obj)
-
-
-    def add_branch_shapes(
-         self,
-         specs,
-         default_where: float = 0.5,
-         orient: str | None = None,  
-         offset: float = 0.0,        
-         **kwargs  # <--- Added to handle extra arguments like stroke_color
-     ) -> None:
-        """
-         Add shapes on branches.
- 
-         Each spec dict can include:
-           branch (str|node), where, shape, fill, size, stroke, stroke_width, rotation, opacity
-        """
-         # Accept either list[dict] or a DataFrame-like object (e.g. pandas.DataFrame)
-        if hasattr(specs, "to_dict") and hasattr(specs, "columns"):
-            specs = specs.to_dict(orient="records")
-
-        for s in specs:
-            br = s.get("branch", None)
-            if br is None:
-                continue
-
-            # resolve node
-            if isinstance(br, str):
-                try:
-                    child = self.t & br
-                except Exception:
-                    continue
-            else:
-                child = br
-
-            if child.up is None:
-                continue  # no parent edge
-
-            # Determine position along the branch
-            if "where" in s and s.get("where") is not None:
-                where = float(s.get("where"))
-            elif "time" in s and s.get("time") is not None and hasattr(child, "time_from_origin") and hasattr(child.up, "time_from_origin"):
-                 where = float(self._where_from_time(child, float(s.get("time"))))
-            else:
-                where = float(default_where)
+        if scale is None:
+            scale = dpi / 72.0
             
-            x, y, edge_ang = self._edge_point(child, where=where)
+        svg_content = self._get_rotated_svg_content(rotation)
+        cairosvg.svg2png(bytestring=svg_content.encode("utf-8"), write_to=str(outpath), scale=scale)
 
-            # optional perpendicular offset
-            if offset != 0.0:
-                perp = edge_ang + 90.0
-                x += float(offset) * math.cos(math.radians(perp))
-                y += float(offset) * math.sin(math.radians(perp))
+    def _get_rotated_svg_content(self, rotation):
+        """Internal helper for generating rotated SVG markup."""
+        if rotation == 0: return self.drawing.as_svg()
+        original_svg = self.drawing.as_svg()
+        original_svg = re.sub(r'<\?xml.*?\?>|<!DOCTYPE.*?>', '', original_svg)
+        w, h = self.style.width, self.style.height
+        rad = math.radians(rotation)
+        new_w = abs(w * math.cos(rad)) + abs(h * math.sin(rad))
+        new_h = abs(w * math.sin(rad)) + abs(h * math.cos(rad))
+        return (
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{new_w}" height="{new_h}" viewBox="0 0 {new_w} {new_h}">\n'
+            f'  <g transform="translate({new_w/2}, {new_h/2}) rotate({rotation}) translate({-w/2}, {-h/2})">\n'
+            f'    {original_svg}\n'
+            f'  </g>\n'
+            f'</svg>'
+        )
 
-            # Handle rotation
-            rot = float(s.get("rotation", 0.0))
-            if orient is not None:
-                o = str(orient).lower().strip()
-                if o == "along":
-                    rot = edge_ang
-                elif o == "perp":
-                    rot = edge_ang + 90.0
-
-            # Draw the shape using internal helper
-            self._draw_shape_at(
-                x=x, y=y,
-                shape=s.get("shape", "circle"),
-                fill=s.get("fill", "blue"),
-                size=float(s.get("size", 10)),
-                stroke=s.get("stroke", None),
-                stroke_width=float(s.get("stroke_width", 1)),
-                rotation=rot,
-                opacity=float(s.get("opacity", 1.0)),
-            )
-
-    def add_colorbar(
-        self,
-        vmin: float,
-        vmax: float,
-        low_color: str = "#f7fbff",
-        high_color: str = "#08306b",
-        label: str | None = None,
-        ticks: list[float] | None = None,
-        n_steps: int = 60,
-        bar_width: float = 18.0,
-        bar_height: float = 180.0,
-        margin: float = 18.0,
-        x_offset: float = 0.0,
-        y_offset: float = 0.0,
-        label_pad: float = 10.0,
-        tick_pad: float = 12.0,
-        font_size: int | None = None,
-        font_family: str | None = None,
-        stroke: str = "black",
-        stroke_width: float = 1.0,
-    ):
-        """Add a vertical colorbar to the drawing (top-right by default).
-
-        You can reposition with x_offset / y_offset (in px), relative to top-right anchor.
-        Coordinates assume drawsvg Drawing(origin='center').
+    def add_categorical_legend(self, palette, title="Legend", x=None, y=None, font_size=14, r=6):
         """
-        def _hex_to_rgb(h: str) -> tuple[int, int, int]:
-            h = h.lstrip("#")
-            return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        Adds a categorical legend (colored dots with text) to the canvas.
 
-        def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
-            return "#{:02x}{:02x}{:02x}".format(*rgb)
+        Args:
+            palette (dict): Mapping of category names to color hex strings.
+            title (str): Legend title.
+            x (float, optional): X coordinate (Canvas center is 0,0). Defaults to top-left.
+            y (float, optional): Y coordinate. Defaults to top-left.
+            font_size (int): Text size for labels.
+            r (float): Radius of the color dots.
+        """
+        if x is None: x = -self.style.width / 2 + 30
+        if y is None: y = -self.style.height / 2 + 30
+        
+        self.drawing.append(draw.Text(title, font_size + 2, x, y, font_weight="bold", 
+                                      font_family=self.style.font_family, text_anchor="start"))
+        curr_y = y + font_size * 1.5
+        for label, color in palette.items():
+            self.drawing.append(draw.Circle(x + r, curr_y, r, fill=color))
+            self.drawing.append(draw.Text(str(label), font_size, x + r*2.5, curr_y, 
+                                          font_family=self.style.font_family, text_anchor="start", dominant_baseline="middle"))
+            curr_y += font_size * 1.4
 
-        def _lerp(a: float, b: float, t: float) -> float:
-            return a + (b - a) * t
+    def add_color_bar(self, low_color, high_color, vmin, vmax, title="", x=None, y=None, width=100, height=15, font_size=12):
+        """
+        Adds a continuous color gradient bar to the canvas.
 
-        c0 = _hex_to_rgb(low_color)
-        c1 = _hex_to_rgb(high_color)
+        Args:
+            low_color (str): Color hex for minimum value.
+            high_color (str): Color hex for maximum value.
+            vmin (float): Minimum value label.
+            vmax (float): Maximum value label.
+            title (str): Color bar title.
+            x (float, optional): X coordinate. Defaults to bottom-left.
+            y (float, optional): Y coordinate. Defaults to bottom-left.
+            width (float): Width of the bar.
+            height (float): Height of the bar.
+            font_size (int): Text size for labels.
+        """
+        if x is None: x = -self.style.width / 2 + 30
+        if y is None: y = self.style.height / 2 - 60
+        gid = generate_id("cb_grad")
+        grad = draw.LinearGradient(x, y, x + width, y, id=gid)
+        grad.add_stop(0, low_color); grad.add_stop(1, high_color)
+        self.drawing.append(grad)
+        if title:
+            self.drawing.append(draw.Text(title, font_size, x, y - 10, font_weight="bold", text_anchor="start"))
+        self.drawing.append(draw.Rectangle(x, y, width, height, fill=grad, stroke="black", stroke_width=0.5))
+        self.drawing.append(draw.Text(f"{vmin:.2g}", font_size - 2, x, y + height + 12, text_anchor="start"))
+        self.drawing.append(draw.Text(f"{vmax:.2g}", font_size - 2, x + width, y + height + 12, text_anchor="end"))
 
-        def _lerp_color(t: float) -> str:
-            t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
-            r = int(_lerp(c0[0], c1[0], t))
-            g = int(_lerp(c0[1], c1[1], t))
-            b = int(_lerp(c0[2], c1[2], t))
-            return _rgb_to_hex((r, g, b))
+    def add_title(self, text, font_size=24, position="top", pad=40.0, color="black", weight="bold"):
+        """
+        Adds a text title to a fixed position on the canvas.
 
-        fs = int(font_size) if font_size is not None else int(self.style.font_size)
-        ff = font_family if font_family is not None else self.style.font_family
-
-        # anchor top-right (origin is center)
-        x0 = float(self.style.width) / 2.0 - float(margin) - float(bar_width) + float(x_offset)
-        y_top = -float(self.style.height) / 2.0 + float(margin) + float(y_offset)
-
-        # outline box
-        self.d.append(draw.Rectangle(
-            x0, y_top, bar_width, bar_height,
-            fill="none", stroke=stroke, stroke_width=stroke_width
+        Args:
+            text (str): Title text.
+            font_size (int): Text size.
+            position (str): 'top', 'bottom', 'left', or 'right'.
+            pad (float): Padding from the canvas edge.
+            color (str): Text color.
+            weight (str): Font weight ('normal', 'bold').
+        """
+        w, h = self.style.width, self.style.height
+        tx, ty = 0, 0
+        if position == "top": ty = -h/2 + pad
+        elif position == "bottom": ty = h/2 - pad
+        elif position == "left": tx = -w/2 + pad
+        elif position == "right": tx = w/2 - pad
+        self.drawing.append(draw.Text(
+            text, font_size, tx, ty, fill=color, font_weight=weight,
+            font_family=self.style.font_family, text_anchor="middle", dominant_baseline="middle"
         ))
 
-        # gradient fill as stacked rectangles
-        steps = max(2, int(n_steps))
-        step_h = float(bar_height) / steps
-        for i in range(steps):
-            t = i / (steps - 1)
-            fill = _lerp_color(1.0 - t)  # high at top
-            y = y_top + i * step_h
-            self.d.append(draw.Rectangle(x0, y, bar_width, step_h + 0.5, fill=fill, stroke="none"))
-
-        # default ticks
-        if ticks is None:
-            ticks = [vmin, (vmin + vmax) / 2.0, vmax]
-
-        # tick marks + labels (right side)
-        for tv in ticks:
-            frac = 0.0 if vmax == vmin else (float(tv) - float(vmin)) / (float(vmax) - float(vmin))
-            frac = 0.0 if frac < 0.0 else (1.0 if frac > 1.0 else frac)
-
-            y = y_top + (1.0 - frac) * float(bar_height)
-            self.d.append(draw.Line(
-                x0 + bar_width, y,
-                x0 + bar_width + 6, y,
-                stroke=stroke, stroke_width=stroke_width
-            ))
-            self.d.append(draw.Text(
-                str(tv), fs,
-                x0 + bar_width + float(tick_pad), y + fs * 0.35,
-                font_family=ff
-            ))
-
-        # label (above)
-        if label:
-            self.d.append(draw.Text(
-                label, fs,
-                x0 + bar_width / 2.0, y_top - float(label_pad),
-                center=True, font_family=ff
-            ))
-
-    def add_node_shapes(
-        self,
-        nodes,
-        shape: str = "circle",
-        fill: str = "red",
-        size: float = 10.0,
-        stroke: str | None = None,
-        stroke_width: float = 1.0,
-        rotation: float = 0.0,
-        dx: float = 0.0,
-        dy: float = 0.0,
-        missing: str = "ignore",  # "ignore" or "raise"
-    ) -> None:
-        """Draw shapes centered on (ancestral) nodes.
-
-        Parameters
-        ----------
-        nodes
-            Either:
-            - list of node names (str) or ete3 Node objects
-            - OR a list of dict specs with keys:
-            {"node": <name_or_node>, "shape": ..., "fill": ..., "size": ..., "stroke": ..., "stroke_width": ..., "rotation": ..., "dx": ..., "dy": ...}
-        shape
-            "circle", "square", or "triangle" (ignored when using dict specs per-node).
-        rotation
-            Degrees. For triangles/squares; circle ignores it.
-        dx, dy
-            Pixel offsets to nudge the marker.
-        missing
-            What to do if a node name is not found: "ignore" or "raise".
+    def add_scale_bar(self, length, label=None, x=None, y=None, stroke="black", stroke_width=2.0):
         """
-        # allow list[dict] specs
-        if isinstance(nodes, list) and nodes and isinstance(nodes[0], dict):
-            for s in nodes:
-                n = s.get("node", None)
-                if n is None:
-                    continue
-                self._add_one_node_shape(
-                    node=n,
-                    shape=str(s.get("shape", shape)),
-                    fill=str(s.get("fill", fill)),
-                    size=float(s.get("size", size)),
-                    stroke=s.get("stroke", stroke),
-                    stroke_width=float(s.get("stroke_width", stroke_width)),
-                    rotation=float(s.get("rotation", rotation)),
-                    dx=float(s.get("dx", dx)),
-                    dy=float(s.get("dy", dy)),
-                    missing=missing,
-                )
-            return
+        Adds a physical scale bar representing evolutionary distance.
 
-        # uniform style for all nodes
-        for n in nodes:
-            self._add_one_node_shape(
-                node=n,
-                shape=shape,
-                fill=fill,
-                size=size,
-                stroke=stroke,
-                stroke_width=stroke_width,
-                rotation=rotation,
-                dx=dx,
-                dy=dy,
-                missing=missing,
-            )
-
-
-    def _add_one_node_shape(
-        self,
-        node,
-        shape: str,
-        fill: str,
-        size: float,
-        stroke: str | None,
-        stroke_width: float,
-        rotation: float,
-        dx: float,
-        dy: float,
-        missing: str,
-    ) -> None:
-        """Internal helper: draw one node marker centered at node coordinates."""
-        # resolve node
-        n = node
-        if isinstance(node, str):
-            hits = self.t.search_nodes(name=node)
-            if not hits:
-                if missing == "raise":
-                    raise ValueError(f"Node '{node}' not found in tree.")
-                return
-            n = hits[0]
-
-        x, y = self._node_xy(n)
-        x += float(dx)
-        y += float(dy)
-
-        shp = str(shape).lower()
-        half = float(size) / 2.0
-
-        common = {"fill": fill}
-        if stroke is not None:
-            common["stroke"] = stroke
-            common["stroke_width"] = float(stroke_width)
-
-        if shp == "circle":
-            self.d.append(draw.Circle(x, y, half, **common))
-            return
-
-        if shp == "square":
-            rect = draw.Rectangle(x - half, y - half, float(size), float(size), **common)
-            if rotation:
-                rect.args["transform"] = f"rotate({float(rotation)},{x},{y})"
-            self.d.append(rect)
-            return
-
-        if shp == "triangle":
-            # Up-pointing triangle centered at (x,y)
-            p = draw.Path(**common)
-            p.M(x, y - half).L(x - half, y + half).L(x + half, y + half).Z()
-            if rotation:
-                p.args["transform"] = f"rotate({float(rotation)},{x},{y})"
-            self.d.append(p)
-            return
-
-        raise ValueError(f"Unknown shape '{shape}'. Use: circle, square, triangle.")
+        Args:
+            length (float): Length in tree distance units.
+            label (str, optional): Label text. Defaults to length value.
+            x (float, optional): X coordinate.
+            y (float, optional): Y coordinate.
+            stroke (str): Bar color.
+            stroke_width (float): Bar thickness.
+        """
+        self._pre_flight_check()
+        px = float(length) * self.sf
+        label = label or str(length)
+        x = x if x is not None else -self.style.width/2 + 20
+        y = y if y is not None else self.style.height/2 - 20
+        self.drawing.append(draw.Line(x, y, x + px, y, stroke=stroke, stroke_width=stroke_width))
+        self.drawing.append(draw.Text(label, self.style.font_size, x + px/2, y - 8, 
+                                      text_anchor="middle", font_family=self.style.font_family))
