@@ -26,6 +26,11 @@ pip install git+\[https://github.com/aadria/Phylustrator.git\](https://github.co
 
 This example demonstrates how to create a complex vertical tree with trait mapping, markers, heatmaps, and legends.
 
+![Example Tree](https://github.com/AADavin/Phylustrator/blob/main/examples/figures/vertical_tree.png)
+
+
+
+```
 import ete3  
 import phylustrator as ph  
 import random
@@ -182,8 +187,7 @@ v.save\_png("my\_phylogeny.png", dpi=300)
 
 \!
 
-$$Phylustrator Example$$  
-(https://github.com/AADavin/Phylustrator/blob/main/examples/figures/vertical\_tree.png)
+```
 
 ## ** API Overview**
 
