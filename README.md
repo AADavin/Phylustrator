@@ -8,19 +8,19 @@ Phylustrator is pure Python, but it relies on **Cairo** for high-resolution imag
 
 ### **Step 1: Install System Libraries (Only for PNG/PDF)**
 
-*If you only need SVG output, you can skip this\!*
+*If you only need SVG output, you can skip this!*
 
-* **Conda (Recommended):**  
-  conda install \-c conda-forge cairo pango
+* **Conda (Recommended):**
+  conda install -c conda-forge cairo pango
 
-* **Ubuntu/Debian:** sudo apt-get install libcairo2-dev  
+* **Ubuntu/Debian:** sudo apt-get install libcairo2-dev
 * **macOS (Homebrew):** brew install cairo
 
 ### **Step 2: Install Phylustrator**
 
 You can install the latest version directly from GitHub using pip:
 
-pip install git+\[https://github.com/aadria/Phylustrator.git\](https://github.com/aadria/Phylustrator.git)
+pip install git+[https://github.com/aadria/Phylustrator.git](https://github.com/aadria/Phylustrator.git)
 
 ## **Quick Start Example**
 
@@ -28,189 +28,159 @@ This example demonstrates how to create a complex vertical tree with trait mappi
 
 ![Example Tree](https://github.com/AADavin/Phylustrator/blob/main/examples/figures/vertical_tree.png)
 
-
-
-```
-import ete3  
-import phylustrator as ph  
+```python
+import ete3
+import phylustrator as ph
 import random
 
-\# 1\. Load your tree  
-\# Ensure your Newick file is formatted correctly (format=1 is standard for trees with names and lengths)  
-with open("../examples/data/basic/tree.nwk") as f:  
-    t \= ete3.Tree(f.readline(), format=1)
+# 1. Load your tree
+# Ensure your Newick file is formatted correctly (format=1 is standard for trees with names and lengths)
+with open("../examples/data/basic/tree.nwk") as f:
+    t = ete3.Tree(f.readline(), format=1)
 
-\# 2\. Define your style  
-\# Control dimensions, stroke widths, and default sizes here  
-my\_style \= ph.TreeStyle(  
-    width=600,  
-    height=600,  
-    leaf\_r=0,               \# Radius of leaf tips (0 to hide)  
-    node\_r=0,               \# Radius of internal nodes (0 to hide)  
-    branch\_stroke\_width=2,  \# Thickness of branches  
-    branch\_color="black",  
-    font\_size=12,  
-    font\_family="Arial",  
+# 2. Define your style
+# Control dimensions, stroke widths, and default sizes here
+my_style = ph.TreeStyle(
+    width=600,
+    height=600,
+    leaf_r=0,               # Radius of leaf tips (0 to hide)
+    node_r=0,               # Radius of internal nodes (0 to hide)
+    branch_stroke_width=2,  # Thickness of branches
+    branch_color="black",
+    font_size=12,
+    font_family="Arial",
 )
 
-\# 3\. Initialize the Drawer  
-v \= ph.VerticalTreeDrawer(t, style=my\_style)
+# 3. Initialize the Drawer
+v = ph.VerticalTreeDrawer(t, style=my_style)
 
-\# \--- BASE TREE COLORING \---  
-\# Find a target clade (common ancestor of A and D)  
-target \= t.get\_common\_ancestor("A", "D") 
+# --- BASE TREE COLORING ---
+# Find a target clade (common ancestor of A and D)
+target = t.get_common_ancestor("A", "D")
 
-\# Create a color mapping: default blue, target clade green  
-node\_colors \= {n: "blue" for n in t.traverse()}  
-for n in target.traverse():  
-    node\_colors\[n\] \= "green"
+# Create a color mapping: default blue, target clade green
+node_colors = {n: "blue" for n in t.traverse()}
+for n in target.traverse():
+    node_colors[n] = "green"
 
-\# Draw the base tree structure  
-v.draw(branch2color=node\_colors)  
-v.add\_leaf\_names()
+# Draw the base tree structure
+v.draw(branch2color=node_colors)
+v.add_leaf_names()
 
-\# \--- ADDING MARKERS \---  
-\# Add triangle shapes next to leaves A, B, C, D  
-v.add\_leaf\_shapes(  
-    leaves=\["A", "B", "C", "D"\],  
-    shape="triangle",  
-    fill="blue",  
-    r=5,                    \# Radius of the shape  
-    stroke="black",  
-    stroke\_width=1,  
-    offset=35,              \# Distance from the leaf tip  
+# --- ADDING MARKERS ---
+# Add triangle shapes next to leaves A, B, C, D
+v.add_leaf_shapes(
+    leaves=["A", "B", "C", "D"],
+    shape="triangle",
+    fill="blue",
+    r=5,                    # Radius of the shape
+    stroke="black",
+    stroke_width=1,
+    offset=35,              # Distance from the leaf tip
 )
 
-\# Add rotated square shapes for J and M  
-v.add\_leaf\_shapes(  
-    leaves=\["J", "M"\],  
-    shape="square",  
-    fill="orange",  
-    r=4,                      
-    stroke="black",  
-    stroke\_width=1,  
-    offset=35,  
-    rotation=45,  
+# Add rotated square shapes for J and M
+v.add_leaf_shapes(
+    leaves=["J", "M"],
+    shape="square",
+    fill="orange",
+    r=4,
+    stroke="black",
+    stroke_width=1,
+    offset=35,
+    rotation=45,
 )
 
-\# Add events along branch 'K' at specific positions (0.0=start, 1.0=end)  
-events \= \[  
-    {"branch": "K", "where": 0.2, "shape": "circle", "fill": "red", "r": 7},          
-    {"branch": "K", "where": 0.5, "shape": "circle", "fill": "orange", "r": 7},       
-    {"branch": "K", "where": 0.8, "shape": "circle", "fill": "darkgreen", "r": 7},    
-\]  
-v.add\_branch\_shapes(events)
+# Add events along branch 'K' at specific positions (0.0=start, 1.0=end)
+events = [
+    {"branch": "K", "where": 0.2, "shape": "circle", "fill": "red", "r": 7},
+    {"branch": "K", "where": 0.5, "shape": "circle", "fill": "orange", "r": 7},
+    {"branch": "K", "where": 0.8, "shape": "circle", "fill": "darkgreen", "r": 7},
+]
+v.add_branch_shapes(events)
 
-\# \--- HIGHLIGHTING \---  
-\# Highlight a clade with a shaded background box  
-target\_clade \= t.get\_common\_ancestor("E", "G")   
-v.highlight\_clade(target\_clade, color="orange", opacity=0.4)
+# --- HIGHLIGHTING ---
+# Highlight a clade with a shaded background box
+target_clade = t.get_common_ancestor("E", "G")
+v.highlight_clade(target_clade, color="orange", opacity=0.4)
 
-\# Highlight specific branches  
-target\_branch \= t.get\_common\_ancestor("P", "Q")   
-v.highlight\_branch(target\_branch, color="blue", stroke\_width=5)
+# Highlight specific branches
+target_branch = t.get_common_ancestor("P", "Q")
+v.highlight_branch(target_branch, color="blue", stroke_width=5)
 
-\# Apply a gradient to a branch  
-target\_grad \= t.get\_common\_ancestor("H", "J")   
-v.gradient\_branch(target\_grad, colors=("purple", "red"), stroke\_width=6)
+# Apply a gradient to a branch
+target_grad = t.get_common_ancestor("H", "J")
+v.gradient_branch(target_grad, colors=("purple", "red"), stroke_width=6)
 
-\# \--- TRANSFERS \---  
-\# Plot curved links between lineages  
-transfer\_data \= \[  
-    {"from": "E", "to": "A", "freq": 1.0},  
-\]
+# --- TRANSFERS ---
+# Plot curved links between lineages
+transfer_data = [
+    {"from": "E", "to": "A", "freq": 1.0},
+]
 
-v.plot\_transfers(  
-    transfer\_data,  
-    curve\_type="C",         \# Cubic curve  
-    stroke\_width=3,           
-    opacity=0.6,  
-    gradient\_colors=("purple", "orange")   
+v.plot_transfers(
+    transfer_data,
+    curve_type="C",         # Cubic curve
+    stroke_width=3,
+    opacity=0.6,
+    gradient_colors=("purple", "orange")
 )
 
-\# \--- AXES & HEATMAPS \---  
-\# Add a time axis at the bottom  
-v.add\_time\_axis(  
-    ticks=\[0, 0.5, 1.0, 1.5, 2.0, 2.5\],   
-    label="Time",   
-    y\_offset=20    
+# --- AXES & HEATMAPS ---
+# Add a time axis at the bottom
+v.add_time_axis(
+    ticks=[0, 0.5, 1.0, 1.5, 2.0, 2.5],
+    label="Time",
+    y_offset=20
 )
 
-\# Add heatmaps (metadata columns) next to the tree  
-\# Column 1: Expression (Blue)  
-data\_col1 \= {leaf.name: random.uniform(0, 1\) for leaf in t.get\_leaves()}  
-v.add\_heatmap(  
-    data\_col1,  
-    width=15,  
-    offset=50,  
-    low\_color="white",  
-    high\_color="blue",  
-    border\_color="black",  
-    border\_width=0.5  
+# Add heatmaps (metadata columns) next to the tree
+# Column 1: Expression (Blue)
+data_col1 = {leaf.name: random.uniform(0, 1) for leaf in t.get_leaves()}
+v.add_heatmap(
+    data_col1,
+    width=15,
+    offset=50,
+    low_color="white",
+    high_color="blue",
+    border_color="black",
+    border_width=0.5
 )
 
-\# Column 2: Enrichment (Red)  
-data\_col2 \= {leaf.name: random.uniform(0, 100\) for leaf in t.get\_leaves()}  
-v.add\_heatmap(  
-    data\_col2,  
-    width=15,  
-    offset=70,  
-    low\_color="\#fff5f0",  
-    high\_color="\#67000d",  
-    border\_color="black",  
-    border\_width=0.5  
+# Column 2: Enrichment (Red)
+data_col2 = {leaf.name: random.uniform(0, 100) for leaf in t.get_leaves()}
+v.add_heatmap(
+    data_col2,
+    width=15,
+    offset=70,
+    low_color="#fff5f0",
+    high_color="#67000d",
+    border_color="black",
+    border_width=0.5
 )
 
-\# \--- LEGENDS \---  
-v.add\_categorical\_legend(  
-    palette={"Blue": "blue", "Green": "green"},   
-    title="Lineage type",  
-    x=-280, y=-280  \# Top-left area  
+# --- LEGENDS ---
+v.add_categorical_legend(
+    palette={"Blue": "blue", "Green": "green"},
+    title="Lineage type",
+    x=-280, y=-280  # Top-left area
 )
 
-v.add\_transfer\_legend(  
-    colors=("purple", "orange"),  
-    x=-150, y=-280    
+v.add_transfer_legend(
+    colors=("purple", "orange"),
+    x=-150, y=-280
 )
 
-v.add\_color\_bar(  
-    low\_color="white",   
-    high\_color="blue",   
-    vmin=0, vmax=1,   
-    title="Expression",  
-    x=160, y=-250  
+v.add_color_bar(
+    low_color="white",
+    high_color="blue",
+    vmin=0, vmax=1,
+    title="Expression",
+    x=160, y=-250
 )
 
-\# Display or Save  
-\# v.d  \# Display in Jupyter  
-v.save\_png("my\_phylogeny.png", dpi=300)
-
-\!
+# Display or Save
+# v.d  # Display in Jupyter
+v.save_png("my_phylogeny.png", dpi=300)
 
 ```
-
-## ** API Overview**
-
-### **TreeStyle**
-
-Controls the global appearance of the plot.
-
-* width, height: Canvas dimensions.  
-* leaf\_r, node\_r: Radius of leaf/node markers (0 to hide).  
-* branch\_stroke\_width: Thickness of tree branches.  
-* mode: "r" (radial) or "c" (circular) \- *RadialDrawer only*.
-
-### **Drawers (VerticalTreeDrawer, RadialTreeDrawer)**
-
-The main classes for generating plots.
-
-* **draw()**: Renders the tree structure.  
-* **add\_leaf\_shapes()**: Adds markers (circle, square, triangle) to tips.  
-* **add\_heatmap()**: Adds data columns/rings.  
-* **plot\_transfers()**: Draws HGT links.  
-* **highlight\_clade()**: Adds background shading.  
-* **save\_png(path, dpi=300)**: Exports high-quality images.
-
-## **License**
-
-This project is licensed under the MIT License \- see the LICENSE file for details.
