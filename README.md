@@ -1,6 +1,6 @@
 # Phylustrator
 
-A libary for easy plotting of phylogenies...
+A libary for easy plotting of phylogenies
 
 ![Phylustrator Example](https://github.com/AADavin/Phylustrator/blob/main/examples/figures/vertical_tree.png)
 ![Phylustrator Example](https://github.com/AADavin/Phylustrator/blob/main/examples/figures/radial_tree.png)
