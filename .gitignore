@@ -32,3 +32,4 @@ venv/
 # Allow specific example data
 !examples/data/
 notebooks/05.MarkovChain.ipynb
+
