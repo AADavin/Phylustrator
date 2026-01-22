@@ -1,574 +1,556 @@
-from platform import node
 import drawsvg as draw
 import math
-import random
+import os
+import base64
 from .base import BaseDrawer
-
-def radial_converter(degree, radius, rotation=0):
-    theta = math.radians(degree + rotation)
-    return radius * math.cos(theta), radius * math.sin(theta)
+from ..utils import polar_to_cartesian, generate_id, lerp_color
 
 class RadialTreeDrawer(BaseDrawer):
+    """
+    Drawer class for rendering phylogenetic trees in a circular (radial) layout.
+    
+    Inherits from BaseDrawer and implements radial-specific geometry calculations
+    where nodes are positioned by angle and radius.
+    """
     def __init__(self, tree, style=None):
+        """
+        Initializes the RadialTreeDrawer and performs the initial layout calculation.
+
+        Args:
+            tree (ete3.TreeNode): The tree object to be visualized.
+            style (TreeStyle, optional): Custom style configuration.
+        """
         super().__init__(tree, style)
         self._calculate_layout()
 
     def _rot_ang(self, ang_deg: float) -> float:
-        # layout angle + style rotation (degrees)
-        return float(ang_deg) + float(getattr(self.style, "rotation", 0.0))
+        """Applies the global rotation offset to a given angle."""
+        return float(ang_deg) + float(self.style.rotation)
 
-
-    def _node_xy(self, node):
+    def _node_xy(self, node) -> tuple[float, float]:
+        """Calculates Cartesian (x, y) coordinates for a node in polar space."""
         if not (hasattr(node, "rad") and hasattr(node, "angle")):
             self._calculate_layout()
-        r = float(node.rad)
-        ang = self._rot_ang(node.angle)
-        th = math.radians(ang)
-        return (r * math.cos(th), r * math.sin(th))
+        return polar_to_cartesian(self._rot_ang(node.angle), node.rad)
 
-
-    def _leaf_xy(self, leaf, offset: float = 0.0):
+    def _leaf_xy(self, leaf, offset: float = 0.0) -> tuple[float, float]:
+        """Calculates Cartesian coordinates for a leaf tip with a radial offset."""
         if not (hasattr(leaf, "rad") and hasattr(leaf, "angle")):
             self._calculate_layout()
-        r = float(leaf.rad) + float(offset)
-        ang = self._rot_ang(leaf.angle)
-        th = math.radians(ang)
-        return (r * math.cos(th), r * math.sin(th))
+        return polar_to_cartesian(self._rot_ang(leaf.angle), leaf.rad + float(offset))
 
-
-    def _edge_point(self, child, where: float):
-        """
-        Place a point along the drawn branch centerline (radial segment at CHILD angle).
-        where=0 => (r=parent.rad, angle=child.angle)
-        where=1 => (r=child.rad,  angle=child.angle)
-        """
+    def _edge_point(self, child, where: float) -> tuple[float, float, float]:
+        """Finds a point along the radial branch leading to a child node."""
         parent = child.up
         if parent is None:
-            x, y = self._node_xy(child)
-            return x, y, 0.0
-
-        if not (hasattr(parent, "rad") and hasattr(child, "rad") and hasattr(child, "angle")):
-            self._calculate_layout()
-
-        r0 = float(parent.rad)
-        r1 = float(child.rad)
+            return (*self._node_xy(child), self._rot_ang(child.angle))
+        r_p, r_c = float(parent.rad), float(child.rad)
         t = max(0.0, min(1.0, float(where)))
-        r = r0 + (r1 - r0) * t
-
+        r = r_p + (r_c - r_p) * t
         ang = self._rot_ang(child.angle)
-        th = math.radians(ang)
-        x = r * math.cos(th)
-        y = r * math.sin(th)
-
-        # orientation "along" the branch direction
-        edge_ang = ang if (r1 - r0) >= 0 else (ang + 180.0)
-        return x, y, edge_ang
+        x, y = polar_to_cartesian(ang, r)
+        return x, y, ang
 
     def _calculate_layout(self):
-        max_dist = 0
+        """
+        Computes polar coordinates (radius and angle) for all nodes in the tree.
+        
+        This method is called automatically during initialization or before drawing.
+        """
+        # 1. Radial Scaling (Distances)
+        max_dist = 0.0
         for n in self.t.traverse("preorder"):
             n.dist_to_root = n.up.dist_to_root + n.dist if not n.is_root() else getattr(n, "dist", 0.0)
             max_dist = max(max_dist, n.dist_to_root)
         self.total_tree_depth = max_dist
-        self.sf = self.style.radius / max_dist if max_dist > 0 else 1
-        leaves = self.t.get_leaves()
-        self.angle_step = self.style.degrees / len(leaves)
-        for i, leaf in enumerate(leaves):
-            leaf.angle = i * self.angle_step
-        for n in self.t.traverse("postorder"):
-            if not n.is_leaf():
-                n.angle = (n.children[0].angle + n.children[-1].angle) / 2
+        self.sf = float(self.style.radius) / max_dist if max_dist > 0 else 1.0
+        
+        for n in self.t.traverse():
             n.rad = n.dist_to_root * self.sf
-            n.xy = radial_converter(n.angle, n.rad, self.style.rotation)
 
-    def draw(self, branch2color=None, hide_radial_lines=None):
-        """
-        Standard radial drawing loop.
-        :param branch2color: Dictionary {node_object: color_string}
-        :param hide_radial_lines: List of nodes to skip parent connections
-        """
-        hidden_set = set(hide_radial_lines) if hide_radial_lines else set()
+        # 2. Angular Scaling (Leaves)
+        leaves = self.t.get_leaves()
+        span = float(self.style.degrees)
+        angle_step = span / max(len(leaves), 1)
+        for i, leaf in enumerate(leaves):
+            leaf.angle = i * angle_step
 
+        # 3. Internal Centerings
         for n in self.t.traverse("postorder"):
-            # Resolve Color
-            b_color = self.style.branch_color
-            if branch2color and n in branch2color:
-                b_color = branch2color[n]
-                if b_color == "None": continue
-
-            x, y = n.xy
-
-            # 1. Radial Line to Parent
-            if not n.is_root() and n not in hidden_set:
-                px, py = radial_converter(n.angle, n.up.rad, self.style.rotation)
-                self.d.append(draw.Line(px, py, x, y, stroke=b_color, stroke_width=self.style.branch_size))
-
-            # 2. Connector Arc and Nodes
             if not n.is_leaf():
-                a1, a2 = n.children[0].angle, n.children[-1].angle
-                p = draw.Path(stroke=b_color, stroke_width=self.style.branch_size, fill="none")
-                sx, sy = radial_converter(a1, n.rad, self.style.rotation)
-                ex, ey = radial_converter(a2, n.rad, self.style.rotation)
-                p.M(sx, sy).A(n.rad, n.rad, 0, 0, 1, ex, ey)
-                self.d.append(p)
-                
-                if not n.is_root():
-                    self.d.append(draw.Circle(x, y, self.style.node_size, fill=b_color))
-            else:
-                self.d.append(draw.Circle(x, y, self.style.leaf_size, fill=self.style.leaf_color))
+                if n.children:
+                    n.angle = sum(c.angle for c in n.children) / len(n.children)
+                else:
+                    n.angle = 0.0
+        self._layout_calculated = True
 
-    def add_ring(self, mapping, width=20, padding=10):
-        r_in = self.style.radius + padding
-        r_out = r_in + width
-        for l in self.t.get_leaves():
-            if l.name not in mapping: continue
-            a1, a2 = l.angle - self.angle_step/2, l.angle + self.angle_step/2
-            p = draw.Path(fill=mapping[l.name])
-            s_i_x, s_i_y = radial_converter(a1, r_in, self.style.rotation)
-            e_i_x, e_i_y = radial_converter(a2, r_in, self.style.rotation)
-            s_o_x, s_o_y = radial_converter(a1, r_out, self.style.rotation)
-            e_o_x, e_o_y = radial_converter(a2, r_out, self.style.rotation)
-            p.M(s_o_x, s_o_y).A(r_out, r_out, 0, 0, 1, e_o_x, e_o_y).L(e_i_x, e_i_y).A(r_in, r_in, 0, 0, 0, s_i_x, s_i_y).Z()
-            self.d.append(p)
+    def draw(self, branch2color=None):
+        """
+        Draws the main tree skeleton.
+
+        Connectors are drawn as circular arcs and branches as radial lines.
+
+        Args:
+            branch2color (dict, optional): Dictionary mapping `ete3.TreeNode` objects to 
+                CSS color strings. Used to color specific branches.
+        """
+        self._pre_flight_check()
+        for n in self.t.traverse("postorder"):
+            color = branch2color.get(n, self.style.branch_color) if branch2color else self.style.branch_color
+            x, y = self._node_xy(n)
+            if not n.is_root():
+                parent = n.up
+                px, py = self._node_xy(parent)
+                start_ang, end_ang = self._rot_ang(parent.angle), self._rot_ang(n.angle)
+                if abs(start_ang - end_ang) > 0.001:
+                    ax, ay = polar_to_cartesian(end_ang, parent.rad)
+                    path = draw.Path(stroke=color, stroke_width=self.style.branch_stroke_width, fill="none")
+                    sweep = 1 if end_ang > start_ang else 0
+                    path.M(px, py).A(parent.rad, parent.rad, 0, 0, sweep, ax, ay)
+                    self.drawing.append(path)
+                    self.drawing.append(draw.Line(ax, ay, x, y, stroke=color, stroke_width=self.style.branch_stroke_width))
+                else:
+                    self.drawing.append(draw.Line(px, py, x, y, stroke=color, stroke_width=self.style.branch_stroke_width))
             
-    def add_leaf_names(self, padding=15):
-        for l in self.t.get_leaves():
-            angle = l.angle + self.style.rotation
-            ang_mod = angle % 360.0
-
-            # SVG y-axis is downward, so the "right side" includes angles near 360 as well
-            right_side = (ang_mod <= 90.0) or (ang_mod >= 270.0)
-
-            # place at leaf tip radius, not at a fixed style.radius
-            x, y = radial_converter(l.angle, float(l.rad) + float(padding), self.style.rotation)
-
-            rot = angle if right_side else (angle - 180.0)
-            anchor = "start" if right_side else "end"
-
-            self.d.append(
-                draw.Text(
-                    l.name,
-                    self.style.font_size,
-                    x,
-                    y,
-                    transform=f"rotate({rot},{x},{y})",
-                    text_anchor=anchor,
-                    dominant_baseline="middle",
-                    font_family=self.style.font_family,
-                )
-            )
-
-
-    def plot_transfers(
-        self,
-        transfers,
-        mode="midpoint",
-        curve_type="C",
-        filter_below=0.1,
-        use_gradient=True,
-        gradient_colors=("purple", "orange"),
-        color="orange",
-        use_thickness=True,
-        stroke_width=5,
-        arc_intensity=40,
-        opacity=0.6,
-    ):
-        """
-        Plot transfers on a radial tree.
-
-        mode="time" places endpoints at the correct event time along each endpoint branch
-        using node.time_from_origin (from Zombi parser). Otherwise uses midpoint logic.
-        """
-        # Accept either list[dict] or a DataFrame-like object (e.g. pandas.DataFrame)
-        if hasattr(transfers, "to_dict") and hasattr(transfers, "columns"):
-            transfers = transfers.to_dict(orient="records")
-
-        # Ensure layout exists
-        any_node = next(self.t.traverse("preorder"))
-        if not hasattr(any_node, "rad") or not hasattr(any_node, "angle"):
-            self._calculate_layout()
-
-        name_to_node = {n.name: n for n in self.t.traverse()}
-
-        def where_from_time(node, tt: float) -> float:
-            parent = node.up
-            if parent is None:
-                return 0.0
-            t0 = float(getattr(parent, "time_from_origin", 0.0))
-            t1 = float(getattr(node, "time_from_origin", t0))
-            denom = (t1 - t0) if abs(t1 - t0) > 1e-12 else 1.0
-            w = (float(tt) - t0) / denom
-            if w < 0.0:
-                return 0.0
-            if w > 1.0:
-                return 1.0
-            return w
-
-        for tr in transfers:
-            freq = float(tr.get("freq", 1.0))
-            if freq < filter_below:
-                continue
-
-            src = name_to_node.get(tr.get("from"))
-            dst = name_to_node.get(tr.get("to"))
-            if src is None or dst is None:
-                continue
-
-            src_angle = float(src.angle)
-            dst_angle = float(dst.angle)
-
-            # Compute endpoints
-            if (
-                mode == "time"
-                and tr.get("time") is not None
-                and hasattr(src, "time_from_origin")
-                and hasattr(dst, "time_from_origin")
-            ):
-                tt = float(tr["time"])
-                w_src = where_from_time(src, tt)
-                w_dst = where_from_time(dst, tt)
-                sx, sy, _ = self._edge_point(src, w_src)
-                ex, ey, _ = self._edge_point(dst, w_dst)
-
-                # radii for control points
-                src_r_mid = (sx * sx + sy * sy) ** 0.5
-                dst_r_mid = (ex * ex + ey * ey) ** 0.5
-
-            else:
-                # midpoint fallback (old behavior)
-                src_r = float(src.rad)
-                dst_r = float(dst.rad)
-                src_parent_r = float(src.up.rad) if src.up else (src_r - 20.0)
-                dst_parent_r = float(dst.up.rad) if dst.up else (dst_r - 20.0)
-
-                src_r_mid = (src_r + src_parent_r) / 2.0
-                dst_r_mid = (dst_r + dst_parent_r) / 2.0
-
-                sx, sy = radial_converter(src_angle, src_r_mid, self.style.rotation)
-                ex, ey = radial_converter(dst_angle, dst_r_mid, self.style.rotation)
-
-            width = (stroke_width * freq) if use_thickness else stroke_width
-            path = draw.Path(stroke_width=width, fill="none", stroke_opacity=opacity)
-
-            if use_gradient:
-                grad_id = f"tr_grad_{random.randint(0, 999999)}"
-                grad = draw.LinearGradient(sx, sy, ex, ey, id=grad_id)
-                grad.add_stop(0, gradient_colors[0])
-                grad.add_stop(1, gradient_colors[1])
-                self.d.append(grad)
-                path.args["stroke"] = grad
-            else:
-                path.args["stroke"] = color
-
-            path.M(sx, sy)
-
-            if curve_type.upper() == "S":
-                c1x, c1y = radial_converter(src_angle, src_r_mid + arc_intensity, self.style.rotation)
-                c2x, c2y = radial_converter(dst_angle, dst_r_mid - arc_intensity, self.style.rotation)
-                path.C(c1x, c1y, c2x, c2y, ex, ey)
-            else:
-                c1x, c1y = radial_converter(src_angle, src_r_mid - arc_intensity, self.style.rotation)
-                c2x, c2y = radial_converter(dst_angle, dst_r_mid - arc_intensity, self.style.rotation)
-                path.C(c1x, c1y, c2x, c2y, ex, ey)
-
-            self.d.append(path)
-
-    
-    def add_transfer_legend(
-        self,
-        title="Transfer Frequency",
-        colors=("purple", "orange"),
-        low=0.1,
-        high=1.0,
-        source_label="Source",
-        arrival_label="Arrival",
-        show_frequency=False,
-        show_direction=True,
-        margin=20,
-    ):
-        """Add a transfer legend.
-
-        By default this shows *direction* (two solid colors): a "Source" swatch and an
-        "Arrival" swatch. If you also want a frequency scale, set
-        ``show_frequency=True``.
-
-        Parameters
-        ----------
-        colors:
-            Tuple (source_color, arrival_color). These match the gradient endpoints
-            used by ``plot_transfers(..., gradient_colors=...)``.
-        show_frequency:
-            Draws a gradient bar + numeric low/high labels.
-        show_direction:
-            Draws two solid color swatches labelled source/arrival.
-        """
-        if not (show_frequency or show_direction):
-            return
-
-        font_size = 11
-        num_font_size = 9
-        sw = 14
-        gap = 6
-        pad_x = 10
-        top_pad = 10
-        bottom_pad = 10
-        row_h = 18
-        bar_h = 12
-        bar_w = 110
-
-        # Estimate legend width from label lengths (drawsvg doesn't expose text metrics).
-        max_label_len = 0
-        if show_direction:
-            max_label_len = max(len(str(source_label)), len(str(arrival_label)))
-        if show_frequency:
-            max_label_len = max(max_label_len, len(str(title)))
-        est_text_w = max_label_len * font_size * 0.60
-        w = int(pad_x + sw + gap + est_text_w + pad_x)
-        if show_frequency:
-            w = max(w, pad_x + bar_w + pad_x)
-
-        # Height: SVG y-axis increases downward.
-        content_h = top_pad
-        if show_frequency:
-            # title + bar + low/high labels + spacing
-            content_h += (font_size + 4) + bar_h + (num_font_size + 10) + 6
-        if show_direction:
-            content_h += (2 * row_h)
-        content_h += bottom_pad
-        box_h = content_h
-
-        x = -self.style.width / 2 + 30
-        y = self.style.height / 2 - margin - box_h
-
-        # Background
-        self.d.append(
-            draw.Rectangle(x, y, w, box_h, fill="white", stroke="black", stroke_width=1, opacity=0.9)
-        )
-
-        cursor_y = y + top_pad + 2
-
-        # Optional frequency scale
-        if show_frequency:
-            self.d.append(draw.Text(title, font_size, x + 10, cursor_y, font_family="sans-serif", font_weight="bold"))
-            cursor_y += 10
-
-            grad_id = f"legend_transfer_grad_{random.randint(0, 999999)}"
-            grad = draw.LinearGradient(x + 10, cursor_y + bar_h / 2, x + 10 + bar_w, cursor_y + bar_h / 2, id=grad_id)
-            grad.add_stop(0, colors[0])
-            grad.add_stop(1, colors[1])
-            self.d.append(grad)
-            self.d.append(draw.Rectangle(x + 10, cursor_y, bar_w, bar_h, fill=grad))
-
-            # low/high numeric labels
-            self.d.append(draw.Text(f"{low}", num_font_size, x + 10, cursor_y + bar_h + 12, font_family="sans-serif"))
-            self.d.append(draw.Text(f"{high}", num_font_size, x + 10 + bar_w - 15, cursor_y + bar_h + 12, font_family="sans-serif"))
-            cursor_y += bar_h + 24
-
-        # Direction swatches
-        if show_direction:
-            sw = 14
-            self.d.append(draw.Rectangle(x + 10, cursor_y, sw, sw, fill=colors[0]))
-            self.d.append(draw.Text(source_label, font_size, x + 30, cursor_y + 11, font_family="sans-serif"))
-            cursor_y += row_h
-
-            self.d.append(draw.Rectangle(x + 10, cursor_y, sw, sw, fill=colors[1]))
-            self.d.append(draw.Text(arrival_label, font_size, x + 30, cursor_y + 11, font_family="sans-serif"))
-
-    def add_ring_heatmap(
-        self,
-        values,
-        width: float = 20.0,
-        padding: float = 10.0,
-        vmin: float | None = None,
-        vmax: float | None = None,
-        low_color: str = "#f7fbff",
-        high_color: str = "#08306b",
-        missing_color: str = "white",
-    ):
-        """Add a numeric heatmap ring around the radial tree.
-
-        Parameters
-        ----------
-        values:
-            Mapping leaf_name -> numeric value, OR a pandas Series, OR a DataFrame with columns
-            ["leaf", "value"] (any column names are fine if you pass a dict instead).
-        width:
-            Ring thickness in px.
-        padding:
-            Distance outward from the tree radius.
-        vmin, vmax:
-            Normalization bounds. If None, computed from provided values.
-        low_color, high_color:
-            Gradient endpoints (hex colors).
-        missing_color:
-            Fill used if a leaf is missing from the values.
-        """
-        # ---- normalize inputs to dict[str, float] ----
-        if hasattr(values, "to_dict") and not isinstance(values, dict):
-            # pandas Series
-            values = values.to_dict()
-
-        if hasattr(values, "columns") and hasattr(values, "to_dict") and not isinstance(values, dict):
-            # DataFrame-like: try common formats
-            cols = list(values.columns)
-            if len(cols) >= 2:
-                leaf_col, val_col = cols[0], cols[1]
-                values = dict(zip(values[leaf_col].astype(str), values[val_col].astype(float)))
-            else:
-                values = {}
-
-        if not isinstance(values, dict):
-            raise TypeError("values must be a dict, pandas Series, or a DataFrame with 2 columns.")
-
-        # ---- helpers for color interpolation ----
-        def _hex_to_rgb(h: str) -> tuple[int, int, int]:
-            h = h.lstrip("#")
-            return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-
-        def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
-            return "#{:02x}{:02x}{:02x}".format(*rgb)
-
-        def _lerp(a: float, b: float, t: float) -> float:
-            return a + (b - a) * t
-
-        c0 = _hex_to_rgb(low_color)
-        c1 = _hex_to_rgb(high_color)
-
-        def _lerp_color(t: float) -> str:
-            t = 0.0 if t < 0.0 else (1.0 if t > 1.0 else t)
-            r = int(_lerp(c0[0], c1[0], t))
-            g = int(_lerp(c0[1], c1[1], t))
-            b = int(_lerp(c0[2], c1[2], t))
-            return _rgb_to_hex((r, g, b))
-
-        # ---- determine vmin/vmax from provided numeric values ----
-        vals = []
-        for k, v in values.items():
-            try:
-                vals.append(float(v))
-            except Exception:
-                continue
-
-        if not vals:
-            return
-
-        if vmin is None:
-            vmin = min(vals)
-        if vmax is None:
-            vmax = max(vals)
-        if float(vmax) == float(vmin):
-            vmax = float(vmin) + 1e-12
-
-        vmin = float(vmin)
-        vmax = float(vmax)
-
-        # ---- ring geometry (same as add_ring) ----
-        r_in = float(self.style.radius) + float(padding)
-        r_out = r_in + float(width)
-
-        for l in self.t.get_leaves():
-            name = str(l.name)
-            if name not in values:
-                fill = missing_color
-            else:
-                try:
-                    v = float(values[name])
-                    tnorm = (v - vmin) / (vmax - vmin)
-                    fill = _lerp_color(tnorm)
-                except Exception:
-                    fill = missing_color
-
-            a1, a2 = l.angle - self.angle_step / 2.0, l.angle + self.angle_step / 2.0
-            p = draw.Path(fill=fill, stroke="none")
-
-            s_i_x, s_i_y = radial_converter(a1, r_in, self.style.rotation)
-            e_i_x, e_i_y = radial_converter(a2, r_in, self.style.rotation)
-            s_o_x, s_o_y = radial_converter(a1, r_out, self.style.rotation)
-            e_o_x, e_o_y = radial_converter(a2, r_out, self.style.rotation)
-
-            p.M(s_o_x, s_o_y)\
-             .A(r_out, r_out, 0, 0, 1, e_o_x, e_o_y)\
-             .L(e_i_x, e_i_y)\
-             .A(r_in, r_in, 0, 0, 0, s_i_x, s_i_y)\
-             .Z()
-
-            self.d.append(p)
-
+            r_v = self.style.leaf_r if n.is_leaf() else self.style.node_r
+            if r_v > 0:
+                fill = self.style.leaf_color if n.is_leaf() else color
+                self.drawing.append(draw.Circle(x, y, r_v, fill=fill))
 
     def highlight_clade(self, node, color="lightblue", opacity=0.3, padding=10):
-            """Draws a shaded sector (pie slice) behind a specific clade."""
-            if node.is_leaf(): return 
-            
-            leaves = node.get_leaves()
-            angles = [l.angle for l in leaves]
-            
-            # Define Angular bounds
-            # We extend by half a step to cover the "gap" between this clade and neighbors
-            min_ang = min(angles) - (self.angle_step / 2.0)
-            max_ang = max(angles) + (self.angle_step / 2.0)
-            
-            # Define Radial bounds
-            # Inner: from the node itself (or root 0 if you want full pie)
-            # Outer: furthest leaf + padding
-            r_inner = float(node.rad)
-            r_outer = max(float(l.rad) for l in leaves) + padding
-            
-            # Convert to SVG Arc Path
-            # Move to Inner Start -> Line to Outer Start -> Arc to Outer End -> Line to Inner End -> Arc to Inner Start
-            sx_in, sy_in = radial_converter(min_ang, r_inner, self.style.rotation)
-            ex_in, ey_in = radial_converter(max_ang, r_inner, self.style.rotation)
-            
-            sx_out, sy_out = radial_converter(min_ang, r_outer, self.style.rotation)
-            ex_out, ey_out = radial_converter(max_ang, r_outer, self.style.rotation)
-            
-            # Large arc flag (0 or 1) depending on if angle > 180
-            angle_diff = max_ang - min_ang
-            large_arc = 1 if angle_diff > 180 else 0
-            
-            path = draw.Path(fill=color, fill_opacity=opacity, stroke="none")
-            path.M(sx_in, sy_in)\
-                .L(sx_out, sy_out)\
-                .A(r_outer, r_outer, 0, large_arc, 1, ex_out, ey_out)\
-                .L(ex_in, ey_in)\
-                .A(r_inner, r_inner, 0, large_arc, 0, sx_in, sy_in)\
-                .Z()
-                
-            self.d.append(path)
+        """
+        Draws a shaded "donut wedge" background behind a specific clade.
 
+        Args:
+            node (ete3.TreeNode): The root node of the clade to highlight.
+            color (str, optional): Fill color. Defaults to "lightblue".
+            opacity (float, optional): Fill opacity (0.0 to 1.0). Defaults to 0.3.
+            padding (float, optional): Radial padding in pixels. Defaults to 10.
+        """
+        self._pre_flight_check()
+        leaves = node.get_leaves()
+        angles = [l.angle for l in leaves]
+        start_ang, end_ang = self._rot_ang(min(angles)), self._rot_ang(max(angles))
+        r_i, r_o = node.rad - padding, max(l.rad for l in leaves) + padding
+        
+        p = draw.Path(fill=color, fill_opacity=opacity)
+        p1x, p1y = polar_to_cartesian(start_ang, r_i)
+        p2x, p2y = polar_to_cartesian(end_ang, r_i)
+        p3x, p3y = polar_to_cartesian(end_ang, r_o)
+        p4x, p4y = polar_to_cartesian(start_ang, r_o)
+        sweep = 1 if end_ang > start_ang else 0
+        p.M(p1x, p1y).A(r_i, r_i, 0, 0, sweep, p2x, p2y).L(p3x, p3y).A(r_o, r_o, 0, 0, 0 if sweep == 1 else 1, p4x, p4y).Z()
+        self.drawing.append(p)
 
-    def add_time_axis(
-            self,
-            ticks: list[float],
-            label: str = "Time",
-            tick_size: float = 0, # Usually 0 for radial rings
-            label_angle: float = 90, # Angle where text labels appear
-            stroke: str = "#ccc",
-            stroke_width: float = 1.0,
-            stroke_dasharray: str = "4,2", # Dashed lines look better for grids
-            font_size: int = 10,
-        ):
-            """Add concentric rings representing time/distance."""
+    def highlight_branch(self, node, color="red", stroke_width=None):
+        """
+        Overlays a thicker or colored arc/line on the branch leading to the specific node.
+
+        Args:
+            node (ete3.TreeNode): The target node.
+            color (str, optional): CSS color string. Defaults to "red".
+            stroke_width (float, optional): Thickness of the highlight. Defaults to 2x standard width.
+        """
+        if node.is_root(): return
+        sw = stroke_width or self.style.branch_stroke_width * 2
+        px, py = self._node_xy(node.up)
+        x, y = self._node_xy(node)
+        start_ang, end_ang = self._rot_ang(node.up.angle), self._rot_ang(node.angle)
+        
+        if abs(start_ang - end_ang) > 0.001:
+            ax, ay = polar_to_cartesian(end_ang, node.up.rad)
+            path = draw.Path(stroke=color, stroke_width=sw, fill="none", stroke_linecap="round")
+            sweep = 1 if end_ang > start_ang else 0
+            path.M(px, py).A(node.up.rad, node.up.rad, 0, 0, sweep, ax, ay)
+            self.drawing.append(path)
+            self.drawing.append(draw.Line(ax, ay, x, y, stroke=color, stroke_width=sw, stroke_linecap="round"))
+        else:
+            self.drawing.append(draw.Line(px, py, x, y, stroke=color, stroke_width=sw, stroke_linecap="round"))
+
+    def gradient_branch(self, node, colors=("red", "blue"), stroke_width=None):
+        """
+        Applies a linear color gradient along a radial branch segment.
+
+        Args:
+            node (ete3.TreeNode): The target node.
+            colors (tuple, optional): Tuple of (start_color, end_color). Defaults to ("red", "blue").
+            stroke_width (float, optional): Thickness of the branch. Defaults to style default.
+        """
+        if node.is_root(): return
+        sw = stroke_width or self.style.branch_stroke_width
+        px, py = self._node_xy(node.up)
+        x, y = self._node_xy(node)
+        gid = generate_id("grad")
+        grad = draw.LinearGradient(px, py, x, y, id=gid)
+        grad.add_stop(0, colors[0])
+        grad.add_stop(1, colors[1])
+        self.drawing.append(grad)
+        self.highlight_branch(node, color=grad, stroke_width=sw)
+
+    def add_leaf_names(self, font_size=None, color="black", padding=10):
+        """
+        Adds text labels to leaf tips, automatically rotated to match the radial angle.
+
+        Args:
+            font_size (int, optional): Font size in pixels. Defaults to style default.
+            color (str, optional): Text color. Defaults to "black".
+            padding (float, optional): Distance from leaf tip to text start. Defaults to 10.
+        """
+        fs = font_size or self.style.font_size
+        for l in self.t.get_leaves():
+            ang = (self._rot_ang(l.angle)) % 360
+            x, y = polar_to_cartesian(ang, l.rad + padding)
+            text_rot, anchor = ang, "start"
+            if 90 < ang < 270:
+                text_rot += 180
+                anchor = "end"
+            self.drawing.append(draw.Text(l.name, fs, x, y, fill=color, font_family=self.style.font_family,
+                                          transform=f"rotate({text_rot}, {x}, {y})", text_anchor=anchor, dominant_baseline="middle"))
+
+    def add_node_names(self, font_size=None, color="gray", padding=5):
+        """
+        Adds text labels to internal node positions.
+
+        Args:
+            font_size (int, optional): Font size. Defaults to style default * 0.8.
+            color (str, optional): Text color. Defaults to "gray".
+            padding (float, optional): Radial offset. Defaults to 5.
+        """
+        fs = font_size or self.style.font_size * 0.8
+        for n in self.t.traverse():
+            if not n.is_leaf() and n.name:
+                ang = (self._rot_ang(n.angle)) % 360
+                x, y = polar_to_cartesian(ang, n.rad + padding)
+                text_rot = ang + (180 if 90 < ang < 270 else 0)
+                self.drawing.append(draw.Text(n.name, fs, x, y, fill=color, font_family=self.style.font_family,
+                                              transform=f"rotate({text_rot}, {x}, {y})", text_anchor="middle", dominant_baseline="middle"))
+
+    def add_leaf_shapes(self, leaves, shape="circle", fill="blue", r=5.0, stroke=None, stroke_width=1.0, offset=0.0, rotation=0.0, opacity=1.0, orient=False):
+        """
+        Adds geometric markers next to specific leaf tips.
+
+        Args:
+            leaves (list): List of node names (str) or objects to mark.
+            shape (str, optional): Shape type ("circle", "square", "triangle"). Defaults to "circle".
+            fill (str, optional): Fill color. Defaults to "blue".
+            r (float, optional): Radius/Size of the shape. Defaults to 5.0.
+            stroke (str, optional): Border color. Defaults to None.
+            stroke_width (float, optional): Border width. Defaults to 1.0.
+            offset (float, optional): Radial distance offset from the leaf tip. Defaults to 0.0.
+            rotation (float, optional): Additional rotation for the shape. Defaults to 0.0.
+            opacity (float, optional): Opacity (0.0 to 1.0). Defaults to 1.0.
+            orient (bool, optional): If True, rotates shape to match the branch angle. Defaults to False.
+        """
+        self._pre_flight_check()
+        for item in leaves:
+            try:
+                node = self.t & item if isinstance(item, str) else item
+                ang = self._rot_ang(node.angle)
+                x, y = polar_to_cartesian(ang, node.rad + float(offset))
+                rot = rotation + (ang if orient else 0.0)
+                self._draw_shape_at(x, y, shape, fill, r, stroke, stroke_width, rot, opacity)
+            except: continue
+
+    def add_node_shapes(self, nodes, shape="circle", fill="red", r=5.0, stroke=None, stroke_width=1.0, rotation=0, dx=0, dy=0, orient=False):
+        """
+        Adds geometric markers centered on specific node positions.
+
+        Args:
+            nodes (list): List of node names/objects OR list of dicts with specific style per node.
+            shape (str, optional): Default shape. Defaults to "circle".
+            fill (str, optional): Default fill color. Defaults to "red".
+            r (float, optional): Default radius. Defaults to 5.0.
+            stroke (str, optional): Default stroke color. Defaults to None.
+            stroke_width (float, optional): Default stroke width. Defaults to 1.0.
+            rotation (float, optional): Default rotation. Defaults to 0.
+            dx (float, optional): Cartesian X offset. Defaults to 0.
+            dy (float, optional): Cartesian Y offset. Defaults to 0.
+            orient (bool, optional): If True, rotates shape to match the branch angle. Defaults to False.
+        """
+        self._pre_flight_check()
+        if isinstance(nodes, list) and nodes and isinstance(nodes[0], dict):
+            for s in nodes:
+                self.add_node_shapes([s.get("node")], s.get("shape", shape), s.get("fill", fill), s.get("r", r), 
+                                     s.get("stroke", stroke), s.get("stroke_width", stroke_width), s.get("rotation", rotation), orient=orient)
+            return
+        for item in nodes:
+            try:
+                node = self.t.search_nodes(name=item)[0] if isinstance(item, str) else item
+                ang = self._rot_ang(node.angle)
+                x, y = polar_to_cartesian(ang, node.rad)
+                rot = rotation + (ang if orient else 0.0)
+                self._draw_shape_at(x + dx, y + dy, shape, fill, r, stroke, stroke_width, rot)
+            except: continue
+
+    def add_branch_shapes(self, specs, default_where=0.5, offset=0.0, orient=None):
+        """
+        Adds geometric markers along branches (e.g., to visualize events).
+
+        Args:
+            specs (list or DataFrame): Data definitions. Must contain 'branch' key/column.
+            default_where (float, optional): Position along branch (0.0 to 1.0). Defaults to 0.5.
+            offset (float, optional): Perpendicular offset from the branch line. Defaults to 0.0.
+            orient (str, optional): Rotation mode: "along" (matches branch), "perp" (90 deg to branch), or None.
+        """
+        self._pre_flight_check()
+        if hasattr(specs, "to_dict"): specs = specs.to_dict(orient="records")
+        for s in specs:
+            br = s.get("branch")
+            if not br: continue
+            try:
+                node = self.t & br if isinstance(br, str) else br
+                where = s.get("where", default_where)
+                x, y, ang = self._edge_point(node, where=where)
+                if offset != 0:
+                    perp = math.radians(ang + 90)
+                    x += offset * math.cos(perp)
+                    y += offset * math.sin(perp)
+                rot = s.get("rotation", 0.0)
+                if orient == "along": rot = ang
+                elif orient == "perp": rot = ang + 90
+                r_val = float(s.get("r", s.get("size", 10.0) / 2.0))
+                self._draw_shape_at(x, y, s.get("shape", "circle"), s.get("fill", "blue"), r_val, 
+                                    s.get("stroke"), s.get("stroke_width", 1.0), rot, s.get("opacity", 1.0))
+            except: continue
+
+    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.0, use_gradient=True, 
+                       gradient_colors=("purple", "orange"), color="orange", stroke_width=5.0, arc_intensity=50.0, opacity=0.6):
+        """
+        Plots curved HGT (Horizontal Gene Transfer) links between lineages in radial space.
+
+        Args:
+            transfers (list or DataFrame): List of dicts with 'from', 'to', 'freq' keys.
+            mode (str, optional): "time" (uses 'time' key for position) or "midpoint". Defaults to "midpoint".
+            curve_type (str, optional): Bezier curve type ("C" or "S"). Defaults to "C".
+            filter_below (float, optional): Minimum frequency to plot. Defaults to 0.0.
+            use_gradient (bool, optional): If True, colors fade from source to dest. Defaults to True.
+            gradient_colors (tuple, optional): (Start color, End color). Defaults to ("purple", "orange").
+            color (str, optional): Solid color if gradients are disabled. Defaults to "orange".
+            stroke_width (float, optional): Base thickness of the transfer lines. Defaults to 5.0.
+            arc_intensity (float, optional): Curvature strength (control point distance). Defaults to 50.0.
+            opacity (float, optional): Opacity of the transfer lines. Defaults to 0.6.
+        """
+        if hasattr(transfers, "to_dict"): transfers = transfers.to_dict(orient="records")
+        name2node = {n.name: n for n in self.t.traverse()}
+        self._pre_flight_check()
+        def get_where(node, t_ev):
+            p = node.up
+            if not p: return 0.0
+            t0, t1 = float(getattr(p, "time_from_origin", 0.0)), float(getattr(node, "time_from_origin", 0.0))
+            return max(0.0, min(1.0, (float(t_ev) - t0) / (t1 - t0))) if abs(t1 - t0) > 1e-12 else 0.5
+        
+        for tr in transfers:
+            freq = float(tr.get("freq", 1.0))
+            if freq < filter_below: continue
+            src, dst = name2node.get(tr.get("from")), name2node.get(tr.get("to"))
+            if not src or not dst: continue
+            if mode == "time" and "time" in tr:
+                x_s, y_s, _ = self._edge_point(src, get_where(src, tr["time"]))
+                x_e, y_e, _ = self._edge_point(dst, get_where(dst, tr["time"]))
+            else:
+                x_s, y_s, _ = self._edge_point(src, 0.5); x_e, y_e, _ = self._edge_point(dst, 0.5)
             
-            for t in ticks:
-                r = t * self.sf
-                
-                # 1. Draw the ring (circle)
-                # If tree is full 360, use Circle. If partial, use Arc (omitted for brevity, assuming 360 usually)
-                self.d.append(draw.Circle(0, 0, r, fill="none", stroke=stroke, 
-                                        stroke_width=stroke_width, stroke_dasharray=stroke_dasharray))
-                
-                # 2. Draw the label
-                # We place the label at 'label_angle'
-                lx, ly = radial_converter(label_angle, r, 0) # rotation=0 so angle is absolute
-                
-                # Simple background rect for readability? (Optional)
-                self.d.append(draw.Text(str(t), font_size, lx, ly, 
-                                        fill="black", stroke="white", stroke_width=0.5, paint_order="stroke",
-                                        text_anchor="middle", dominant_baseline="middle", font_family="Arial"))
+            path = draw.Path(stroke_width=stroke_width * freq, fill="none", stroke_opacity=opacity)
+            if use_gradient:
+                gid = generate_id("tr_grad")
+                grad = draw.LinearGradient(x_s, y_s, x_e, y_e, id=gid)
+                grad.add_stop(0, gradient_colors[0]); grad.add_stop(1, gradient_colors[1])
+                self.drawing.append(grad); path.args["stroke"] = grad
+            else: path.args["stroke"] = color
+            path.M(x_s, y_s)
+            mx, my = (x_s + x_e) / 2.0, (y_s + y_e) / 2.0
+            dist = math.sqrt(mx**2 + my**2)
+            pull = max(0, dist - arc_intensity) if dist > 0 else 0
+            cx = (mx/dist)*pull if dist > 0 else 0
+            cy = (my/dist)*pull if dist > 0 else 0
+            path.Q(cx, cy, x_e, y_e); self.drawing.append(path)
 
-            # Axis Title? (Optional, maybe placed at the outermost tick)
-            if ticks:
-                max_r = max(ticks) * self.sf
-                lx, ly = radial_converter(label_angle, max_r + 20, 0)
-                self.d.append(draw.Text(label, font_size + 2, lx, ly, 
-                                        font_weight="bold", text_anchor="middle", dominant_baseline="middle"))
+    def add_time_axis(self, ticks, label="", tick_labels=None, stroke="gray", stroke_width=1.0, stroke_dasharray="3,3", font_size=10, label_angle=90):
+        """
+        Adds concentric rings representing evolutionary time or distance steps.
+
+        Args:
+            ticks (list): List of radial distances to draw rings at.
+            label (str, optional): Unused in radial currently, but kept for interface consistency.
+            tick_labels (list, optional): Custom text for each tick. Defaults to numerical values.
+            stroke (str, optional): Color of rings. Defaults to "gray".
+            stroke_width (float, optional): Thickness of rings. Defaults to 1.0.
+            stroke_dasharray (str, optional): Dash pattern. Defaults to "3,3".
+            font_size (int, optional): Size of tick labels. Defaults to 10.
+            label_angle (float, optional): Angle (degrees) to place labels at. Defaults to 90.
+        """
+        self._pre_flight_check()
+        for i, t in enumerate(ticks):
+            r = t * self.sf
+            self.drawing.append(draw.Circle(0, 0, r, fill="none", stroke=stroke, stroke_width=stroke_width, stroke_dasharray=stroke_dasharray))
+            lx, ly = polar_to_cartesian(label_angle, r)
+            
+            # Use custom label if provided
+            display_text = str(tick_labels[i]) if tick_labels is not None and i < len(tick_labels) else str(t)
+            self.drawing.append(draw.Text(display_text, font_size, lx, ly, fill="black", stroke="white", stroke_width=0.5, 
+                                          paint_order="stroke", text_anchor="middle", dominant_baseline="middle", font_family="Arial"))
+
+    def add_heatmap(self, values, width=15.0, offset=10.0, low_color="#f7fbff", high_color="#08306b", border_color="none", border_width=0.5):
+        """
+        Adds a circular heatmap ring surrounding the leaf tips.
+
+        Args:
+            values (dict): Mapping of {node_name: numeric_value}.
+            width (float, optional): Thickness of the heatmap ring. Defaults to 15.0.
+            offset (float, optional): Radial offset from leaf tips. Defaults to 10.0.
+            low_color (str, optional): Color for minimum value. Defaults to "#f7fbff".
+            high_color (str, optional): Color for maximum value. Defaults to "#08306b".
+            border_color (str, optional): Border color for cells. Defaults to "none".
+            border_width (float, optional): Border thickness. Defaults to 0.5.
+        """
+        if hasattr(values, "to_dict"): values = values.to_dict()
+        vals = [float(v) for v in values.values() if isinstance(v, (int, float))]
+        if not vals: return
+        vmin, vmax = min(vals), max(vals) + 1e-12
+        angle_span = float(self.style.degrees) / len(self.t.get_leaves())
+        for l in self.t.get_leaves():
+            val = values.get(l.name)
+            fill = lerp_color(low_color, high_color, (float(val) - vmin) / (vmax - vmin)) if val is not None else "white"
+            start_ang, end_ang = self._rot_ang(l.angle - angle_span/2), self._rot_ang(l.angle + angle_span/2)
+            r_i, r_o = l.rad + offset, l.rad + offset + width
+            p = draw.Path(fill=fill, stroke=border_color, stroke_width=border_width)
+            p1x, p1y = polar_to_cartesian(start_ang, r_i); p2x, p2y = polar_to_cartesian(end_ang, r_i)
+            p3x, p3y = polar_to_cartesian(end_ang, r_o); p4x, p4y = polar_to_cartesian(start_ang, r_o)
+            sweep = 1 if end_ang > start_ang else 0
+            p.M(p1x, p1y).A(r_i, r_i, 0, 0, sweep, p2x, p2y).L(p3x, p3y).A(r_o, r_o, 0, 0, 0 if sweep == 1 else 1, p4x, p4y).Z()
+            self.drawing.append(p)
+
+    def add_clade_labels(self, labels, offset=40.0, stroke_width=1.5, color="black", font_size=None):
+        """
+        Adds circular arcs outside the tree to group and label specific clades.
+
+        Args:
+            labels (dict): Mapping of {node_name_or_object: label_text}.
+            offset (float, optional): Radial offset from the outermost leaf. Defaults to 40.0.
+            stroke_width (float, optional): Thickness of the bracket arc. Defaults to 1.5.
+            color (str, optional): Color of the arc and text. Defaults to "black".
+            font_size (int, optional): Font size. Defaults to style default.
+        """
+        self._pre_flight_check()
+        fs = font_size or self.style.font_size
+        max_rad = max(l.rad for l in self.t.get_leaves())
+        arc_rad = max_rad + offset
+        for target, text in labels.items():
+            try:
+                node = self.t.search_nodes(name=target)[0] if isinstance(target, str) else target
+                leaves = node.get_leaves()
+                angles = [l.angle for l in leaves]
+                start_ang, end_ang = self._rot_ang(min(angles)), self._rot_ang(max(angles))
+                mid_ang = (start_ang + end_ang) / 2.0
+                p1x, p1y = polar_to_cartesian(start_ang, arc_rad); p2x, p2y = polar_to_cartesian(end_ang, arc_rad)
+                sweep = 1 if end_ang > start_ang else 0
+                p = draw.Path(stroke=color, stroke_width=stroke_width, fill="none")
+                p.M(p1x, p1y).A(arc_rad, arc_rad, 0, 0, sweep, p2x, p2y)
+                self.drawing.append(p)
+                tx, ty = polar_to_cartesian(mid_ang, arc_rad + 8)
+                text_rot, anchor = mid_ang, "start"
+                if 90 < (mid_ang % 360) < 270:
+                    text_rot += 180; anchor = "end"
+                self.drawing.append(draw.Text(text, fs, tx, ty, fill=color, font_family=self.style.font_family,
+                                              transform=f"rotate({text_rot}, {tx}, {ty})", text_anchor=anchor, dominant_baseline="middle"))
+            except: continue
+
+    def plot_continuous_variable(self, node_to_rgb, stroke_width=None):
+        """
+        Maps a continuous trait to branch colors using a gradient interpolation.
+
+        Args:
+            node_to_rgb (dict): Mapping of {node: (r, g, b)} tuples (values 0-255).
+            stroke_width (float, optional): Thickness of the branches. Defaults to style default.
+        """
+        def _to_hex(rgb): return '#%02x%02x%02x' % (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+        sw = stroke_width or self.style.branch_stroke_width
+        for node in self.t.traverse():
+            if node.is_root(): continue
+            c_c = node_to_rgb.get(node) or node_to_rgb.get(node.name)
+            c_p = node_to_rgb.get(node.up) or node_to_rgb.get(node.up.name)
+            if c_c and c_p: self.gradient_branch(node, stroke_width=sw, colors=(_to_hex(c_p), _to_hex(c_c)))
+            else: self.highlight_branch(node, stroke_width=sw)
+        for n in self.t.traverse("postorder"):
+            if not n.is_leaf() and (col := (node_to_rgb.get(n) or node_to_rgb.get(n.name))):
+                x, y = self._node_xy(n); self.drawing.append(draw.Circle(x, y, self.style.node_r, fill=_to_hex(col)))
+
+    def plot_categorical_trait(self, data, value_col, node_col="Node", palette=None, stroke_width=None, default_color="black"):
+        """
+        Maps categorical traits to branch and node colors.
+
+        If a parent and child have different categories, the branch color transitions (gradient).
+
+        Args:
+            data (DataFrame or dict): Data containing trait values per node.
+            value_col (str): Column name for the trait values (if DataFrame).
+            node_col (str, optional): Column name for node names. Defaults to "Node".
+            palette (dict, optional): Color map {value: color}. Defaults to auto-generated.
+            stroke_width (float, optional): Branch thickness. Defaults to style default.
+            default_color (str, optional): Fallback color. Defaults to "black".
+        """
+        if hasattr(data, "to_dict"): mapping = dict(zip(data[node_col].astype(str), data[value_col]))
+        else: mapping = data
+        if palette is None:
+            unique_vals = sorted(list(set(mapping.values())))
+            defaults = ["#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#FFFF33"]
+            palette = {val: defaults[i % len(defaults)] for i, val in enumerate(unique_vals)}
+        sw = stroke_width or self.style.branch_stroke_width
+        def get_color(n): return palette.get(mapping.get(n.name), default_color)
+        for node in self.t.traverse():
+            if node.is_root(): continue
+            c_n, c_p = get_color(node), get_color(node.up)
+            if c_n != c_p: self.gradient_branch(node, colors=(c_p, c_n), stroke_width=sw)
+            else: self.highlight_branch(node, color=c_n, stroke_width=sw)
+        for n in self.t.traverse("postorder"):
+            if not n.is_leaf():
+                x, y = self._node_xy(n); self.drawing.append(draw.Circle(x, y, self.style.node_r, fill=get_color(n)))
+
+    def add_transfer_legend(self, colors=("purple", "orange"), labels=("Departure", "Arrival"), x=None, y=None, font_size=14):
+        """
+        Adds a legend specifically for Horizontal Gene Transfers.
+        """
+        palette = {labels[0]: colors[0], labels[1]: colors[1]}
+        self.add_categorical_legend(palette, title="Transfer Event", x=x, y=y, font_size=font_size)
+
+    def add_leaf_images(self, image_dir, extension=".png", width=40, height=40, offset=10):
+        """
+        Places images next to leaf tips in the radial layout.
+        """
+        self._pre_flight_check()
+        for leaf in self.t.get_leaves():
+            lx, ly = self._leaf_xy(leaf, offset=offset)
+            path = os.path.join(image_dir, f"{leaf.name}{extension}")
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    uri = f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+                self.drawing.append(draw.Image(lx - width/2, ly - height/2, width, height, path=uri))
+
+    def add_ancestral_images(self, image_dir, extension=".png", width=40, height=40, omit=None):
+        """
+        Places images at internal node positions in the radial layout.
+        """
+        self._pre_flight_check()
+        for node in self.t.traverse():
+            if not node.is_leaf():
+                if omit and node.name in omit: continue
+
+                nx, ny = self._node_xy(node)
+                path = os.path.join(image_dir, f"{node.name}{extension}")
+                if os.path.exists(path):
+                    with open(path, "rb") as f:
+                        uri = f"data:image/png;base64,{base64.b64encode(f.read()).decode()}"
+                    self.drawing.append(draw.Image(nx - width/2, ny - height/2, width, height, path=uri))
+
+    def add_scale_bar(self, length, label=None, x=None, y=None, stroke="black", stroke_width=2.0):
+        """
+        Adds a physical scale bar representing a distance value.
+        """
+        self._pre_flight_check()
+        px = float(length) * self.sf
+        label = label or str(length)
+        x = x if x is not None else -self.style.width/2 + 20
+        y = y if y is not None else self.style.height/2 - 20
+        self.drawing.append(draw.Line(x, y, x + px, y, stroke=stroke, stroke_width=stroke_width))
+        self.drawing.append(draw.Text(label, self.style.font_size, x + px/2, y - 8, center=True))
+
