@@ -2,113 +2,78 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="600" height="600" viewBox="-300.0 -300.0 600 600">
 <defs>
-<linearGradient x1="8.727793967364448" y1="-36.84210526315788" x2="168.22151399318432" y2="-36.84210526315788" gradientUnits="userSpaceOnUse" id="grad_fsokv2">
+<linearGradient x1="8.727793967364448" y1="-36.84210526315788" x2="168.22151399318432" y2="-36.84210526315788" gradientUnits="userSpaceOnUse" id="grad_x0ve04">
 <stop offset="0" stop-color="purple" />
 <stop offset="1" stop-color="red" />
 </linearGradient>
-<linearGradient x1="142.6461556009097" y1="-115.78947368421052" x2="172.4708675580145" y2="-200.0" gradientUnits="userSpaceOnUse" id="tr_grad_fnces4">
+<linearGradient x1="142.6461556009097" y1="-115.78947368421052" x2="172.4708675580145" y2="-200.0" gradientUnits="userSpaceOnUse" id="tr_grad_p7q22y">
 <stop offset="0" stop-color="purple" />
 <stop offset="1" stop-color="orange" />
+</linearGradient>
+<linearGradient x1="160" y1="-250" x2="260" y2="-250" gradientUnits="userSpaceOnUse" id="cb_grad_fka1ds">
+<stop offset="0" stop-color="white" />
+<stop offset="1" stop-color="blue" />
 </linearGradient>
 </defs>
 <rect x="-300.0" y="-300.0" width="600" height="600" fill="white" />
 <path d="M144.9421690366416,-200.0 L199.99956607938742,-200.0" stroke="green" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99956607938742" cy="-200.0" r="0" fill="black" />
 <path d="M144.9421690366416,-178.94736842105263 L199.99956607938742,-178.94736842105263" stroke="green" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99956607938742" cy="-178.94736842105263" r="0" fill="black" />
 <path d="M129.6355419414685,-189.4736842105263 L144.9421690366416,-189.4736842105263" stroke="green" stroke-width="2" stroke-linecap="round" />
 <path d="M144.9421690366416,-200.0 L144.9421690366416,-178.94736842105263" stroke="green" stroke-width="2" stroke-linecap="round" />
-<circle cx="144.9421690366416" cy="-189.4736842105263" r="0" fill="green" />
 <path d="M163.4308289669749,-157.89473684210526 L199.99948859356374,-157.89473684210526" stroke="green" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99948859356374" cy="-157.89473684210526" r="0" fill="black" />
 <path d="M163.4308289669749,-136.8421052631579 L199.99948859356374,-136.8421052631579" stroke="green" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99948859356374" cy="-136.8421052631579" r="0" fill="black" />
 <path d="M129.6355419414685,-147.36842105263156 L163.4308289669749,-147.36842105263156" stroke="green" stroke-width="2" stroke-linecap="round" />
 <path d="M163.4308289669749,-157.89473684210526 L163.4308289669749,-136.8421052631579" stroke="green" stroke-width="2" stroke-linecap="round" />
-<circle cx="163.4308289669749" cy="-147.36842105263156" r="0" fill="green" />
 <path d="M-200.0,-168.42105263157893 L129.6355419414685,-168.42105263157893" stroke="green" stroke-width="2" stroke-linecap="round" />
 <path d="M129.6355419414685,-189.4736842105263 L129.6355419414685,-147.36842105263156" stroke="green" stroke-width="2" stroke-linecap="round" />
-<circle cx="129.6355419414685" cy="-168.42105263157893" r="0" fill="green" />
 <path d="M85.2927761167615,-115.78947368421052 L199.99953508505791,-115.78947368421052" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99953508505791" cy="-115.78947368421052" r="0" fill="black" />
 <path d="M181.214336907509,-94.73684210526315 L199.99953508505791,-94.73684210526315" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99953508505791" cy="-94.73684210526315" r="0" fill="black" />
 <path d="M181.214336907509,-73.68421052631578 L199.99953508505791,-73.68421052631578" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99953508505791" cy="-73.68421052631578" r="0" fill="black" />
 <path d="M85.2927761167615,-84.21052631578947 L181.214336907509,-84.21052631578947" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M181.214336907509,-94.73684210526315 L181.214336907509,-73.68421052631578" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="181.214336907509" cy="-84.21052631578947" r="0" fill="blue" />
 <path d="M-145.99310926318614,-100.0 L85.2927761167615,-100.0" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M85.2927761167615,-115.78947368421052 L85.2927761167615,-84.21052631578947" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="85.2927761167615" cy="-100.0" r="0" fill="blue" />
 <path d="M168.22151399318432,-52.63157894736841 L199.9996900567054,-52.63157894736841" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.9996900567054" cy="-52.63157894736841" r="0" fill="black" />
 <path d="M187.3445503619693,-31.57894736842104 L199.9995815765522,-31.57894736842104" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.9995815765522" cy="-31.57894736842104" r="0" fill="black" />
 <path d="M187.3445503619693,-10.52631578947367 L199.9995815765522,-10.52631578947367" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.9995815765522" cy="-10.52631578947367" r="0" fill="black" />
 <path d="M168.22151399318432,-21.052631578947356 L187.3445503619693,-21.052631578947356" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M187.3445503619693,-31.57894736842104 L187.3445503619693,-10.52631578947367" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="187.3445503619693" cy="-21.052631578947356" r="0" fill="blue" />
 <path d="M8.727793967364448,-36.84210526315788 L168.22151399318432,-36.84210526315788" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M168.22151399318432,-52.63157894736841 L168.22151399318432,-21.052631578947356" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="168.22151399318432" cy="-36.84210526315788" r="0" fill="blue" />
 <path d="M8.727793967364448,10.5263157894737 L200.0,10.5263157894737" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="200.0" cy="10.5263157894737" r="0" fill="black" />
 <path d="M3.983336983561344,-13.157894736842092 L8.727793967364448,-13.157894736842092" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M8.727793967364448,-36.84210526315788 L8.727793967364448,10.5263157894737" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="8.727793967364448" cy="-13.157894736842092" r="0" fill="blue" />
 <path d="M162.28112530957037,31.57894736842107 L199.99936461624583,31.57894736842107" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99936461624583" cy="31.57894736842107" r="0" fill="black" />
 <path d="M173.14972085925734,52.63157894736844 L199.99933362191643,52.63157894736844" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99933362191643" cy="52.63157894736844" r="0" fill="black" />
 <path d="M173.14972085925734,73.68421052631584 L199.99933362191643,73.68421052631584" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99933362191643" cy="73.68421052631584" r="0" fill="black" />
 <path d="M162.28112530957037,63.15789473684214 L173.14972085925734,63.15789473684214" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M173.14972085925734,52.63157894736844 L173.14972085925734,73.68421052631584" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="173.14972085925734" cy="63.15789473684214" r="0" fill="blue" />
 <path d="M57.338354982937005,47.368421052631604 L162.28112530957037,47.368421052631604" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M162.28112530957037,31.57894736842107 L162.28112530957037,63.15789473684214" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="162.28112530957037" cy="47.368421052631604" r="0" fill="blue" />
 <path d="M57.338354982937005,94.73684210526318 L199.99936461624583,94.73684210526318" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99936461624583" cy="94.73684210526318" r="0" fill="black" />
 <path d="M20.117109749332172,71.0526315789474 L57.338354982937005,71.0526315789474" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M57.338354982937005,47.368421052631604 L57.338354982937005,94.73684210526318" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="57.338354982937005" cy="71.0526315789474" r="0" fill="blue" />
 <path d="M100.30315941084893,115.78947368421052 L199.99936461624583,115.78947368421052" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99936461624583" cy="115.78947368421052" r="0" fill="black" />
 <path d="M100.30315941084893,136.84210526315792 L199.99936461624583,136.84210526315792" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99936461624583" cy="136.84210526315792" r="0" fill="black" />
 <path d="M20.117109749332172,126.31578947368422 L100.30315941084893,126.31578947368422" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M100.30315941084893,115.78947368421052 L100.30315941084893,136.84210526315792" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="100.30315941084893" cy="126.31578947368422" r="0" fill="blue" />
 <path d="M10.541086218747182,98.68421052631581 L20.117109749332172,98.68421052631581" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M20.117109749332172,71.0526315789474 L20.117109749332172,126.31578947368422" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="20.117109749332172" cy="98.68421052631581" r="0" fill="blue" />
 <path d="M10.541086218747182,157.89473684210532 L199.9985742608443,157.89473684210532" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.9985742608443" cy="157.89473684210532" r="0" fill="black" />
 <path d="M3.983336983561344,128.28947368421058 L10.541086218747182,128.28947368421058" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M10.541086218747182,98.68421052631581 L10.541086218747182,157.89473684210532" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="10.541086218747182" cy="128.28947368421058" r="0" fill="blue" />
 <path d="M-145.99310926318614,57.56578947368424 L3.983336983561344,57.56578947368424" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M3.983336983561344,-13.157894736842092 L3.983336983561344,128.28947368421058" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="3.983336983561344" cy="57.56578947368424" r="0" fill="blue" />
 <path d="M-152.6666998047706,-21.21710526315788 L-145.99310926318614,-21.21710526315788" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M-145.99310926318614,-100.0 L-145.99310926318614,57.56578947368424" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="-145.99310926318614" cy="-21.21710526315788" r="0" fill="blue" />
 <path d="M142.28773717490486,178.94736842105266 L199.99979853685846,178.94736842105266" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99979853685846" cy="178.94736842105266" r="0" fill="black" />
 <path d="M142.28773717490486,200.0 L199.99979853685846,200.0" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="199.99979853685846" cy="200.0" r="0" fill="black" />
 <path d="M-152.6666998047706,189.47368421052633 L142.28773717490486,189.47368421052633" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M142.28773717490486,178.94736842105266 L142.28773717490486,200.0" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="142.28773717490486" cy="189.47368421052633" r="0" fill="blue" />
 <path d="M-200.0,84.12828947368422 L-152.6666998047706,84.12828947368422" stroke="blue" stroke-width="2" stroke-linecap="round" />
 <path d="M-152.6666998047706,-21.21710526315788 L-152.6666998047706,189.47368421052633" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="-152.6666998047706" cy="84.12828947368422" r="0" fill="blue" />
 <path d="M-220.0,-42.146381578947356 L-200.0,-42.146381578947356" stroke="blue" stroke-width="2" />
 <path d="M-200.0,-168.42105263157893 L-200.0,84.12828947368422" stroke="blue" stroke-width="2" stroke-linecap="round" />
-<circle cx="-200.0" cy="-42.146381578947356" r="0" fill="blue" />
 <text x="209.99956607938742" y="-200.0" font-size="12" fill="black" font-family="Arial" transform="" text-anchor="start" dominant-baseline="middle">A</text>
 <text x="209.99956607938742" y="-178.94736842105263" font-size="12" fill="black" font-family="Arial" transform="" text-anchor="start" dominant-baseline="middle">B</text>
 <text x="209.99948859356374" y="-157.89473684210526" font-size="12" fill="black" font-family="Arial" transform="" text-anchor="start" dominant-baseline="middle">C</text>
@@ -138,67 +103,79 @@
 <circle cx="46.98223517389156" cy="10.5263157894737" r="7.0" fill="red" opacity="1.0" />
 <circle cx="104.36389698368222" cy="10.5263157894737" r="7.0" fill="orange" opacity="1.0" />
 <circle cx="161.7455587934729" cy="10.5263157894737" r="7.0" fill="darkgreen" opacity="1.0" />
-<circle cx="30.74487935902792" cy="-168.42105263157893" r="7.0" fill="purple" opacity="1.0" />
 <rect x="80.2927761167615" y="-125.78947368421052" width="124.70675896829641" height="62.10526315789474" fill="orange" fill-opacity="0.4" stroke="none" />
 <path d="M20.117109749332172,126.31578947368422 L100.30315941084893,126.31578947368422" stroke="blue" stroke-width="5" stroke-linecap="round" />
-<use xlink:href="#grad_fsokv2" />
-<path d="M8.727793967364448,-36.84210526315788 L168.22151399318432,-36.84210526315788" stroke="url(#grad_fsokv2)" stroke-width="6" />
-<use xlink:href="#tr_grad_fnces4" />
-<path d="M142.6461556009097,-115.78947368421052 C102.64615560090971,-115.78947368421052,132.4708675580145,-200.0,172.4708675580145,-200.0" stroke-width="3.0" fill="none" stroke-opacity="0.6" stroke="url(#tr_grad_fnces4)" />
+<use xlink:href="#grad_x0ve04" />
+<path d="M8.727793967364448,-36.84210526315788 L168.22151399318432,-36.84210526315788" stroke="url(#grad_x0ve04)" stroke-width="6" />
+<use xlink:href="#tr_grad_p7q22y" />
+<path d="M142.6461556009097,-115.78947368421052 C102.64615560090971,-115.78947368421052,132.4708675580145,-200.0,172.4708675580145,-200.0" stroke-width="3.0" fill="none" stroke-opacity="0.6" stroke="url(#tr_grad_p7q22y)" />
 <path d="M-220.0,240.0 L187.42911838993138,240.0" stroke="black" stroke-width="2.0" />
 <path d="M-200.0,240.0 L-200.0,246.0" stroke="black" stroke-width="2.0" />
-<text x="-200.0" y="258.0" font-size="12" text-anchor="middle" dominant-baseline="central">0</text>
+<text x="-200.0" y="258.0" font-size="12" text-anchor="middle" font-family="Arial">0</text>
 <path d="M-122.51417632201372,240.0 L-122.51417632201372,246.0" stroke="black" stroke-width="2.0" />
-<text x="-122.51417632201372" y="258.0" font-size="12" text-anchor="middle" dominant-baseline="central">0.5</text>
+<text x="-122.51417632201372" y="258.0" font-size="12" text-anchor="middle" font-family="Arial">0.5</text>
 <path d="M-45.02835264402745,240.0 L-45.02835264402745,246.0" stroke="black" stroke-width="2.0" />
-<text x="-45.02835264402745" y="258.0" font-size="12" text-anchor="middle" dominant-baseline="central">1.0</text>
+<text x="-45.02835264402745" y="258.0" font-size="12" text-anchor="middle" font-family="Arial">1.0</text>
 <path d="M32.457471033958825,240.0 L32.457471033958825,246.0" stroke="black" stroke-width="2.0" />
-<text x="32.457471033958825" y="258.0" font-size="12" text-anchor="middle" dominant-baseline="central">1.5</text>
+<text x="32.457471033958825" y="258.0" font-size="12" text-anchor="middle" font-family="Arial">1.5</text>
 <path d="M109.9432947119451,240.0 L109.9432947119451,246.0" stroke="black" stroke-width="2.0" />
-<text x="109.9432947119451" y="258.0" font-size="12" text-anchor="middle" dominant-baseline="central">2.0</text>
+<text x="109.9432947119451" y="258.0" font-size="12" text-anchor="middle" font-family="Arial">2.0</text>
 <path d="M187.42911838993138,240.0 L187.42911838993138,246.0" stroke="black" stroke-width="2.0" />
-<text x="187.42911838993138" y="258.0" font-size="12" text-anchor="middle" dominant-baseline="central">2.5</text>
-<text x="-16.285440805034312" y="276.0" font-size="12" text-anchor="middle" dominant-baseline="central">Time</text>
-<rect x="250.0" y="-210.5263157894737" width="15" height="21.05263157894737" fill="#0f0fff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-189.4736842105263" width="15" height="21.05263157894737" fill="#7777ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-168.42105263157896" width="15" height="21.05263157894737" fill="#5858ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-147.36842105263156" width="15" height="21.05263157894737" fill="#c3c3ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-126.3157894736842" width="15" height="21.05263157894737" fill="#5353ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-105.26315789473684" width="15" height="21.05263157894737" fill="#5555ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-84.21052631578947" width="15" height="21.05263157894737" fill="#e3e3ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-63.157894736842096" width="15" height="21.05263157894737" fill="#a1a1ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-42.105263157894726" width="15" height="21.05263157894737" fill="#ffffff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="-21.052631578947356" width="15" height="21.05263157894737" fill="#3737ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="1.4210854715202004e-14" width="15" height="21.05263157894737" fill="#1f1fff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="21.052631578947384" width="15" height="21.05263157894737" fill="#0a0aff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="42.105263157894754" width="15" height="21.05263157894737" fill="#2727ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="63.15789473684215" width="15" height="21.05263157894737" fill="#0000ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="84.2105263157895" width="15" height="21.05263157894737" fill="#c0c0ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="105.26315789473684" width="15" height="21.05263157894737" fill="#2222ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="126.31578947368423" width="15" height="21.05263157894737" fill="#b8b8ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="147.36842105263162" width="15" height="21.05263157894737" fill="#3333ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="168.42105263157896" width="15" height="21.05263157894737" fill="#6666ff" stroke="black" stroke-width="0.5" />
-<rect x="250.0" y="189.4736842105263" width="15" height="21.05263157894737" fill="#3333ff" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-210.5263157894737" width="15" height="21.05263157894737" fill="#6e0c18" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-189.4736842105263" width="15" height="21.05263157894737" fill="#91444c" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-168.42105263157896" width="15" height="21.05263157894737" fill="#f8eae6" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-147.36842105263156" width="15" height="21.05263157894737" fill="#ead4d1" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-126.3157894736842" width="15" height="21.05263157894737" fill="#832e37" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-105.26315789473684" width="15" height="21.05263157894737" fill="#67000d" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-84.21052631578947" width="15" height="21.05263157894737" fill="#c99e9f" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-63.157894736842096" width="15" height="21.05263157894737" fill="#89373f" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-42.105263157894726" width="15" height="21.05263157894737" fill="#dfc1c0" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="-21.052631578947356" width="15" height="21.05263157894737" fill="#d0aaaa" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="1.4210854715202004e-14" width="15" height="21.05263157894737" fill="#954b52" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="21.052631578947384" width="15" height="21.05263157894737" fill="#d1acac" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="42.105263157894754" width="15" height="21.05263157894737" fill="#c69a9c" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="63.15789473684215" width="15" height="21.05263157894737" fill="#f2e0dd" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="84.2105263157895" width="15" height="21.05263157894737" fill="#f9ebe7" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="105.26315789473684" width="15" height="21.05263157894737" fill="#f9ece8" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="126.31578947368423" width="15" height="21.05263157894737" fill="#944951" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="147.36842105263162" width="15" height="21.05263157894737" fill="#fff5f0" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="168.42105263157896" width="15" height="21.05263157894737" fill="#f8e9e5" stroke="black" stroke-width="0.5" />
-<rect x="270.0" y="189.4736842105263" width="15" height="21.05263157894737" fill="#751622" stroke="black" stroke-width="0.5" />
-<circle cx="129.6355419414685" cy="-168.42105263157893" r="5.0" fill="red" opacity="1.0" stroke="white" stroke-width="1" />
-<circle cx="3.983336983561344" cy="57.56578947368424" r="5.0" fill="red" opacity="1.0" stroke="white" stroke-width="1" />
+<text x="187.42911838993138" y="258.0" font-size="12" text-anchor="middle" font-family="Arial">2.5</text>
+<text x="-16.285440805034312" y="276.0" font-size="12" text-anchor="middle" font-family="Arial">Time</text>
+<rect x="250.0" y="-210.5263157894737" width="15" height="21.05263157894737" fill="#ccccff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-189.4736842105263" width="15" height="21.05263157894737" fill="#0000ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-168.42105263157896" width="15" height="21.05263157894737" fill="#ffffff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-147.36842105263156" width="15" height="21.05263157894737" fill="#7171ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-126.3157894736842" width="15" height="21.05263157894737" fill="#4848ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-105.26315789473684" width="15" height="21.05263157894737" fill="#7c7cff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-84.21052631578947" width="15" height="21.05263157894737" fill="#0707ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-63.157894736842096" width="15" height="21.05263157894737" fill="#8787ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-42.105263157894726" width="15" height="21.05263157894737" fill="#6c6cff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="-21.052631578947356" width="15" height="21.05263157894737" fill="#1f1fff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="1.4210854715202004e-14" width="15" height="21.05263157894737" fill="#f7f7ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="21.052631578947384" width="15" height="21.05263157894737" fill="#bfbfff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="42.105263157894754" width="15" height="21.05263157894737" fill="#8a8aff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="63.15789473684215" width="15" height="21.05263157894737" fill="#a1a1ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="84.2105263157895" width="15" height="21.05263157894737" fill="#6b6bff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="105.26315789473684" width="15" height="21.05263157894737" fill="#9292ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="126.31578947368423" width="15" height="21.05263157894737" fill="#e9e9ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="147.36842105263162" width="15" height="21.05263157894737" fill="#6e6eff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="168.42105263157896" width="15" height="21.05263157894737" fill="#3636ff" stroke="black" stroke-width="0.5" />
+<rect x="250.0" y="189.4736842105263" width="15" height="21.05263157894737" fill="#8f8fff" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-210.5263157894737" width="15" height="21.05263157894737" fill="#a7676d" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-189.4736842105263" width="15" height="21.05263157894737" fill="#7c232d" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-168.42105263157896" width="15" height="21.05263157894737" fill="#cca3a4" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-147.36842105263156" width="15" height="21.05263157894737" fill="#b1787c" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-126.3157894736842" width="15" height="21.05263157894737" fill="#7b212c" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-105.26315789473684" width="15" height="21.05263157894737" fill="#771a25" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-84.21052631578947" width="15" height="21.05263157894737" fill="#f4e4e0" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-63.157894736842096" width="15" height="21.05263157894737" fill="#a05c62" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-42.105263157894726" width="15" height="21.05263157894737" fill="#ecd7d4" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="-21.052631578947356" width="15" height="21.05263157894737" fill="#e9d2cf" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="1.4210854715202004e-14" width="15" height="21.05263157894737" fill="#f0ddd9" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="21.052631578947384" width="15" height="21.05263157894737" fill="#9b545b" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="42.105263157894754" width="15" height="21.05263157894737" fill="#edd9d6" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="63.15789473684215" width="15" height="21.05263157894737" fill="#771a25" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="84.2105263157895" width="15" height="21.05263157894737" fill="#cba2a3" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="105.26315789473684" width="15" height="21.05263157894737" fill="#f5e5e1" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="126.31578947368423" width="15" height="21.05263157894737" fill="#8f4048" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="147.36842105263162" width="15" height="21.05263157894737" fill="#67000d" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="168.42105263157896" width="15" height="21.05263157894737" fill="#791e29" stroke="black" stroke-width="0.5" />
+<rect x="270.0" y="189.4736842105263" width="15" height="21.05263157894737" fill="#fff5f0" stroke="black" stroke-width="0.5" />
+<text x="-280" y="-280" font-size="16" font-weight="bold" font-family="Arial" text-anchor="start">Lineage type</text>
+<circle cx="-274" cy="-259.0" r="6" fill="blue" />
+<text x="-265.0" y="-259.0" font-size="14" font-family="Arial" text-anchor="start" dominant-baseline="middle">Blue</text>
+<circle cx="-274" cy="-239.4" r="6" fill="green" />
+<text x="-265.0" y="-239.4" font-size="14" font-family="Arial" text-anchor="start" dominant-baseline="middle">Green</text>
+<text x="-150" y="-280" font-size="16" font-weight="bold" font-family="Arial" text-anchor="start">Transfer Event</text>
+<circle cx="-144" cy="-259.0" r="6" fill="purple" />
+<text x="-135.0" y="-259.0" font-size="14" font-family="Arial" text-anchor="start" dominant-baseline="middle">Departure</text>
+<circle cx="-144" cy="-239.4" r="6" fill="orange" />
+<text x="-135.0" y="-239.4" font-size="14" font-family="Arial" text-anchor="start" dominant-baseline="middle">Arrival</text>
+<use xlink:href="#cb_grad_fka1ds" />
+<text x="160" y="-260" font-size="12" font-weight="bold" text-anchor="start">Expression</text>
+<rect x="160" y="-250" width="100" height="15" fill="url(#cb_grad_fka1ds)" stroke="black" stroke-width="0.5" />
+<text x="160" y="-223" font-size="10" text-anchor="start">0</text>
+<text x="260" y="-223" font-size="10" text-anchor="end">1</text>
 </svg>
