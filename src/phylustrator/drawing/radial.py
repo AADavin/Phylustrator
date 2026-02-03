@@ -228,18 +228,10 @@ class RadialTreeDrawer(BaseDrawer):
     def add_leaf_shapes(self, leaves, shape="circle", fill="blue", r=5.0, stroke=None, stroke_width=1.0, offset=0.0, rotation=0.0, opacity=1.0, orient=False):
         """
         Adds geometric markers next to specific leaf tips.
-
-        Args:
-            leaves (list): List of node names (str) or objects to mark.
-            shape (str, optional): Shape type ("circle", "square", "triangle"). Defaults to "circle".
-            fill (str, optional): Fill color. Defaults to "blue".
-            r (float, optional): Radius/Size of the shape. Defaults to 5.0.
-            stroke (str, optional): Border color. Defaults to None.
-            stroke_width (float, optional): Border width. Defaults to 1.0.
-            offset (float, optional): Radial distance offset from the leaf tip. Defaults to 0.0.
-            rotation (float, optional): Additional rotation for the shape. Defaults to 0.0.
-            opacity (float, optional): Opacity (0.0 to 1.0). Defaults to 1.0.
-            orient (bool, optional): If True, rotates shape to match the branch angle. Defaults to False.
+        
+        Fixes: 
+        1. Adds a +90 degree correction because shapes (like triangles) are defined pointing UP, 
+           while polar 0 is RIGHT.
         """
         self._pre_flight_check()
         for item in leaves:
@@ -247,8 +239,57 @@ class RadialTreeDrawer(BaseDrawer):
                 node = self.t & item if isinstance(item, str) else item
                 ang = self._rot_ang(node.angle)
                 x, y = polar_to_cartesian(ang, node.rad + float(offset))
-                rot = rotation + (ang if orient else 0.0)
+                
+                # FIX: Add 90 degrees to align "UP" shapes with "RIGHT" polar 0
+                base_rot = (ang + 90) if orient else 0.0
+                rot = rotation + base_rot
+                
                 self._draw_shape_at(x, y, shape, fill, r, stroke, stroke_width, rot, opacity)
+            except: continue
+
+    def add_branch_shapes(self, specs, default_where=0.5, offset=0.0, orient=None):
+        """
+        Adds geometric markers along branches.
+        
+        Fixes:
+        1. Checks the 'specs' dictionary for 'orient' key (priority) vs function arg (fallback).
+        2. Adds +90 degree geometric correction.
+        """
+        self._pre_flight_check()
+        if hasattr(specs, "to_dict"): specs = specs.to_dict(orient="records")
+        
+        for s in specs:
+            br = s.get("branch")
+            if not br: continue
+            try:
+                node = self.t & br if isinstance(br, str) else br
+                where = s.get("where", default_where)
+                x, y, ang = self._edge_point(node, where=where)
+                
+                # Apply perpendicular offset
+                if offset != 0:
+                    perp = math.radians(ang + 90)
+                    x += offset * math.cos(perp)
+                    y += offset * math.sin(perp)
+                
+                # FIX 1: Look for orient in the specific event dictionary first
+                user_orient = s.get("orient", orient)
+                
+                user_rot = float(s.get("rotation", 0.0))
+                
+                # FIX 2: Add 90 degrees to align shapes with the branch direction
+                if user_orient == "along":
+                    base_rot = ang + 90
+                elif user_orient == "perp":
+                    base_rot = ang + 180 # 90 + 90
+                else:
+                    base_rot = 0.0
+                
+                final_rot = base_rot + user_rot
+                
+                r_val = float(s.get("r", s.get("size", 10.0) / 2.0))
+                self._draw_shape_at(x, y, s.get("shape", "circle"), s.get("fill", "blue"), r_val, 
+                                    s.get("stroke"), s.get("stroke_width", 1.0), final_rot, s.get("opacity", 1.0))
             except: continue
 
     def add_node_shapes(self, nodes, shape="circle", fill="red", r=5.0, stroke=None, stroke_width=1.0, rotation=0, dx=0, dy=0, orient=False):
@@ -282,36 +323,7 @@ class RadialTreeDrawer(BaseDrawer):
                 self._draw_shape_at(x + dx, y + dy, shape, fill, r, stroke, stroke_width, rot)
             except: continue
 
-    def add_branch_shapes(self, specs, default_where=0.5, offset=0.0, orient=None):
-        """
-        Adds geometric markers along branches (e.g., to visualize events).
-
-        Args:
-            specs (list or DataFrame): Data definitions. Must contain 'branch' key/column.
-            default_where (float, optional): Position along branch (0.0 to 1.0). Defaults to 0.5.
-            offset (float, optional): Perpendicular offset from the branch line. Defaults to 0.0.
-            orient (str, optional): Rotation mode: "along" (matches branch), "perp" (90 deg to branch), or None.
-        """
-        self._pre_flight_check()
-        if hasattr(specs, "to_dict"): specs = specs.to_dict(orient="records")
-        for s in specs:
-            br = s.get("branch")
-            if not br: continue
-            try:
-                node = self.t & br if isinstance(br, str) else br
-                where = s.get("where", default_where)
-                x, y, ang = self._edge_point(node, where=where)
-                if offset != 0:
-                    perp = math.radians(ang + 90)
-                    x += offset * math.cos(perp)
-                    y += offset * math.sin(perp)
-                rot = s.get("rotation", 0.0)
-                if orient == "along": rot = ang
-                elif orient == "perp": rot = ang + 90
-                r_val = float(s.get("r", s.get("size", 10.0) / 2.0))
-                self._draw_shape_at(x, y, s.get("shape", "circle"), s.get("fill", "blue"), r_val, 
-                                    s.get("stroke"), s.get("stroke_width", 1.0), rot, s.get("opacity", 1.0))
-            except: continue
+    
 
     def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.0, use_gradient=True, 
                        gradient_colors=("purple", "orange"), color="orange", stroke_width=5.0, arc_intensity=50.0, opacity=0.6):
