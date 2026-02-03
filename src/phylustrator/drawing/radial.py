@@ -292,6 +292,60 @@ class RadialTreeDrawer(BaseDrawer):
                                     s.get("stroke"), s.get("stroke_width", 1.0), final_rot, s.get("opacity", 1.0))
             except: continue
 
+    def add_trait_strip(self, data, size=10, padding=1, offset=0, rotation=0, orient="radial", stroke="black", stroke_width=0.5):
+        """
+        Draws a strip of adjacent colored squares at nodes, aligned with the radial layout.
+        
+        Args:
+            data (dict): Mapping of {node_name: [color1, color2, ...]}.
+            size (float): Side length of each square.
+            padding (float): Gap between squares.
+            offset (float): Radial distance offset from the node.
+            rotation (float): Manual rotation offset.
+            orient (str): "radial" (strip points out) or "perp" (strip is tangential/perpendicular).
+            stroke (str): Border color.
+            stroke_width (float): Border thickness.
+        """
+        self._pre_flight_check()
+        for item, colors in data.items():
+            if not colors: continue
+            try:
+                node = self.t & item if isinstance(item, str) else item
+                node_ang = self._rot_ang(node.angle)
+                
+                # Calculate center position of the strip
+                cx, cy = polar_to_cartesian(node_ang, node.rad + offset)
+                
+                n = len(colors)
+                total_len = n * size + (n - 1) * padding
+                
+                # Determine automatic rotation based on tree geometry
+                if orient == "radial":
+                    base_angle = node_ang
+                elif orient == "perp" or orient == "tangential":
+                    base_angle = node_ang + 90
+                else: 
+                    base_angle = 0 # Absolute screen coordinates
+                
+                final_angle = base_angle + rotation
+                
+                # Start positions relative to the center (cx, cy)
+                start_local_x = -total_len / 2
+                start_local_y = -size / 2
+                
+                for i, color in enumerate(colors):
+                    local_x = start_local_x + i * (size + padding)
+                    
+                    self.drawing.append(draw.Rectangle(
+                        cx + local_x, cy + start_local_y,
+                        size, size,
+                        fill=color,
+                        stroke=stroke,
+                        stroke_width=stroke_width,
+                        transform=f"rotate({final_angle},{cx},{cy})"
+                    ))
+            except: continue
+
     def add_node_shapes(self, nodes, shape="circle", fill="red", r=5.0, stroke=None, stroke_width=1.0, rotation=0, dx=0, dy=0, orient=False):
         """
         Adds geometric markers centered on specific node positions.

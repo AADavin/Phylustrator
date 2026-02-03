@@ -297,6 +297,54 @@ class VerticalTreeDrawer(BaseDrawer):
                                     s.get("stroke"), s.get("stroke_width", 1.0), rot, s.get("opacity", 1.0))
             except: continue
 
+    def add_trait_strip(self, data, size=10, padding=1, offset_x=0, offset_y=0, rotation=0, stroke="black", stroke_width=0.5):
+        """
+        Draws a strip of adjacent colored squares (traits) centered at specific nodes.
+        
+        Args:
+            data (dict): Mapping of {node_name: [color1, color2, ...]}.
+            size (float): Side length of each square.
+            padding (float): Gap between squares.
+            offset_x (float): Shift in X pixels.
+            offset_y (float): Shift in Y pixels.
+            rotation (float): Rotation of the entire strip in degrees.
+            stroke (str): Border color for the squares.
+            stroke_width (float): Border thickness.
+        """
+        self._pre_flight_check()
+        for item, colors in data.items():
+            if not colors: continue
+            try:
+                node = self.t & item if isinstance(item, str) else item
+                cx, cy = self._node_xy(node)
+                
+                # Center point for the strip
+                base_x = cx + offset_x
+                base_y = cy + offset_y
+                
+                # Calculate total width to center the strip accurately
+                n = len(colors)
+                total_w = n * size + (n - 1) * padding
+                
+                # Starting position (local to the rotation center)
+                start_x = -total_w / 2
+                start_y = -size / 2
+                
+                for i, color in enumerate(colors):
+                    # Calculate local offset for this specific square
+                    local_x = start_x + i * (size + padding)
+                    
+                    # Draw rectangle rotated around the base point (base_x, base_y)
+                    self.drawing.append(draw.Rectangle(
+                        base_x + local_x, base_y + start_y, 
+                        size, size, 
+                        fill=color,
+                        stroke=stroke,
+                        stroke_width=stroke_width,
+                        transform=f"rotate({rotation},{base_x},{base_y})"
+                    ))
+            except: continue
+
     def add_time_axis(self, ticks, label="Time", tick_labels=None, tick_size=6.0, padding=20.0, y_offset=0.0, stroke_width=2.0, grid=False):
         """
         Adds a linear axis at the bottom to represent time or distance.
