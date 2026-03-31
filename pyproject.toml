@@ -5,24 +5,67 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "phylustrator"
 version = "0.0.1"
-description = "A Python library for easy plotting of phylogenies"
+description = "A Python library for rendering highly customizable phylogenetic trees"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-  {name = "Adrian A. Davin", email = "aaredav@gmail.com"}, 
+  {name = "Adrian A. Davin", email = "aaredav@gmail.com"},
+]
+keywords = ["phylogenetics", "visualization", "tree", "biology", "evolution", "svg"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
 ]
 dependencies = [
     "ete3",
     "drawsvg",
     "pandas",
     "numpy",
-    "newick"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/AADavin/Phylustrator"  
+Homepage = "https://github.com/AADavin/Phylustrator"
+Documentation = "https://github.com/AADavin/Phylustrator#readme"
+Repository = "https://github.com/AADavin/Phylustrator"
+Issues = "https://github.com/AADavin/Phylustrator/issues"
+Changelog = "https://github.com/AADavin/Phylustrator/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 export = ["cairosvg>=2.5"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.3",
+    "mypy>=1.0",
+    "pre-commit>=3.0",
+]
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "tests_*.py"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

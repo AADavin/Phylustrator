@@ -1,9 +1,19 @@
-import drawsvg as draw
+"""Radial (circular) phylogenetic tree drawer."""
+
+from __future__ import annotations
+
+import base64
+import logging
 import math
 import os
-import base64
+from typing import Any
+
+import drawsvg as draw
+
+from ..utils import generate_id, lerp_color, polar_to_cartesian
 from .base import BaseDrawer
-from ..utils import polar_to_cartesian, generate_id, lerp_color
+
+logger = logging.getLogger(__name__)
 
 class RadialTreeDrawer(BaseDrawer):
     """
@@ -245,7 +255,9 @@ class RadialTreeDrawer(BaseDrawer):
                 rot = rotation + base_rot
                 
                 self._draw_shape_at(x, y, shape, fill, r, stroke, stroke_width, rot, opacity)
-            except: continue
+            except Exception as exc:
+                logger.warning("Skipping element due to error: %s", exc)
+                continue
 
     def add_branch_shapes(self, specs, default_where=0.5, offset=0.0, orient=None):
         """
@@ -290,7 +302,9 @@ class RadialTreeDrawer(BaseDrawer):
                 r_val = float(s.get("r", s.get("size", 10.0) / 2.0))
                 self._draw_shape_at(x, y, s.get("shape", "circle"), s.get("fill", "blue"), r_val, 
                                     s.get("stroke"), s.get("stroke_width", 1.0), final_rot, s.get("opacity", 1.0))
-            except: continue
+            except Exception as exc:
+                logger.warning("Skipping element due to error: %s", exc)
+                continue
 
     def add_trait_strip(self, data, size=10, padding=1, offset=0, rotation=0, orient="radial", stroke="black", stroke_width=0.5):
         """
@@ -344,7 +358,9 @@ class RadialTreeDrawer(BaseDrawer):
                         stroke_width=stroke_width,
                         transform=f"rotate({final_angle},{cx},{cy})"
                     ))
-            except: continue
+            except Exception as exc:
+                logger.warning("Skipping element due to error: %s", exc)
+                continue
 
     def add_node_shapes(self, nodes, shape="circle", fill="red", r=5.0, stroke=None, stroke_width=1.0, rotation=0, dx=0, dy=0, orient=False):
         """
@@ -375,7 +391,9 @@ class RadialTreeDrawer(BaseDrawer):
                 x, y = polar_to_cartesian(ang, node.rad)
                 rot = rotation + (ang if orient else 0.0)
                 self._draw_shape_at(x + dx, y + dy, shape, fill, r, stroke, stroke_width, rot)
-            except: continue
+            except Exception as exc:
+                logger.warning("Skipping element due to error: %s", exc)
+                continue
 
     
 
@@ -519,7 +537,9 @@ class RadialTreeDrawer(BaseDrawer):
                     text_rot += 180; anchor = "end"
                 self.drawing.append(draw.Text(text, fs, tx, ty, fill=color, font_family=self.style.font_family,
                                               transform=f"rotate({text_rot}, {tx}, {ty})", text_anchor=anchor, dominant_baseline="middle"))
-            except: continue
+            except Exception as exc:
+                logger.warning("Skipping element due to error: %s", exc)
+                continue
 
     def plot_continuous_variable(self, node_to_rgb, stroke_width=None):
         """

@@ -1,10 +1,19 @@
-import drawsvg as draw
-from .base import BaseDrawer
-from ..utils import to_hex, lerp_color, generate_id
-import math
-import random
-import os
+"""Vertical (rectangular) phylogenetic tree drawer."""
+
+from __future__ import annotations
+
 import base64
+import logging
+import math
+import os
+from typing import Any
+
+import drawsvg as draw
+
+from ..utils import generate_id, lerp_color, to_hex
+from .base import BaseDrawer
+
+logger = logging.getLogger(__name__)
 
 class VerticalTreeDrawer(BaseDrawer):
     """
@@ -236,7 +245,9 @@ class VerticalTreeDrawer(BaseDrawer):
                 node = self.t & item if isinstance(item, str) else item
                 x, y = self._leaf_xy(node, offset=float(offset))
                 self._draw_shape_at(x, y, shape, fill, r, stroke, stroke_width, rotation, opacity)
-            except: continue
+            except Exception as exc:
+                logger.warning("Could not draw leaf shape for '%s': %s", item, exc)
+                continue
 
     def add_node_shapes(self, nodes, shape="circle", fill="red", r=5.0, stroke=None, stroke_width=1.0, rotation=0, dx=0, dy=0):
         """
@@ -264,7 +275,9 @@ class VerticalTreeDrawer(BaseDrawer):
                 node = self.t.search_nodes(name=item)[0] if isinstance(item, str) else item
                 x, y = self._node_xy(node)
                 self._draw_shape_at(x + dx, y + dy, shape, fill, r, stroke, stroke_width, rotation)
-            except: continue
+            except Exception as exc:
+                logger.warning("Could not draw node shape for '%s': %s", item, exc)
+                continue
 
     def add_branch_shapes(self, specs, default_where=0.5, offset=0.0, orient=None):
         """
@@ -295,7 +308,9 @@ class VerticalTreeDrawer(BaseDrawer):
                 r_val = float(s.get("r", s.get("size", 10.0) / 2.0))
                 self._draw_shape_at(x, y, s.get("shape", "circle"), s.get("fill", "blue"), r_val, 
                                     s.get("stroke"), s.get("stroke_width", 1.0), rot, s.get("opacity", 1.0))
-            except: continue
+            except Exception as exc:
+                logger.warning("Could not draw branch shape for '%s': %s", br, exc)
+                continue
 
     def add_trait_strip(self, data, size=10, padding=1, offset_x=0, offset_y=0, rotation=0, stroke="black", stroke_width=0.5):
         """
@@ -343,7 +358,9 @@ class VerticalTreeDrawer(BaseDrawer):
                         stroke_width=stroke_width,
                         transform=f"rotate({rotation},{base_x},{base_y})"
                     ))
-            except: continue
+            except Exception as exc:
+                logger.warning("Could not draw trait strip for '%s': %s", item, exc)
+                continue
 
     def add_time_axis(self, ticks, label="Time", tick_labels=None, tick_size=6.0, padding=20.0, y_offset=0.0, stroke_width=2.0, grid=False):
         """
@@ -491,7 +508,9 @@ class VerticalTreeDrawer(BaseDrawer):
                 self.drawing.append(draw.Text(text, fs, bracket_x + 8, (y_min + y_max) / 2, 
                                               fill=color, font_family=self.style.font_family, 
                                               text_anchor="start", dominant_baseline="middle"))
-            except: continue
+            except Exception as exc:
+                logger.warning("Could not draw clade label for '%s': %s", target, exc)
+                continue
 
     def plot_continuous_variable(self, node_to_rgb, stroke_width=None):
         """

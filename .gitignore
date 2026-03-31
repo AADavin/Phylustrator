@@ -1,11 +1,16 @@
-# Python garbage
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
-.ipynb_checkpoints/
+*.egg
 build/
 dist/
+.eggs/
+*.whl
+
+# Jupyter
+.ipynb_checkpoints/
 
 # Mac system files
 .DS_Store
@@ -13,8 +18,10 @@ dist/
 # IDE settings
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Large Data & Archives
+# Large data and archives
 *.tar.gz
 *.zip
 patches/
@@ -23,13 +30,26 @@ legacy/
 dev_archive/
 ale_results/
 alerax_output/
+temp/
 
-# Virtual Environments
+# Virtual environments
 env/
 venv/
 .env/
+.venv/
+
+# Testing and coverage
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# Type checking
+.mypy_cache/
 
 # Allow specific example data
 !examples/data/
-notebooks/05.MarkovChain.ipynb
 
+# Specific notebook exclusions
+notebooks/05.MarkovChain.ipynb
