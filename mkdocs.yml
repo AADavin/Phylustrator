@@ -1,0 +1,52 @@
+site_name: Phylustrator
+site_description: A Python library for rendering highly customizable phylogenetic trees
+site_url: https://aadavin.github.io/Phylustrator
+repo_url: https://github.com/AADavin/Phylustrator
+repo_name: AADavin/Phylustrator
+
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: deep purple
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+  - User Guide:
+    - Vertical Trees: guide/vertical.md
+    - Radial Trees: guide/radial.md
+    - Styling & Customization: guide/styling.md
+    - Trait Mapping: guide/traits.md
+    - HGT Visualization: guide/transfers.md
+    - File Formats: guide/formats.md
+  - API Reference:
+    - TreeStyle: api/treestyle.md
+    - VerticalTreeDrawer: api/vertical.md
+    - RadialTreeDrawer: api/radial.md
+    - Utility Functions: api/utils.md
+    - I/O Functions: api/io.md
+  - Gallery: gallery.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - toc:
+      permalink: true
+
+plugins:
+  - search
