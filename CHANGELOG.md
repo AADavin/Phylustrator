@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `phylustrator.zombi2` — read [ZOMBI2](https://github.com/AADavin/zombi2) output and draw
+  gene-family reconciliations on the **time-calibrated** species tree. `load()` parses a
+  `Genomes.write()` folder; `draw_reconciliation()` overlays a family's originations,
+  duplications and losses as markers at their true time and transfers as time-placed arcs
+  (horizontal in time). Lower-level `event_markers()` / `transfer_records()` helpers, plus a
+  guide and API docs. Phylustrator does not import ZOMBI2 — it only reads the written files.
+
 ## [0.0.1] - 2025-01-01
 
 ### Added
