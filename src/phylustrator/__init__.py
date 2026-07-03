@@ -1,5 +1,6 @@
 """Phylustrator -- Customizable phylogenetic tree visualization."""
 
+from . import zombi2
 from .drawing import BaseDrawer, RadialTreeDrawer, TreeStyle, VerticalTreeDrawer
 from .io import read_newick, read_nexus, read_phyloxml, read_tree
 
@@ -14,5 +15,6 @@ __all__ = [
     "read_nexus",
     "read_phyloxml",
     "read_tree",
+    "zombi2",
     "__version__",
 ]

@@ -27,6 +27,7 @@ nav:
     - Styling & Customization: guide/styling.md
     - Trait Mapping: guide/traits.md
     - HGT Visualization: guide/transfers.md
+    - ZOMBI2 Reconciliations: guide/zombi2.md
     - File Formats: guide/formats.md
   - API Reference:
     - TreeStyle: api/treestyle.md
@@ -34,6 +35,7 @@ nav:
     - RadialTreeDrawer: api/radial.md
     - Utility Functions: api/utils.md
     - I/O Functions: api/io.md
+    - ZOMBI2 Integration: api/zombi2.md
   - Gallery: gallery.md
   - Contributing: contributing.md
   - Changelog: changelog.md
