@@ -111,7 +111,7 @@ class VerticalTreeDrawer(BaseDrawer):
                 px, py = n.up.coordinates
                 # Horizontal segment
                 self.drawing.append(draw.Line(px, y, x, y, stroke=color, 
-                                              stroke_width=self.style.branch_stroke_width, stroke_linecap="round"))
+                                              stroke_width=self.style.branch_stroke_width, stroke_linecap="square"))
             else:
                 # Root stub
                 self.drawing.append(draw.Line(x - self.style.root_stub_length, y, x, y, 
@@ -122,7 +122,7 @@ class VerticalTreeDrawer(BaseDrawer):
                 y_min = min(c.y_coord for c in n.children)
                 y_max = max(c.y_coord for c in n.children)
                 self.drawing.append(draw.Line(x, y_min, x, y_max, stroke=color, 
-                                              stroke_width=self.style.branch_stroke_width, stroke_linecap="round"))
+                                              stroke_width=self.style.branch_stroke_width, stroke_linecap="square"))
                 if self.style.node_r > 0:
                     self.drawing.append(draw.Circle(x, y, self.style.node_r, fill=color))
             elif self.style.leaf_r > 0:
@@ -163,7 +163,7 @@ class VerticalTreeDrawer(BaseDrawer):
         sw = stroke_width if stroke_width is not None else self.style.branch_stroke_width * 2
         x, y = node.coordinates
         px, _ = node.up.coordinates
-        self.drawing.append(draw.Line(px, y, x, y, stroke=color, stroke_width=sw, stroke_linecap="round"))
+        self.drawing.append(draw.Line(px, y, x, y, stroke=color, stroke_width=sw, stroke_linecap="square"))
 
     def gradient_branch(self, node, colors=("red", "blue"), stroke_width=None):
         """
@@ -182,7 +182,7 @@ class VerticalTreeDrawer(BaseDrawer):
         grad.add_stop(0, colors[0])
         grad.add_stop(1, colors[1])
         self.drawing.append(grad)
-        self.drawing.append(draw.Line(px, y, x, y, stroke=grad, stroke_width=sw))
+        self.drawing.append(draw.Line(px, y, x, y, stroke=grad, stroke_width=sw, stroke_linecap="square"))
 
     def add_leaf_names(self, font_size=None, color="black", rotation=0, padding=10):
         """
@@ -395,8 +395,9 @@ class VerticalTreeDrawer(BaseDrawer):
         self.drawing.append(draw.Text(label, self.style.font_size, (x_left + x_right) / 2.0, y_axis + tick_size + self.style.font_size * 2.5, 
                                       text_anchor="middle", font_family=self.style.font_family))
 
-    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.0, use_gradient=True, 
-                       gradient_colors=("purple", "orange"), color="orange", stroke_width=5.0, arc_intensity=40.0, opacity=0.6):
+    def plot_transfers(self, transfers, mode="midpoint", curve_type="C", filter_below=0.0, use_gradient=True,
+                       gradient_colors=("purple", "orange"), color="orange", stroke_width=5.0, arc_intensity=40.0, opacity=0.6,
+                       arrowhead=False, arrow_size=11.0, donor_dot=False):
         """
         Plots curved arrows representing Horizontal Gene Transfer (HGT) events.
 
@@ -411,6 +412,11 @@ class VerticalTreeDrawer(BaseDrawer):
             stroke_width (float, optional): Stroke width. Defaults to 5.0.
             arc_intensity (float, optional): Curve height. Defaults to 40.0.
             opacity (float, optional): Opacity. Defaults to 0.6.
+            arrowhead (bool, optional): Draw a filled arrowhead whose *tip touches the
+                recipient branch*. The arc then arrives perpendicular to the branch so the
+                arrow points into it (rather than lying flat along it). Defaults to False.
+            arrow_size (float, optional): Arrowhead length in px. Defaults to 11.0.
+            donor_dot (bool, optional): Draw a small dot at the donor end. Defaults to False.
         """
         if hasattr(transfers, "to_dict") and hasattr(transfers, "columns"):
             transfers = transfers.to_dict(orient="records")
@@ -436,7 +442,10 @@ class VerticalTreeDrawer(BaseDrawer):
             else:
                 x_s, y_s, _ = self._edge_point(src, 0.5)
                 x_e, y_e, _ = self._edge_point(dst, 0.5)
-            
+
+            arrow_color = gradient_colors[1] if use_gradient else color
+            donor_color = gradient_colors[0] if use_gradient else color
+
             path = draw.Path(stroke_width=stroke_width * freq, fill="none", stroke_opacity=opacity)
             if use_gradient:
                 gid = generate_id("tr_grad")
@@ -447,14 +456,27 @@ class VerticalTreeDrawer(BaseDrawer):
                 path.args["stroke"] = grad
             else:
                 path.args["stroke"] = color
-            
+
             path.M(x_s, y_s)
-            if curve_type.upper() == "S":
-                sgn = 1 if (x_e - x_s) >= 0 else -1
-                path.C(x_s + (sgn * arc_intensity), y_s, x_e - (sgn * arc_intensity), y_e, x_e, y_e)
+            if arrowhead:
+                # Arrive perpendicular to the (horizontal) recipient branch: the shaft ends
+                # one arrow-length short of the branch, then the arrowhead tip touches it.
+                sign = 1.0 if y_e >= y_s else -1.0
+                base_y = y_e - sign * arrow_size
+                path.C(x_s - arc_intensity, y_s, x_e, base_y - sign * arc_intensity, x_e, base_y)
+                self.drawing.append(path)
+                hw = arrow_size * 0.6
+                self.drawing.append(draw.Lines(x_e, y_e, x_e - hw, base_y, x_e + hw, base_y,
+                                               close=True, fill=arrow_color, stroke="none"))
+                if donor_dot:
+                    self.drawing.append(draw.Circle(x_s, y_s, max(2.5, stroke_width * 0.7), fill=donor_color))
             else:
-                path.C(x_s - arc_intensity, y_s, x_e - arc_intensity, y_e, x_e, y_e)
-            self.drawing.append(path)
+                if curve_type.upper() == "S":
+                    sgn = 1 if (x_e - x_s) >= 0 else -1
+                    path.C(x_s + (sgn * arc_intensity), y_s, x_e - (sgn * arc_intensity), y_e, x_e, y_e)
+                else:
+                    path.C(x_s - arc_intensity, y_s, x_e - arc_intensity, y_e, x_e, y_e)
+                self.drawing.append(path)
 
     def add_heatmap(self, values, width=15.0, offset=10.0, low_color="#f7fbff", high_color="#08306b", border_color="none", border_width=0.5):
         """
@@ -537,7 +559,7 @@ class VerticalTreeDrawer(BaseDrawer):
                     x, y = n.coordinates
                     y_min = min(c.y_coord for c in n.children)
                     y_max = max(c.y_coord for c in n.children)
-                    self.drawing.append(draw.Line(x, y_min, x, y_max, stroke=_to_hex(col), stroke_width=sw, stroke_linecap="round"))
+                    self.drawing.append(draw.Line(x, y_min, x, y_max, stroke=_to_hex(col), stroke_width=sw, stroke_linecap="square"))
                     self.drawing.append(draw.Circle(x, y, self.style.node_r, fill=_to_hex(col)))
 
     def plot_categorical_trait(self, data, value_col, node_col="Node", palette=None, stroke_width=None, default_color="black"):
@@ -569,14 +591,14 @@ class VerticalTreeDrawer(BaseDrawer):
             else:
                 x, y = node.coordinates
                 px, _ = node.up.coordinates
-                self.drawing.append(draw.Line(px, y, x, y, stroke=c_n, stroke_width=sw, stroke_linecap="round"))
+                self.drawing.append(draw.Line(px, y, x, y, stroke=c_n, stroke_width=sw, stroke_linecap="square"))
         for n in self.t.traverse("postorder"):
             if not n.is_leaf():
                 color = get_color(n)
                 x, y = n.coordinates
                 y_min = min(c.y_coord for c in n.children)
                 y_max = max(c.y_coord for c in n.children)
-                self.drawing.append(draw.Line(x, y_min, x, y_max, stroke=color, stroke_width=sw, stroke_linecap="round"))
+                self.drawing.append(draw.Line(x, y_min, x, y_max, stroke=color, stroke_width=sw, stroke_linecap="square"))
                 self.drawing.append(draw.Circle(x, y, self.style.node_r, fill=color))
 
     def add_categorical_legend(self, palette, title="Legend", x=None, y=None, font_size=14, r=6):
