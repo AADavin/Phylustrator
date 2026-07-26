@@ -49,6 +49,9 @@ dev = [
     "cairosvg>=2.5",
 ]
 
+[project.scripts]
+phyl = "phylustrator.cli:main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "tests_*.py"]

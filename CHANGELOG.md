@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `phyl`, a one-shot command-line viewer: `phyl tree.nwk` renders a Newick tree to a temporary PDF
+  and opens it; `-o FILE` saves to SVG/PDF/PNG instead. Flags for layout (`--radial`/`--unrooted`),
+  labels (`--no-labels`/`--node-labels`), and `--no-stem`.
+
 ### Changed
 - **Full rewrite** into a small, composable tree plotter. Read a tree with `loads`/`read`, build a
   figure with the layer grammar (`plot(tree) + color_branches(...) + tip_labels() + colorbar() + …`),

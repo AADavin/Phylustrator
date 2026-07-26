@@ -3,7 +3,7 @@
 A small, composable plotter for phylogenetic trees. Read a Newick tree, build a figure by adding
 layers, and save it to SVG, PDF, or PNG.
 
-![A primate tree with branches coloured by brain size](docs/img/tree.png)
+![A 100-tip tree with branches coloured by a Brownian-motion trait](docs/img/tree.png)
 
 ## Install
 
@@ -35,6 +35,19 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
 - **Layers** — `color_branches`, `tip_labels`, `node_labels`, `tip_track`, `colorbar`, `legend`,
   `time_axis`, `scale_bar`, `highlight_clade`.
 - **Dependencies** — only `drawsvg` (plus `cairosvg` for PDF/PNG).
+
+## Command line
+
+`phyl` is a one-shot viewer — hand it a Newick file:
+
+```bash
+phyl tree.nwk                 # render to a temporary PDF and open it
+phyl tree.nwk -o fig.svg      # save instead (format from the extension: .svg / .pdf / .png)
+phyl tree.nwk --radial --no-labels
+```
+
+Flags: `--layout {rectangular,radial,unrooted}` (or `--radial` / `--unrooted`), `--no-labels`,
+`--node-labels`, `--no-stem`, `--no-open`. Colouring and everything else live in the Python API.
 
 ## License
 
