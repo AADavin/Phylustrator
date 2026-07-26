@@ -13,9 +13,11 @@ from ..color import map_values
 from ..skeleton import draw_branches
 
 
-def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None, width=None):
+def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None, width=None,
+                   dashed=None):
     """Colour every branch by ``values`` (``{node name: value}``). Numeric → colormap gradient;
-    categorical → palette. Returns a layer."""
+    categorical → palette. ``dashed`` is an optional set of node names to draw dashed (e.g. extinct
+    lineages), since the colour overdraws the base skeleton. Returns a layer."""
 
     def layer(canvas, tree, layout, style):
         by_name, scale = map_values(values, cmap=cmap, palette=palette)
@@ -28,6 +30,6 @@ def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None
             return by_name.get(node.name, default)
 
         draw_branches(canvas, tree, layout, color=color, width=width or style.branch_width,
-                      gradient=(scale["kind"] == "continuous"))
+                      gradient=(scale["kind"] == "continuous"), dashed=dashed)
 
     return layer

@@ -31,6 +31,12 @@ def test_dashed_branches():
     assert "stroke-dasharray" not in plot(tree).as_svg()  # none dashed by default
 
 
+def test_color_branches_dashed():
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    svg = (plot(tree) + color_branches({"A": 1.0, "B": 2.0, "C": 1.5, "D": 0.5}, dashed={"A", "B"})).as_svg()
+    assert "stroke-dasharray" in svg   # coloured branches can still be dashed
+
+
 def test_composable_grammar_returns_new_figure():
     tree = loads("(A:1,B:1)R;")
     base = plot(tree)
