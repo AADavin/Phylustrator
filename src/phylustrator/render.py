@@ -99,6 +99,28 @@ class Canvas:
         self.raw_rect(min(px0, px1), min(py0, py1), abs(px1 - px0), abs(py1 - py0),
                       fill=fill, opacity=opacity)
 
+    def raw_marker(self, cx, cy, shape: str, color: str, size: float, *,
+                   stroke: str = "#ffffff", stroke_width: float = 0.8) -> None:
+        """A small filled glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` /
+        ``diamond`` (for point markers such as events or a legend key)."""
+        r = size
+        if shape == "square":
+            self._d.append(draw.Rectangle(cx - r, cy - r, 2 * r, 2 * r, fill=color,
+                                          stroke=stroke, stroke_width=stroke_width))
+        elif shape in ("triangle", "diamond"):
+            pts = ([(cx, cy - r), (cx + r, cy + r * 0.85), (cx - r, cy + r * 0.85)]
+                   if shape == "triangle"
+                   else [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)])
+            self._d.append(draw.Lines(*[c for p in pts for c in p], fill=color,
+                                      stroke=stroke, stroke_width=stroke_width, close=True))
+        else:
+            self._d.append(draw.Circle(cx, cy, r, fill=color, stroke=stroke,
+                                       stroke_width=stroke_width))
+
+    def marker(self, x, y, shape: str, color: str, size: float, **kw) -> None:
+        """A glyph placed at *data* coordinates (see :meth:`raw_marker`)."""
+        self.raw_marker(self.px(x), self.py(y), shape, color, size, **kw)
+
     def gradient_bar(self, cmap: str, x, y, w, h) -> None:
         """A horizontal rectangle filled with the multi-stop gradient of ``cmap``."""
         grad = draw.LinearGradient(x, y, x + w, y, gradientUnits="userSpaceOnUse")
