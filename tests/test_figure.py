@@ -25,6 +25,12 @@ def test_stem_adds_one_branch():
     assert with_stem == without + 1
 
 
+def test_dashed_branches():
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    assert "stroke-dasharray" in plot(tree, dashed={"A", "B", "C"}).as_svg()
+    assert "stroke-dasharray" not in plot(tree).as_svg()  # none dashed by default
+
+
 def test_composable_grammar_returns_new_figure():
     tree = loads("(A:1,B:1)R;")
     base = plot(tree)

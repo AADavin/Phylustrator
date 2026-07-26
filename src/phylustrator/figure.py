@@ -30,24 +30,25 @@ class Figure:
     new figure with one more layer, so a base figure can be reused."""
 
     def __init__(self, tree: Tree, *, layout: str = "rectangular", stem: bool = True,
-                 style: Style | None = None, layers: tuple[Layer, ...] = ()) -> None:
+                 style: Style | None = None, dashed=None, layers: tuple[Layer, ...] = ()) -> None:
         if layout not in _LAYOUTS:
             raise ValueError(f"unknown layout {layout!r}; choose from {sorted(_LAYOUTS)}")
         self.tree = tree
         self.layout = layout
         self.stem = stem
         self.style = style or Style()
+        self.dashed = dashed  # node names whose branch is drawn dashed (e.g. extinct lineages)
         self.layers = tuple(layers)
 
     def __add__(self, layer: Layer) -> "Figure":
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=self.style,
-                      layers=self.layers + (layer,))
+                      dashed=self.dashed, layers=self.layers + (layer,))
 
     def _build(self) -> Canvas:
         layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(layout.kind != "rectangular"))
-        _draw_skeleton(canvas, self.tree, layout, self.style)
+        _draw_skeleton(canvas, self.tree, layout, self.style, self.dashed)
         for layer in self.layers:
             layer(canvas, self.tree, layout, self.style)
         return canvas
@@ -61,13 +62,14 @@ class Figure:
 
 
 def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
-         style: Style | None = None) -> Figure:
-    """Start a figure for ``tree``. Add layers with ``+``, then :meth:`Figure.save`."""
-    return Figure(tree, layout=layout, stem=stem, style=style)
+         style: Style | None = None, dashed=None) -> Figure:
+    """Start a figure for ``tree``. Add layers with ``+``, then :meth:`Figure.save`. ``dashed`` is an
+    optional set of node names whose branches are drawn dashed (e.g. extinct lineages)."""
+    return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed)
 
 
-def _draw_skeleton(canvas: Canvas, tree: Tree, layout: Layout, style: Style) -> None:
+def _draw_skeleton(canvas: Canvas, tree: Tree, layout: Layout, style: Style, dashed=None) -> None:
     """The always-present base layer: the branches in the default colour, drawn for whichever layout
     is in force (a colouring layer later overdraws them)."""
     draw_branches(canvas, tree, layout, color=lambda node: style.branch_color,
-                  width=style.branch_width, gradient=False)
+                  width=style.branch_width, gradient=False, dashed=dashed)

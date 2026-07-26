@@ -55,9 +55,11 @@ class Canvas:
         span = (self._y1 - self._y0) or 1.0
         return self._m + (y - self._y0) / span * (self.style.height - 2 * self._m)
 
-    def line(self, x1, y1, x2, y2, color: str, width: float) -> None:
+    def line(self, x1, y1, x2, y2, color: str, width: float, *, dash: bool = False) -> None:
+        extra = {"stroke_dasharray": "5,4"} if dash else {}
         self._d.append(draw.Line(self.px(x1), self.py(y1), self.px(x2), self.py(y2),
-                                 stroke=color, stroke_width=width, stroke_linecap="round"))
+                                 stroke=color, stroke_width=width,
+                                 stroke_linecap="butt" if dash else "round", **extra))
 
     def gradient_line(self, x1, y1, x2, y2, color1: str, color2: str, width: float) -> None:
         """A branch coloured with a gradient from ``color1`` (start) to ``color2`` (end)."""
