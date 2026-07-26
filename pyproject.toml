@@ -27,10 +27,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "ete3",
     "drawsvg",
-    "pandas",
-    "numpy",
 ]
 
 [project.urls]
@@ -48,6 +45,8 @@ dev = [
     "ruff>=0.3",
     "mypy>=1.0",
     "pre-commit>=3.0",
+    "ete3",       # test-only: the differential oracle for the Newick parser
+    "cairosvg>=2.5",
 ]
 
 [tool.pytest.ini_options]
