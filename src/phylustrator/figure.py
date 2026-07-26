@@ -12,6 +12,7 @@ contract, so new decorations never touch the figure.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from .layout import Layout, radial, rectangular, unrooted
@@ -23,6 +24,26 @@ from .tree import Tree
 Layer = Callable[[Canvas, Tree, Layout, Style], None]
 
 _LAYOUTS = {"rectangular": rectangular, "radial": radial, "unrooted": unrooted}
+
+
+@dataclass
+class TipPos:
+    """Where a leaf lands on the rendered page, in pixels."""
+
+    name: str
+    x: float
+    y: float
+
+
+@dataclass
+class Geometry:
+    """The rendered figure's pixel geometry — enough to align something else (a heatmap, an
+    alignment) to the tree's tips without redrawing the tree. ``tips`` are in top-to-bottom order;
+    ``tip_x`` is the pixel x where the tips end (where a companion panel can begin)."""
+
+    size: tuple[float, float]
+    tips: list[TipPos]
+    tip_x: float
 
 
 class Figure:
@@ -43,6 +64,24 @@ class Figure:
     def __add__(self, layer: Layer) -> "Figure":
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=self.style,
                       dashed=self.dashed, layers=self.layers + (layer,))
+
+    def with_size(self, width: float, height: float) -> "Figure":
+        """A copy of this figure rendered at a given pixel size (same tree, layers, style otherwise).
+        Used to fit the tree into a column beside a companion panel."""
+        return Figure(self.tree, layout=self.layout, stem=self.stem,
+                      style=replace(self.style, width=width, height=height),
+                      dashed=self.dashed, layers=self.layers)
+
+    def geometry(self) -> Geometry:
+        """The pixel positions of the tips for this figure's current style — so a companion panel can
+        line its rows up with the tree without redrawing it."""
+        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
+        canvas = Canvas(self.style, layout.xlim, layout.ylim,
+                        equal_aspect=(self.layout != "rectangular"))
+        tips = [TipPos(leaf.name, canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf)))
+                for leaf in self.tree.leaves]
+        tip_x = max((t.x for t in tips), default=canvas.size[0])
+        return Geometry(canvas.size, tips, tip_x)
 
     def _build(self) -> Canvas:
         layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
