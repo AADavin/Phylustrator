@@ -57,6 +57,13 @@ def test_radial_radius_is_distance():
     assert lay.coords[tree.root] == (0.0, 0.0)       # root at the centre
 
 
+def test_radial_centres_root_ignoring_stem():
+    tree = loads("((A:2,B:2)C:1,D:3)R:5;")   # a big stem must not push the root off-centre
+    lay = radial(tree)
+    assert lay.coords[tree.root] == (0.0, 0.0)
+    assert lay.root_branch == 0.0
+
+
 def test_unrooted_root_at_origin_and_covers_all_nodes():
     tree = loads("((A:1,B:1)C:1,(D:1,E:1)F:1)R;")
     lay = unrooted(tree)

@@ -79,10 +79,12 @@ class Canvas:
         self._d.append(draw.Line(x1, y1, x2, y2, stroke=color, stroke_width=width))
 
     def raw_text(self, x, y, s: str, *, anchor="start", baseline="central",
-                 color: str | None = None, size: float | None = None, weight="normal") -> None:
+                 color: str | None = None, size: float | None = None, weight="normal",
+                 rotate: float = 0.0) -> None:
+        extra = {"transform": f"rotate({rotate} {x} {y})"} if rotate else {}
         self._d.append(draw.Text(s, size or self.style.font_size, x, y,
                                  fill=color or self.style.label_color, font_family=self.style.font_family,
-                                 text_anchor=anchor, dominant_baseline=baseline, font_weight=weight))
+                                 text_anchor=anchor, dominant_baseline=baseline, font_weight=weight, **extra))
 
     def raw_rect(self, x, y, w, h, *, fill, stroke="none", stroke_width=0.0, opacity=1.0) -> None:
         self._d.append(draw.Rectangle(x, y, w, h, fill=fill, stroke=stroke,

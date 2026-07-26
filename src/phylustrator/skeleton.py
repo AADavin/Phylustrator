@@ -54,7 +54,7 @@ def _radial(canvas, tree, layout, color, width, gradient) -> None:
             r_parent, _ = polar(node.parent)
             sx, sy = r_parent * math.cos(a), r_parent * math.sin(a)           # step out radially
             _branch(canvas, sx, sy, x, y, color(node.parent), cn, width, gradient)
-        if not node.is_leaf:
+        if not node.is_leaf and r > 1e-9:                                     # (skip the root at the centre)
             angles = [polar(c)[1] for c in node.children]
             _arc(canvas, r, min(angles), max(angles), cn, width)              # angular connector
 

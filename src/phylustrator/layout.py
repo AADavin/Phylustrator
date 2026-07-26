@@ -81,27 +81,27 @@ def rectangular(tree: Tree, *, stem: bool = True, cladogram: bool = False) -> La
     return Layout("rectangular", coords, (0.0, x_max), (min(y_vals), max(y_vals)), root_branch=offset)
 
 
-def radial(tree: Tree, *, stem: bool = True, start: float = 0.0, end: float = 360.0,
+def radial(tree: Tree, *, stem: bool = False, start: float = 0.0, end: float = 350.0,
            cladogram: bool = False) -> Layout:
-    """Circular phylogram: radius = distance from the origin (centre), angle = tip order over
-    ``[start, end)`` degrees. A full 360° sweep spaces tips by ``i / n`` (so first and last don't
-    collide); a partial sweep uses ``i / (n - 1)`` to reach both ends."""
-    offset = float(tree.root.length) if stem else 0.0
+    """Circular phylogram: **radius** = distance from the crown at the centre, **angle** = tip order
+    over ``[start, end)`` degrees. Leaving a small gap (the default ``end=350``) keeps the first and
+    last tips from colliding at the seam.
+
+    The root sits at the centre — a stem would become a spurious little circle there — so ``stem`` is
+    ignored (kept for a uniform layout interface)."""
     base = _distance_from_crown(tree, cladogram)
     leaves = tree.leaves
     n = len(leaves)
-    full = abs(end - start) >= 360.0
-    denom = n if full else max(n - 1, 1)
+    denom = max(n - 1, 1)
     angle = {leaf: math.radians(start + (end - start) * i / denom) for i, leaf in enumerate(leaves)}
     for node in tree.walk("postorder"):
         if not node.is_leaf:
             angle[node] = sum(angle[c] for c in node.children) / len(node.children)
-    coords = {node: ((base[node] + offset) * math.cos(angle[node]),
-                     (base[node] + offset) * math.sin(angle[node]))
+    coords = {node: (base[node] * math.cos(angle[node]), base[node] * math.sin(angle[node]))
               for node in tree.walk()}
     xs = [p[0] for p in coords.values()]
     ys = [p[1] for p in coords.values()]
-    return Layout("radial", coords, (min(xs), max(xs)), (min(ys), max(ys)), root_branch=offset)
+    return Layout("radial", coords, (min(xs), max(xs)), (min(ys), max(ys)), root_branch=0.0)
 
 
 def _leaf_counts(tree: Tree) -> dict[Node, int]:
