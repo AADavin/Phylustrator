@@ -57,6 +57,15 @@ def test_radial_radius_is_distance():
     assert lay.coords[tree.root] == (0.0, 0.0)       # root at the centre
 
 
+def test_radial_angles_monotonic_in_leaf_order():
+    # The drawer relies on these being monotonic (0→2π), so an arc never wraps the long way round.
+    tree = loads("(((A,B),(C,D)),((E,F),(G,H)));")
+    lay = radial(tree)
+    assert lay.angle is not None
+    leaf_angles = [lay.angle[leaf] for leaf in tree.leaves]
+    assert leaf_angles == sorted(leaf_angles)
+
+
 def test_radial_centres_root_ignoring_stem():
     tree = loads("((A:2,B:2)C:1,D:3)R:5;")   # a big stem must not push the root off-centre
     lay = radial(tree)

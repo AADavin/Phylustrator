@@ -40,23 +40,27 @@ def _rectangular(canvas, tree, layout, color, width, gradient) -> None:
 
 
 def _radial(canvas, tree, layout, color, width, gradient) -> None:
-    def polar(node):
-        x, y = layout.x(node), layout.y(node)
-        return math.hypot(x, y), math.atan2(y, x)
+    # Use the layout's monotonic angles (0→2π), NOT atan2 (which wraps at ±π and would make a node
+    # straddling the 9-o'clock direction draw a huge arc the long way round).
+    ang = layout.angle
+
+    def radius(node):
+        return math.hypot(layout.x(node), layout.y(node))
 
     for node in tree.walk():
         x, y, cn = layout.x(node), layout.y(node), color(node)
-        r, a = polar(node)
+        r = radius(node)
         if node.is_root:
             if layout.root_branch > 0:
                 canvas.line(0.0, 0.0, x, y, cn, width)                        # stem from centre
         else:
-            r_parent, _ = polar(node.parent)
+            a = ang[node]
+            r_parent = radius(node.parent)
             sx, sy = r_parent * math.cos(a), r_parent * math.sin(a)           # step out radially
             _branch(canvas, sx, sy, x, y, color(node.parent), cn, width, gradient)
         if not node.is_leaf and r > 1e-9:                                     # (skip the root at the centre)
-            angles = [polar(c)[1] for c in node.children]
-            _arc(canvas, r, min(angles), max(angles), cn, width)              # angular connector
+            child_angles = [ang[c] for c in node.children]
+            _arc(canvas, r, min(child_angles), max(child_angles), cn, width)  # angular connector
 
 
 def _arc(canvas, r, a0, a1, color, width, steps: int = 24) -> None:

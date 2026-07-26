@@ -32,6 +32,7 @@ class Layout:
     xlim: tuple[float, float]
     ylim: tuple[float, float]
     root_branch: float = 0.0  # length of the root's stem as laid out (0 when stem is hidden/absent)
+    angle: dict | None = None  # radial only: each node's angle in radians, monotonic (no atan2 wrap)
 
     def x(self, node: Node) -> float:
         return self.coords[node][0]
@@ -101,7 +102,8 @@ def radial(tree: Tree, *, stem: bool = False, start: float = 0.0, end: float = 3
               for node in tree.walk()}
     xs = [p[0] for p in coords.values()]
     ys = [p[1] for p in coords.values()]
-    return Layout("radial", coords, (min(xs), max(xs)), (min(ys), max(ys)), root_branch=0.0)
+    return Layout("radial", coords, (min(xs), max(xs)), (min(ys), max(ys)),
+                  root_branch=0.0, angle=angle)
 
 
 def _leaf_counts(tree: Tree) -> dict[Node, int]:
