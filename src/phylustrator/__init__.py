@@ -20,10 +20,16 @@ Two domains, one grammar (``plot(x) + layer + …``), one shared drawing backend
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+
 from . import genomes, trees, zombi
 from .compose import Composite, beside
 from .style import Style
 
-__version__ = "0.1.0"
+try:  # single source of truth is pyproject.toml; read it from the installed metadata
+    __version__ = _pkg_version("phylustrator")
+except PackageNotFoundError:  # a source tree that hasn't been installed
+    __version__ = "0.0.0+unknown"
 
 __all__ = ["trees", "genomes", "zombi", "beside", "Composite", "Style", "__version__"]
