@@ -89,16 +89,57 @@ class Canvas:
                                  fill=color or self.style.label_color, font_family=self.style.font_family,
                                  text_anchor=anchor, dominant_baseline=baseline, font_weight=weight, **extra))
 
-    def raw_rect(self, x, y, w, h, *, fill, stroke="none", stroke_width=0.0, opacity=1.0) -> None:
-        self._d.append(draw.Rectangle(x, y, w, h, fill=fill, stroke=stroke,
+    def raw_rect(self, x, y, w, h, *, fill, stroke="none", stroke_width=0.0, opacity=1.0,
+                 rx=0.0) -> None:
+        self._d.append(draw.Rectangle(x, y, w, h, fill=fill, stroke=stroke, rx=rx,
                                       stroke_width=stroke_width, fill_opacity=opacity))
 
-    def region(self, x0, y0, x1, y1, *, fill, opacity=1.0) -> None:
-        """A filled rectangle given in *data* coordinates (for shading a clade behind the tree)."""
+    def region(self, x0, y0, x1, y1, *, fill, opacity=1.0, stroke="none", stroke_width=0.0,
+               rx=0.0) -> None:
+        """A filled rectangle given in *data* coordinates (shade a clade, mark a segment)."""
         px0, px1 = self.px(x0), self.px(x1)
         py0, py1 = self.py(y0), self.py(y1)
         self.raw_rect(min(px0, px1), min(py0, py1), abs(px1 - px0), abs(py1 - py0),
-                      fill=fill, opacity=opacity)
+                      fill=fill, opacity=opacity, stroke=stroke, stroke_width=stroke_width, rx=rx)
+
+    # --- genome primitives (gene arrows, synteny ribbons, coordinate rings, embedded rasters) ---
+
+    def polygon(self, points, *, fill, stroke="none", stroke_width=0.0) -> None:
+        """A filled polygon; ``points`` are ``(x, y)`` in *data* coordinates (gene arrows)."""
+        flat = []
+        for x, y in points:
+            flat.append(self.px(x))
+            flat.append(self.py(y))
+        self._d.append(draw.Lines(*flat, fill=fill, stroke=stroke, stroke_width=stroke_width,
+                                  close=True))
+
+    def ribbon(self, xa0, xa1, ya, xb0, xb1, yb, *, fill: str, opacity: float = 0.32,
+               stroke: str = "none") -> None:
+        """A filled S-curved band linking footprint ``[xa0,xa1]`` at ``ya`` to ``[xb0,xb1]`` at ``yb``
+        (all *data* coordinates) — a synteny link between two stacked genomes."""
+        ax0, ax1, ay = self.px(xa0), self.px(xa1), self.py(ya)
+        bx0, bx1, by = self.px(xb0), self.px(xb1), self.py(yb)
+        my = (ay + by) / 2.0
+        p = draw.Path(fill=fill, fill_opacity=opacity, stroke=stroke, stroke_width=0.5)
+        p.M(ax0, ay).L(ax1, ay)
+        p.C(ax1, my, bx1, my, bx1, by)
+        p.L(bx0, by)
+        p.C(bx0, my, ax0, my, ax0, ay)
+        p.Z()
+        self._d.append(p)
+
+    def data_ring(self, r: float, color: str, width: float, *, dash: bool = False) -> None:
+        """A circle of *data* radius ``r`` centred on the data origin (a chromosome backbone / ruler)."""
+        cx, cy = self.px(0.0), self.py(0.0)
+        rpx = self.px(r) - cx
+        extra = {"stroke_dasharray": "5,4"} if dash else {}
+        self._d.append(draw.Circle(cx, cy, abs(rpx), fill="none", stroke=color,
+                                   stroke_width=width, **extra))
+
+    def embed_png(self, data: bytes, x, y, w, h) -> None:
+        """Place a PNG (bytes) at pixel ``(x, y)`` sized ``w×h`` — drops a rendered tree into a
+        composite figure (see :func:`~phylustrator.compose.beside`)."""
+        self._d.append(draw.Image(x, y, w, h, data=data, embed=True, mime_type="image/png"))
 
     def raw_marker(self, cx, cy, shape: str, color: str, size: float, *,
                    stroke: str = "#ffffff", stroke_width: float = 0.8) -> None:

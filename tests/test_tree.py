@@ -1,6 +1,6 @@
 """Tree model: traversal, leaves, lookup, and the stem-excluding depth."""
 
-from phylustrator import loads
+from phylustrator.trees import loads
 
 
 def test_walk_orders():

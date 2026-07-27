@@ -15,10 +15,10 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Callable
 
+from ..render import Canvas
+from ..style import Style
 from .layout import Layout, radial, rectangular, unrooted
-from .render import Canvas
 from .skeleton import draw_branches
-from .style import Style
 from .tree import Tree
 
 Layer = Callable[[Canvas, Tree, Layout, Style], None]

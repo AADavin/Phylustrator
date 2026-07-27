@@ -9,7 +9,7 @@ draws through :func:`phylustrator.skeleton.draw_branches`.
 
 from __future__ import annotations
 
-from ..color import map_values
+from ...color import map_values
 from ..skeleton import draw_branches
 
 

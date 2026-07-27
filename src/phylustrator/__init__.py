@@ -1,31 +1,29 @@
-"""Phylustrator — a lean, composable plotter for phylogenetic trees.
+"""Phylustrator — a lean, composable plotter for phylogenetics: **trees** and **genomes**.
 
-Read a tree, then compose a figure from layers:
+Two domains, one grammar (``plot(x) + layer + …``), one shared drawing backend:
 
-    >>> import phylustrator as ph
-    >>> tree = ph.loads("((A:1,B:1)C:2,D:3)R;")
-    >>> tree.leaves
-    [Node('A', length=1, leaf), Node('B', length=1, leaf), Node('D', length=3, leaf)]
+    import phylustrator as ph
 
-The plotting surface (``plot`` + layers) is being built on top of this foundation.
+    # trees
+    tree = ph.trees.loads("((A:1,B:1)C:2,D:3)R;")
+    (ph.trees.plot(tree) + ph.trees.color_branches(vals) + ph.trees.time_axis()).save("tree.pdf")
+
+    # genomes
+    G = ph.zombi.read_genomes("run")
+    (ph.genomes.plot(G["n12"], layout="circular") + ph.genomes.genes(by="family")).save("ring.png")
+
+    # bridge: a matrix beside a tree
+    ph.beside(ph.trees.plot(tree) + ph.trees.tip_labels(), ph.genomes.heatmap(ph.zombi.read_profiles("run")))
+
+``ph.zombi`` is the only ZOMBI2-format-aware module; ``trees`` / ``genomes`` are general.
 """
 
 from __future__ import annotations
 
-from .figure import Figure, plot
-from .io import dumps, loads, read, write
-from .layers import (branch_events, color_branches, color_history, colorbar, highlight_clade,
-                     legend, note, node_labels, scale_bar, time_axis, time_marker, tip_labels,
-                     tip_track)
+from . import genomes, trees, zombi
+from .compose import Composite, beside
 from .style import Style
-from .tree import Node, Tree
 
 __version__ = "0.1.0.dev0"
 
-__all__ = [
-    "Node", "Tree", "read", "loads", "write", "dumps",
-    "plot", "Figure", "Style",
-    "color_branches", "color_history", "tip_labels", "node_labels", "tip_track", "branch_events",
-    "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "highlight_clade",
-    "__version__",
-]
+__all__ = ["trees", "genomes", "zombi", "beside", "Composite", "Style", "__version__"]

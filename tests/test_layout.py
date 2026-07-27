@@ -2,8 +2,8 @@
 
 import math
 
-from phylustrator import loads
-from phylustrator.layout import radial, rectangular, unrooted
+from phylustrator.trees import loads
+from phylustrator.trees.layout import radial, rectangular, unrooted
 
 
 def test_rectangular_x_is_distance_root_at_zero():

@@ -2,7 +2,7 @@
 
 import pytest
 
-from phylustrator import color_branches, loads, plot
+from phylustrator.trees import color_branches, loads, plot
 
 
 @pytest.mark.parametrize("layout", ["rectangular", "radial", "unrooted"])

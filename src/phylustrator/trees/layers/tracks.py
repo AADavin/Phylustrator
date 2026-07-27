@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from ..color import map_values
+from ...color import map_values
 
 
 def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,

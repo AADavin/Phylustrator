@@ -4,7 +4,7 @@ the differential tests skip if it is absent."""
 
 import pytest
 
-from phylustrator import dumps, loads
+from phylustrator.trees import dumps, loads
 
 # Trees with an explicit length on every non-root branch (topology *and* lengths comparable).
 # NB: quoted labels are tested separately (test_quoted_label_preserved) — ete3 format=1 keeps the

@@ -18,9 +18,7 @@ import tempfile
 from pathlib import Path
 
 from . import __version__
-from .figure import plot
-from .io import read
-from .layers import node_labels, scale_bar, tip_labels, time_axis
+from .trees import node_labels, plot, read, scale_bar, tip_labels, time_axis
 
 
 def _parser() -> argparse.ArgumentParser:
