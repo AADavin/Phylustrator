@@ -64,7 +64,7 @@ def _nice_step(span: float, target: int) -> float:
     exp = math.floor(math.log10(raw))
     base = raw / 10 ** exp
     nice = 1 if base < 1.5 else 2 if base < 3.5 else 5 if base < 7.5 else 10
-    return nice * 10 ** exp
+    return float(nice * 10 ** exp)
 
 
 def _fmt_bp(v: float) -> str:

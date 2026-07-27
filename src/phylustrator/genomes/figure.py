@@ -41,7 +41,7 @@ class Figure:
         base = dict(layout=self.layout, coordinates=self.coordinates, style=self.style,
                     layers=self.layers)
         base.update(kw)
-        return Figure(self.genome, **base)
+        return Figure(self.genome, **base)  # type: ignore[arg-type]  # kw dict, params are typed
 
     def __add__(self, layer: Layer) -> "Figure":
         return self._clone(layers=self.layers + (layer,))
@@ -81,7 +81,7 @@ class StackFigure(Figure):
     def _clone(self, **kw) -> "StackFigure":
         base = dict(coordinates=self.coordinates, style=self.style, layers=self.layers)
         base.update({k: v for k, v in kw.items() if k in ("coordinates", "style", "layers")})
-        return StackFigure(self.genomes, **base)
+        return StackFigure(self.genomes, **base)  # type: ignore[arg-type]  # kw dict, params are typed
 
 
 def plot(genome, *, layout: str = "linear", coordinates: str = "ordered",

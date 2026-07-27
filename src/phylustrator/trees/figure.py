@@ -83,7 +83,7 @@ class Figure:
         layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(self.layout != "rectangular"))
-        tips = [TipPos(leaf.name, canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf)))
+        tips = [TipPos(leaf.name or "", canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf)))
                 for leaf in self.tree.leaves]
         tip_x = max((t.x for t in tips), default=canvas.size[0])
         return Geometry(canvas.size, tips, tip_x)

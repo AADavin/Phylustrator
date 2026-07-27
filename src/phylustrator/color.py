@@ -27,12 +27,12 @@ def to_hex(rgb: tuple[float, float, float]) -> str:
     return "#{:02x}{:02x}{:02x}".format(*(int(max(0, min(255, round(c)))) for c in rgb))
 
 
-def colormap(name: str = "viridis") -> Callable[[float], tuple[int, int, int]]:
+def colormap(name: str = "viridis") -> Callable[[float], tuple[float, float, float]]:
     """Return a sampler ``t in [0, 1] -> (R, G, B)`` that interpolates the named colormap."""
     anchors = _colormap_anchors(name)
     n = len(anchors)
 
-    def sample(t: float) -> tuple[int, int, int]:
+    def sample(t: float) -> tuple[float, float, float]:
         t = max(0.0, min(1.0, float(t)))
         pos = t * (n - 1)
         i = int(math.floor(pos))
@@ -40,7 +40,7 @@ def colormap(name: str = "viridis") -> Callable[[float], tuple[int, int, int]]:
             return anchors[-1]
         frac = pos - i
         a, b = anchors[i], anchors[i + 1]
-        return tuple(a[k] + (b[k] - a[k]) * frac for k in range(3))
+        return (a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac, a[2] + (b[2] - a[2]) * frac)
 
     return sample
 
@@ -76,7 +76,7 @@ def _is_number(v) -> bool:
 
 
 def map_values(values: dict, *, cmap: str = "viridis",
-               palette: dict | None = None) -> tuple[dict, dict]:
+               palette: dict | None = None) -> tuple[dict, dict | None]:
     """Turn ``{key: value}`` into ``({key: hex colour}, scale)``, dispatching on the data: numbers get
     the colormap (and a ``continuous`` scale for a colour bar), labels get a palette (and a
     ``categorical`` scale for a legend). ``scale`` is ``None`` if there is nothing to colour."""

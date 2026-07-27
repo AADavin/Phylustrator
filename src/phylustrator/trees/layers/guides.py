@@ -116,7 +116,7 @@ def _round_nice(v: float) -> float:
     exp = math.floor(math.log10(v))
     base = v / (10 ** exp)
     nice = 1 if base < 1.5 else 2 if base < 3.5 else 5 if base < 7.5 else 10
-    return nice * (10 ** exp)
+    return float(nice * (10 ** exp))
 
 
 def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = None,

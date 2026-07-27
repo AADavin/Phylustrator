@@ -200,7 +200,7 @@ class Canvas:
     # --- output -----------------------------------------------------------
 
     def as_svg(self) -> str:
-        return self._d.as_svg()
+        return str(self._d.as_svg())
 
     def save(self, path: str | Path) -> Path:
         """Write the figure; format follows the extension (``.svg`` direct, ``.pdf`` / ``.png`` via

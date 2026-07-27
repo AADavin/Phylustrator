@@ -26,10 +26,10 @@ __all__ = ["read_genomes", "read_profiles", "read_alignment", "read_events", "re
 
 
 def _genomes_dir(run) -> Path:
-    run = Path(run)
-    if run.is_file():
-        return run.parent
-    return run / "genomes" if (run / "genomes").is_dir() else run
+    p = Path(run)
+    if p.is_file():
+        return p.parent
+    return p / "genomes" if (p / "genomes").is_dir() else p
 
 
 def read_genomes(run) -> dict:
