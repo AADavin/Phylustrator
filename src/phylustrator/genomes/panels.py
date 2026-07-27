@@ -132,9 +132,66 @@ class Alignment:
             x += sw + 6 + fs * 0.8 + 16
 
 
+class States:
+    """A **categorical** matrix panel — each cell coloured by a value→colour ``palette`` (a discrete
+    sibling of :class:`Heatmap`: no gradient, no numeric scale). For character-state / presence–absence
+    matrices beside a tree — e.g. two binary characters shown as two columns of filled / open cells.
+    ``legend_labels`` maps a value to the text shown for it in the key (``{"1": "present"}``)."""
+
+    def __init__(self, matrix, *, palette, legend=True, legend_labels=None, title=None,
+                 col_labels=True, grid="#1a1a1a", other="#c8cdd2"):
+        self.matrix = matrix
+        self.palette = {str(k): v for k, v in palette.items()}
+        self.legend = legend
+        self.legend_labels = {str(k): v for k, v in (legend_labels or {}).items()}
+        self.title = title
+        self.col_labels = col_labels
+        self.grid = grid
+        self.other = other                 # colour for a value not in the palette
+
+    @property
+    def rows(self):
+        return self.matrix.rows
+
+    def draw(self, canvas, x0, x1, rows, style):
+        ncol = len(self.matrix.cols)
+        cw = (x1 - x0) / ncol
+        rh = _row_height(rows)
+        for label, y in rows:
+            for j, v in enumerate(self.matrix.row(label)):
+                canvas.raw_rect(x0 + j * cw, y - rh / 2, cw, rh,
+                                fill=self.palette.get(str(v), self.other),
+                                stroke=self.grid, stroke_width=0.8)
+        top = min(y for _, y in rows) - rh / 2
+        if self.col_labels:
+            for j, c in enumerate(self.matrix.cols):
+                canvas.raw_text(x0 + (j + 0.5) * cw, top - 6, str(c), anchor="middle",
+                                baseline="alphabetic", size=style.font_size, weight="bold")
+        if self.title:
+            canvas.raw_text((x0 + x1) / 2, top - 26, self.title, anchor="middle",
+                            size=style.font_size, weight="bold")
+        if self.legend:
+            self._legend(canvas, x0, max(y for _, y in rows) + rh / 2 + 20, style)
+
+    def _legend(self, canvas, x0, y, style):
+        sw, fs = 20.0, style.font_size
+        x = x0
+        for val, color in self.palette.items():
+            canvas.raw_rect(x, y, sw, sw, fill=color, stroke=self.grid, stroke_width=0.9)
+            text = self.legend_labels.get(val, val)
+            canvas.raw_text(x + sw + 6, y + sw / 2, text, anchor="start", size=fs)
+            x += sw + 6 + fs * 0.62 * len(text) + 18
+
+
 def heatmap(matrix, **kw) -> Heatmap:
     """A heatmap panel for a :class:`~genustrator.matrix.Matrix` (genomes × families)."""
     return Heatmap(matrix, **kw)
+
+
+def states(matrix, **kw) -> States:
+    """A categorical state matrix panel (rows × discrete characters), colours from a value→colour
+    ``palette`` — for presence–absence or discrete character states beside a tree."""
+    return States(matrix, **kw)
 
 
 def alignment(aln, **kw) -> Alignment:

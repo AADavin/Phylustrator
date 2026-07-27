@@ -13,11 +13,11 @@ from .genome import Chromosome, Gene, Genome
 from .io import read_gff
 from .layers import genes, highlight, position_axis, synteny
 from .matrix import Alignment, Matrix
-from .panels import alignment, heatmap
+from .panels import alignment, heatmap, states
 
 __all__ = [
     "Gene", "Chromosome", "Genome", "read_gff",
     "plot", "stack", "Figure", "StackFigure",
     "genes", "synteny", "highlight", "position_axis",
-    "Matrix", "Alignment", "heatmap", "alignment",
+    "Matrix", "Alignment", "heatmap", "alignment", "states",
 ]

@@ -16,6 +16,7 @@ from phylustrator.genomes import (
     plot,
     position_axis,
     stack,
+    states,
     synteny,
 )
 from phylustrator.trees import loads
@@ -63,3 +64,11 @@ def test_alignment_panel_beside_tree():
     tree = tree_plot(loads("(a:1,b:1)R;"))
     aln = Alignment(rows=["a", "b"], seqs={"a": "ACGT", "b": "AGGT"}, kind="nt")
     assert beside(tree, alignment(aln, letters=False)).as_svg().lstrip().startswith("<")
+
+
+def test_states_panel_beside_tree():
+    tree = tree_plot(loads("(a:1,b:1)R;"))
+    m = Matrix(rows=["a", "b"], cols=["X", "Y"], values=[["1", "0"], ["1", "1"]])
+    svg = beside(tree, states(m, palette={"0": "#ffffff", "1": "#1a1a1a"},
+                              legend_labels={"1": "present", "0": "absent"})).as_svg()
+    assert svg.lstrip().startswith("<") and "#1a1a1a" in svg
