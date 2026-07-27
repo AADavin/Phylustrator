@@ -54,7 +54,10 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                 donor, recip = by_name.get(ev.get("donor")), by_name.get(ev.get("recipient"))
                 if donor is None or recip is None:
                     continue
-                canvas.arrow(ev["x"], layout.y(donor), ev["x"], layout.y(recip), color, 1.8)
+                # scale the arrow with `size` (as the point glyphs do) so the head reads as an arrow,
+                # not a tick, on a large figure
+                canvas.arrow(ev["x"], layout.y(donor), ev["x"], layout.y(recip), color,
+                             width=max(1.8, size * 0.42), head=max(9.0, size * 2.4))
             else:
                 node = by_name.get(ev.get("node"))
                 if node is None:
