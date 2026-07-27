@@ -8,7 +8,7 @@ rows. ``heatmap`` shows a :class:`~genustrator.matrix.Matrix`; ``alignment`` sho
 
 from __future__ import annotations
 
-from ..color import colormap, colormap_hex, to_hex
+from ..color import colormap, to_hex
 
 # A clean nucleotide palette; unknown residues fall back to a neutral grey.
 NT_COLORS = {"A": "#3a923a", "C": "#3a6ea5", "G": "#e0a327", "T": "#c1443c",

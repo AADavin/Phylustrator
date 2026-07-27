@@ -9,9 +9,22 @@ from __future__ import annotations
 
 from .figure import Figure, Geometry, TipPos, plot
 from .io import dumps, loads, read, write
-from .layers import (branch_events, color_branches, color_history, color_lanes, colorbar,
-                     highlight_clade, legend, node_labels, note, scale_bar, time_axis, time_marker,
-                     tip_labels, tip_track)
+from .layers import (
+                     branch_events,
+                     color_branches,
+                     color_history,
+                     color_lanes,
+                     colorbar,
+                     highlight_clade,
+                     legend,
+                     node_labels,
+                     note,
+                     scale_bar,
+                     time_axis,
+                     time_marker,
+                     tip_labels,
+                     tip_track,
+)
 from .tree import Node, Tree
 
 __all__ = [
