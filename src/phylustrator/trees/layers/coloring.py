@@ -110,20 +110,28 @@ def color_lanes(lanes, *, width=None, gap: float = 1.0, connectors: bool = True,
             x_start = (x_end - layout.root_branch) if node.is_root else layout.x(node.parent)
             d = node.name in dashed
             end_states = []
-            for (history, palette), oy in zip(lanes, offs_y):
+            for (history, palette), ox, oy in zip(lanes, offs_x, offs_y):
                 yy = y + oy
+                # a lane's own joint sits at x_end + ox and its parent's at x_start + ox; extend the
+                # end segments by |ox| so the horizontal reaches those joints (same colour → the small
+                # overlap is invisible), giving clean corners. Never overshoot the root or the tips.
+                el = abs(ox) if (connectors and not node.is_root) else 0.0
+                er = abs(ox) if (connectors and not node.is_leaf) else 0.0
                 segs = history.get(node.name)
                 if segs:
                     total = sum(dur for _, dur in segs) or 1.0
                     span = x_end - x_start
                     xx = x_start
-                    for state, dur in segs:
+                    last = len(segs) - 1
+                    for k, (state, dur) in enumerate(segs):
                         x1 = xx + span * dur / total
-                        canvas.line(xx, yy, x1, yy, palette.get(state, base), w, dash=d)
+                        canvas.line(xx - (el if k == 0 else 0.0), yy,
+                                    x1 + (er if k == last else 0.0), yy,
+                                    palette.get(state, base), w, dash=d)
                         xx = x1
                     end_states.append(segs[-1][0])
                 else:
-                    canvas.line(x_start, yy, x_end, yy, base, w, dash=d)
+                    canvas.line(x_start - el, yy, x_end + er, yy, base, w, dash=d)
                     end_states.append(None)
             if connectors and not node.is_leaf:      # one joint per lane, coloured by its end state,
                 for (history, palette), ox, oy, es in zip(lanes, offs_x, offs_y, end_states):
