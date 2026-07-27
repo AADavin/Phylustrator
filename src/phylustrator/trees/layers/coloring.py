@@ -76,16 +76,18 @@ def color_history(history, *, palette: dict, width=None, default: str | None = N
     return layer
 
 
-def color_lanes(lanes, *, width=None, gap: float = 1.35, joint: str = "#aab4b2",
-                default: str | None = None, dashed=None):
+def color_lanes(lanes, *, width=None, gap: float = 1.0, connectors: bool = True,
+                joint: str | None = None, default: str | None = None, dashed=None):
     """Paint each branch as several **parallel lanes** — one per trait — so more than one discrete
-    trait shows side by side *on the same branch*. Each lane is a segmented colour history exactly like
-    :func:`color_history` (``{node name: [(state, dur), …]}`` + its own palette), offset across the
-    branch; lane 0 sits on one side, lane 1 the other, and so on. Speciation joints are drawn as one
-    thin ``joint``-coloured link, kept subtle so the coloured lanes read. Rectangular layout only.
+    trait shows side by side *on the same branch*, each branch a stacked two-tone (or n-tone) band.
+    Each lane is a segmented colour history exactly like :func:`color_history` (``{node name:
+    [(state, dur), …]}`` + its own palette), offset across the branch; lane 0 sits on one side, lane 1
+    the other. ``gap`` is the lane spacing in units of the lane width (``1`` = touching, a solid band).
 
-    ``lanes``: a list of ``(history, palette)`` pairs. ``gap`` is the lane spacing in units of the lane
-    width (``1`` = touching). ``dashed`` is an optional set of node names to draw dashed."""
+    Topology: by default the lanes carry their own speciation joints, but the cleanest result is to draw
+    the plain grey skeleton for structure (``plot(tree)`` with ``skeleton=True``) and pass
+    ``connectors=False`` here, so the lanes only paint the horizontal branches and the skeleton shows
+    the tree. Rectangular layout only. ``lanes``: a list of ``(history, palette)`` pairs."""
     dashed = dashed or set()
 
     def layer(canvas, tree, layout, style):
@@ -93,16 +95,20 @@ def color_lanes(lanes, *, width=None, gap: float = 1.35, joint: str = "#aab4b2",
             raise ValueError("color_lanes needs the rectangular layout (segments run along x)")
         w = width or style.branch_width
         n = len(lanes)
-        offs = [(i - (n - 1) / 2.0) * w * gap for i in range(n)]     # centred about the branch
+        # lane widths/offsets are in pixels; y is data-space — convert via the canvas y-scale so the
+        # lanes sit a few pixels apart (a solid band), not whole tree rows apart.
+        ppu = (canvas.py(1.0) - canvas.py(0.0)) or 1.0              # pixels per unit y
+        offs = [(i - (n - 1) / 2.0) * w * gap / ppu for i in range(n)]   # -> data units
         base = default or style.branch_color
         for node in tree.walk():
             y = layout.y(node)
             x_end = layout.x(node)
             x_start = (x_end - layout.root_branch) if node.is_root else layout.x(node.parent)
             d = node.name in dashed
-            if not node.is_leaf:            # a thin subtle joint first, so the lanes overdraw its ends
+            if connectors and not node.is_leaf:      # own joints, in the neutral joint colour
+                jc = joint or style.branch_color
                 for c in node.children:
-                    canvas.line(x_end, y, x_end, layout.y(c), joint, w, dash=(c.name in dashed))
+                    canvas.line(x_end, y, x_end, layout.y(c), jc, w, dash=(c.name in dashed))
             for (history, palette), off in zip(lanes, offs):
                 yy = y + off
                 segs = history.get(node.name)
