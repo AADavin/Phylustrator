@@ -95,22 +95,23 @@ def color_lanes(lanes, *, width=None, gap: float = 1.0, connectors: bool = True,
             raise ValueError("color_lanes needs the rectangular layout (segments run along x)")
         w = width or style.branch_width
         n = len(lanes)
-        # lane widths/offsets are in pixels; y is data-space — convert via the canvas y-scale so the
-        # lanes sit a few pixels apart (a solid band), not whole tree rows apart.
-        ppu = (canvas.py(1.0) - canvas.py(0.0)) or 1.0              # pixels per unit y
-        offs = [(i - (n - 1) / 2.0) * w * gap / ppu for i in range(n)]   # -> data units
+        # lane widths/offsets are in pixels; x, y are data-space — convert via the canvas scales so
+        # the lanes sit a few pixels apart (a solid band), not whole tree rows apart. The horizontals
+        # offset in y, the speciation connectors in x, so each stays a matching stacked band.
+        ppu_y = (canvas.py(1.0) - canvas.py(0.0)) or 1.0
+        ppu_x = (canvas.px(1.0) - canvas.px(0.0)) or 1.0
+        px = [(i - (n - 1) / 2.0) * w * gap for i in range(n)]
+        offs_y = [p / ppu_y for p in px]
+        offs_x = [p / ppu_x for p in px]
         base = default or style.branch_color
         for node in tree.walk():
             y = layout.y(node)
             x_end = layout.x(node)
             x_start = (x_end - layout.root_branch) if node.is_root else layout.x(node.parent)
             d = node.name in dashed
-            if connectors and not node.is_leaf:      # own joints, in the neutral joint colour
-                jc = joint or style.branch_color
-                for c in node.children:
-                    canvas.line(x_end, y, x_end, layout.y(c), jc, w, dash=(c.name in dashed))
-            for (history, palette), off in zip(lanes, offs):
-                yy = y + off
+            end_states = []
+            for (history, palette), oy in zip(lanes, offs_y):
+                yy = y + oy
                 segs = history.get(node.name)
                 if segs:
                     total = sum(dur for _, dur in segs) or 1.0
@@ -120,7 +121,15 @@ def color_lanes(lanes, *, width=None, gap: float = 1.0, connectors: bool = True,
                         x1 = xx + span * dur / total
                         canvas.line(xx, yy, x1, yy, palette.get(state, base), w, dash=d)
                         xx = x1
+                    end_states.append(segs[-1][0])
                 else:
                     canvas.line(x_start, yy, x_end, yy, base, w, dash=d)
+                    end_states.append(None)
+            if connectors and not node.is_leaf:      # one joint per lane, coloured by its end state,
+                for (history, palette), ox, oy, es in zip(lanes, offs_x, offs_y, end_states):
+                    cc = (joint or palette.get(es, base)) if es is not None else (joint or base)
+                    for c in node.children:          # so the speciation verticals match the branches
+                        canvas.line(x_end + ox, y + oy, x_end + ox, layout.y(c) + oy, cc, w,
+                                    dash=(c.name in dashed))
 
     return layer
