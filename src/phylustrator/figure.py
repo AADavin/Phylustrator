@@ -51,7 +51,8 @@ class Figure:
     new figure with one more layer, so a base figure can be reused."""
 
     def __init__(self, tree: Tree, *, layout: str = "rectangular", stem: bool = True,
-                 style: Style | None = None, dashed=None, layers: tuple[Layer, ...] = ()) -> None:
+                 style: Style | None = None, dashed=None, skeleton: bool = True,
+                 layers: tuple[Layer, ...] = ()) -> None:
         if layout not in _LAYOUTS:
             raise ValueError(f"unknown layout {layout!r}; choose from {sorted(_LAYOUTS)}")
         self.tree = tree
@@ -59,18 +60,22 @@ class Figure:
         self.stem = stem
         self.style = style or Style()
         self.dashed = dashed  # node names whose branch is drawn dashed (e.g. extinct lineages)
+        # whether to draw the default-colour base skeleton first. Turn OFF when a colouring layer
+        # paints every branch itself (e.g. color_history), so dashed branches aren't underlaid by a
+        # solid line showing through the gaps.
+        self.skeleton = skeleton
         self.layers = tuple(layers)
 
     def __add__(self, layer: Layer) -> "Figure":
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=self.style,
-                      dashed=self.dashed, layers=self.layers + (layer,))
+                      dashed=self.dashed, skeleton=self.skeleton, layers=self.layers + (layer,))
 
     def with_size(self, width: float, height: float) -> "Figure":
         """A copy of this figure rendered at a given pixel size (same tree, layers, style otherwise).
         Used to fit the tree into a column beside a companion panel."""
         return Figure(self.tree, layout=self.layout, stem=self.stem,
                       style=replace(self.style, width=width, height=height),
-                      dashed=self.dashed, layers=self.layers)
+                      dashed=self.dashed, skeleton=self.skeleton, layers=self.layers)
 
     def geometry(self) -> Geometry:
         """The pixel positions of the tips for this figure's current style — so a companion panel can
@@ -87,7 +92,8 @@ class Figure:
         layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(layout.kind != "rectangular"))
-        _draw_skeleton(canvas, self.tree, layout, self.style, self.dashed)
+        if self.skeleton:
+            _draw_skeleton(canvas, self.tree, layout, self.style, self.dashed)
         for layer in self.layers:
             layer(canvas, self.tree, layout, self.style)
         return canvas
@@ -101,10 +107,12 @@ class Figure:
 
 
 def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
-         style: Style | None = None, dashed=None) -> Figure:
+         style: Style | None = None, dashed=None, skeleton: bool = True) -> Figure:
     """Start a figure for ``tree``. Add layers with ``+``, then :meth:`Figure.save`. ``dashed`` is an
-    optional set of node names whose branches are drawn dashed (e.g. extinct lineages)."""
-    return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed)
+    optional set of node names whose branches are drawn dashed (e.g. extinct lineages). Set
+    ``skeleton=False`` when a colouring layer paints every branch itself (so dashed branches are not
+    underlaid by a solid line)."""
+    return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed, skeleton=skeleton)
 
 
 def _draw_skeleton(canvas: Canvas, tree: Tree, layout: Layout, style: Style, dashed=None) -> None:

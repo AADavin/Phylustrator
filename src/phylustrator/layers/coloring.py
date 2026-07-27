@@ -33,3 +33,44 @@ def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None
                       gradient=(scale["kind"] == "continuous"), dashed=dashed)
 
     return layer
+
+
+def color_history(history, *, palette: dict, width=None, default: str | None = None, dashed=None):
+    """Paint each branch as coloured **segments** from its per-lineage state history — a list of
+    ``(state, duration)`` running from the branch's start to its end. Use this (not
+    :func:`color_branches`) for a discrete trait whose state changes *along* a branch: the branch is a
+    mosaic, not one colour. ``dashed`` is an optional set of node names to draw dashed (e.g. extinct
+    lineages). Rectangular layout only; records the palette so ``legend`` can draw.
+    ``history``: ``{node name: [(state, dur), …]}``."""
+    dashed = dashed or set()
+
+    def layer(canvas, tree, layout, style):
+        if layout.kind != "rectangular":
+            raise ValueError("color_history needs the rectangular layout (segments run along x)")
+        w = width or style.branch_width
+        canvas.scale = {"kind": "categorical", "palette": dict(palette)}
+        base = default or style.branch_color
+        for node in tree.walk():
+            y = layout.y(node)
+            x_end = layout.x(node)
+            x_start = (x_end - layout.root_branch) if node.is_root else layout.x(node.parent)
+            d = node.name in dashed
+            segs = history.get(node.name)
+            end_state = None
+            if segs:
+                total = sum(dur for _, dur in segs) or 1.0
+                span = x_end - x_start
+                xx = x_start
+                for state, dur in segs:
+                    x1 = xx + span * dur / total
+                    canvas.line(xx, y, x1, y, palette.get(state, base), w, dash=d)
+                    xx = x1
+                end_state = segs[-1][0]
+            else:
+                canvas.line(x_start, y, x_end, y, base, w, dash=d)
+            if not node.is_leaf:                              # connectors in the node's end state
+                cc = palette.get(end_state, base)
+                for c in node.children:
+                    canvas.line(x_end, y, x_end, layout.y(c), cc, w, dash=(c.name in dashed))
+
+    return layer

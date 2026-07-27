@@ -6,21 +6,24 @@ Each layer is a callable ``(canvas, tree, layout, style) -> None``. Import them 
 """
 
 from .clades import highlight_clade
-from .coloring import color_branches
+from .coloring import color_branches, color_history
 from .events import branch_events
-from .guides import colorbar, legend, scale_bar, time_axis
+from .guides import colorbar, legend, note, scale_bar, time_axis, time_marker
 from .labels import node_labels, tip_labels
 from .tracks import tip_track
 
 __all__ = [
     "color_branches",
+    "color_history",
     "tip_labels",
     "node_labels",
     "tip_track",
     "branch_events",
     "colorbar",
     "legend",
+    "note",
     "time_axis",
+    "time_marker",
     "scale_bar",
     "highlight_clade",
 ]

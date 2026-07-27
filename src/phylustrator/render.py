@@ -9,6 +9,7 @@ through cairosvg, falling back to ``.svg`` (with a note) when it is absent.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import drawsvg as draw
@@ -101,12 +102,16 @@ class Canvas:
 
     def raw_marker(self, cx, cy, shape: str, color: str, size: float, *,
                    stroke: str = "#ffffff", stroke_width: float = 0.8) -> None:
-        """A small filled glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` /
-        ``diamond`` (for point markers such as events or a legend key)."""
+        """A small glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` / ``diamond``
+        (filled) or ``cross`` (an ✕, for a loss)."""
         r = size
         if shape == "square":
             self._d.append(draw.Rectangle(cx - r, cy - r, 2 * r, 2 * r, fill=color,
                                           stroke=stroke, stroke_width=stroke_width))
+        elif shape == "cross":
+            for a, b, c, d in ((-r, -r, r, r), (-r, r, r, -r)):
+                self._d.append(draw.Line(cx + a, cy + b, cx + c, cy + d, stroke=color,
+                                         stroke_width=max(1.6, r * 0.55), stroke_linecap="round"))
         elif shape in ("triangle", "diamond"):
             pts = ([(cx, cy - r), (cx + r, cy + r * 0.85), (cx - r, cy + r * 0.85)]
                    if shape == "triangle"
@@ -120,6 +125,23 @@ class Canvas:
     def marker(self, x, y, shape: str, color: str, size: float, **kw) -> None:
         """A glyph placed at *data* coordinates (see :meth:`raw_marker`)."""
         self.raw_marker(self.px(x), self.py(y), shape, color, size, **kw)
+
+    def arrow(self, x0, y0, x1, y1, color: str, width: float, *, curve: float = 20.0,
+              head: float = 8.0) -> None:
+        """A curved arrow from *data* ``(x0, y0)`` to ``(x1, y1)``, head at the end — e.g. a gene
+        transfer from a donor lineage to a recipient lineage."""
+        ax, ay, bx, by = self.px(x0), self.py(y0), self.px(x1), self.py(y1)
+        dx, dy = bx - ax, by - ay
+        L = math.hypot(dx, dy) or 1.0
+        cx, cy = (ax + bx) / 2 - dy / L * curve, (ay + by) / 2 + dx / L * curve   # bow sideways
+        p = draw.Path(fill="none", stroke=color, stroke_width=width)
+        p.M(ax, ay).Q(cx, cy, bx, by)
+        self._d.append(p)
+        ang = math.atan2(by - cy, bx - cx)                                        # tangent at the tip
+        for s in (0.5, -0.5):
+            self._d.append(draw.Line(bx, by, bx - head * math.cos(ang - s),
+                                     by - head * math.sin(ang - s), stroke=color,
+                                     stroke_width=width, stroke_linecap="round"))
 
     def gradient_bar(self, cmap: str, x, y, w, h) -> None:
         """A horizontal rectangle filled with the multi-stop gradient of ``cmap``."""

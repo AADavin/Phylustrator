@@ -41,8 +41,11 @@ def _rectangular(canvas, tree, layout, color, width, gradient, dashed) -> None:
         else:
             _branch(canvas, layout.x(node.parent), y, x, y, color(node.parent), cn, width, gradient, dash=d)
         if not node.is_leaf:
-            child_ys = [layout.y(c) for c in node.children]
-            canvas.line(x, min(child_ys), x, max(child_ys), cn, width, dash=d)       # connector
+            # Split the vertical connector per child: the segment descending into an extinct
+            # (dashed) clade is dashed too, instead of one solid bar drawn straight across an
+            # extinction. Each segment runs from this node's y to the child's y (they meet at y).
+            for c in node.children:
+                canvas.line(x, y, x, layout.y(c), cn, width, dash=(c.name in dashed))  # connector
 
 
 def _radial(canvas, tree, layout, color, width, gradient, dashed) -> None:
