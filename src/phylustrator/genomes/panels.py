@@ -192,9 +192,62 @@ class States:
             x += sw + 6 + fs * 0.62 * len(text) + 18
 
 
+class Bars:
+    """A per-row **bar** panel — one horizontal bar per tree tip, its length ∝ the tip's value. For a
+    per-tip scalar beside a tree (a genome size, a count, a rate). ``values`` is ``{row label: number}``;
+    ``colors`` optionally tints the bar per row (e.g. by a trait), else the flat ``color``. ``max_value``
+    fixes the scale (default: the largest value); ``label`` names the axis."""
+
+    def __init__(self, values, *, color="#6a9bd8", colors=None, max_value=None, label="", axis=True,
+                 tick_size=None, label_size=None):
+        self.values = {str(k): float(v) for k, v in values.items()}
+        self.color = color
+        self.colors = {str(k): v for k, v in colors.items()} if colors else None
+        self.max_value = max_value
+        self.label = label
+        self.axis = axis
+        self.tick_size = tick_size          # axis tick font (default: from the style)
+        self.label_size = label_size        # axis label font (default: from the style)
+
+    @property
+    def rows(self):
+        return list(self.values)
+
+    def draw(self, canvas, x0, x1, rows, style):
+        vmax = self.max_value or max(self.values.values(), default=1.0) or 1.0
+        rh = _row_height(rows)
+        span = x1 - x0
+        for label, y in rows:
+            w = span * min(max(self.values.get(label, 0.0) / vmax, 0.0), 1.0)
+            fill = (self.colors or {}).get(label, self.color)
+            canvas.raw_rect(x0, y - rh / 2, w, rh, fill=fill, stroke="#ffffff", stroke_width=0.6)
+        if self.axis:
+            # +14 below the bottom tip — the exact offset trees.time_axis uses, so in a beside()
+            # composite a tree's time axis and this axis land at the identical y (and share the tick /
+            # label offsets below), giving two perfectly aligned, same-size axes
+            self._axis(canvas, x0, x1, max(y for _, y in rows) + 14, vmax, style)
+
+    def _axis(self, canvas, x0, x1, y, vmax, style):
+        ts = self.tick_size or style.font_size * 0.85
+        ls = self.label_size or style.font_size
+        canvas.raw_line(x0, y, x1, y, "#333333", 1.2)          # match trees.time_axis exactly
+        for frac in (0.0, 0.5, 1.0):
+            tx = x0 + (x1 - x0) * frac
+            canvas.raw_line(tx, y, tx, y + 5, "#333333", 1.2)
+            canvas.raw_text(tx, y + ts + 3, f"{round(vmax * frac)}", anchor="middle", size=ts)
+        if self.label:
+            canvas.raw_text((x0 + x1) / 2, y + ts + ls + 4, self.label, anchor="middle", size=ls)
+
+
 def heatmap(matrix, **kw) -> Heatmap:
     """A heatmap panel for a :class:`~genustrator.matrix.Matrix` (genomes × families)."""
     return Heatmap(matrix, **kw)
+
+
+def bars(values, **kw) -> Bars:
+    """A bar panel — one horizontal bar per tree tip, length ∝ value. For a per-tip scalar (a genome
+    size, a count) beside a tree; ``colors`` tints bars per row (e.g. by a trait)."""
+    return Bars(values, **kw)
 
 
 def states(matrix, **kw) -> States:

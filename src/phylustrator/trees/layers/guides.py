@@ -120,11 +120,12 @@ def _round_nice(v: float) -> float:
 
 
 def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = None,
-              label_size: float | None = None):
+              label_size: float | None = None, bold: bool | None = None):
     """A horizontal scale along the bottom, in the layout's distance units (0 at the origin).
     Rectangular only (distance maps to x); use ``scale_bar`` for radial/unrooted. ``tick_size`` /
     ``label_size`` set the tick-number and axis-label font sizes (default: the style's font size);
-    the vertical spacing follows the font, so give the figure enough bottom ``margin`` for big text."""
+    the vertical spacing follows the font, so give the figure enough bottom ``margin`` for big text.
+    ``bold`` sets the label weight (default: bold only when a ``label_size`` is given)."""
 
     def layer(canvas, tree, layout, style):
         if layout.kind != "rectangular":
@@ -143,7 +144,8 @@ def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = 
             canvas.raw_text(tx, y + ts + 3, f"{t:.2g}", anchor="middle", size=ts)
         if label:
             mid = (canvas.px(x0) + canvas.px(x1)) / 2
-            weight = "bold" if label_size is not None else "normal"
+            is_bold = (label_size is not None) if bold is None else bold
+            weight = "bold" if is_bold else "normal"
             canvas.raw_text(mid, y + ts + ls + 4, label, anchor="middle", size=ls, weight=weight)
 
     return layer

@@ -11,6 +11,7 @@ from phylustrator.genomes import (
     Genome,
     Matrix,
     alignment,
+    bars,
     genes,
     heatmap,
     plot,
@@ -86,3 +87,10 @@ def test_states_panel_needs_a_palette():
     m = Matrix(rows=["a"], cols=["X"], values=[["1"]])
     with pytest.raises(ValueError):
         states(m)
+
+
+def test_bars_panel_beside_tree():
+    tree = tree_plot(loads("(a:1,b:1)R;"))
+    svg = beside(tree, bars({"a": 10.0, "b": 4.0}, colors={"a": "#123456"},
+                            label="size", tick_size=12, label_size=14)).as_svg()
+    assert svg.lstrip().startswith("<") and "#123456" in svg   # a per-row bar was coloured
