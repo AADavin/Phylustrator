@@ -24,6 +24,6 @@ from . import genomes, trees, zombi
 from .compose import Composite, beside
 from .style import Style
 
-__version__ = "0.1.0.dev0"
+__version__ = "0.1.0"
 
 __all__ = ["trees", "genomes", "zombi", "beside", "Composite", "Style", "__version__"]
