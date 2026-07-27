@@ -74,3 +74,47 @@ def color_history(history, *, palette: dict, width=None, default: str | None = N
                     canvas.line(x_end, y, x_end, layout.y(c), cc, w, dash=(c.name in dashed))
 
     return layer
+
+
+def color_lanes(lanes, *, width=None, gap: float = 1.35, joint: str = "#aab4b2",
+                default: str | None = None, dashed=None):
+    """Paint each branch as several **parallel lanes** — one per trait — so more than one discrete
+    trait shows side by side *on the same branch*. Each lane is a segmented colour history exactly like
+    :func:`color_history` (``{node name: [(state, dur), …]}`` + its own palette), offset across the
+    branch; lane 0 sits on one side, lane 1 the other, and so on. Speciation joints are drawn as one
+    thin ``joint``-coloured link, kept subtle so the coloured lanes read. Rectangular layout only.
+
+    ``lanes``: a list of ``(history, palette)`` pairs. ``gap`` is the lane spacing in units of the lane
+    width (``1`` = touching). ``dashed`` is an optional set of node names to draw dashed."""
+    dashed = dashed or set()
+
+    def layer(canvas, tree, layout, style):
+        if layout.kind != "rectangular":
+            raise ValueError("color_lanes needs the rectangular layout (segments run along x)")
+        w = width or style.branch_width
+        n = len(lanes)
+        offs = [(i - (n - 1) / 2.0) * w * gap for i in range(n)]     # centred about the branch
+        base = default or style.branch_color
+        for node in tree.walk():
+            y = layout.y(node)
+            x_end = layout.x(node)
+            x_start = (x_end - layout.root_branch) if node.is_root else layout.x(node.parent)
+            d = node.name in dashed
+            if not node.is_leaf:            # a thin subtle joint first, so the lanes overdraw its ends
+                for c in node.children:
+                    canvas.line(x_end, y, x_end, layout.y(c), joint, w, dash=(c.name in dashed))
+            for (history, palette), off in zip(lanes, offs):
+                yy = y + off
+                segs = history.get(node.name)
+                if segs:
+                    total = sum(dur for _, dur in segs) or 1.0
+                    span = x_end - x_start
+                    xx = x_start
+                    for state, dur in segs:
+                        x1 = xx + span * dur / total
+                        canvas.line(xx, yy, x1, yy, palette.get(state, base), w, dash=d)
+                        xx = x1
+                else:
+                    canvas.line(x_start, yy, x_end, yy, base, w, dash=d)
+
+    return layer

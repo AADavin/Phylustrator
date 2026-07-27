@@ -138,10 +138,15 @@ class States:
     matrices beside a tree — e.g. two binary characters shown as two columns of filled / open cells.
     ``legend_labels`` maps a value to the text shown for it in the key (``{"1": "present"}``)."""
 
-    def __init__(self, matrix, *, palette, legend=True, legend_labels=None, title=None,
-                 col_labels=True, grid="#1a1a1a", other="#c8cdd2"):
+    def __init__(self, matrix, *, palette=None, col_palettes=None, legend=True, legend_labels=None,
+                 title=None, col_labels=True, grid="#1a1a1a", other="#c8cdd2"):
+        if palette is None and col_palettes is None:
+            raise ValueError("states() needs palette= (one for all columns) or col_palettes= (per column)")
+        self.palette = {str(k): v for k, v in palette.items()} if palette else None
+        # a per-column palette overrides the shared one for that column (e.g. one trait per column)
+        self.col_palettes = ([{str(k): v for k, v in p.items()} for p in col_palettes]
+                             if col_palettes else None)
         self.matrix = matrix
-        self.palette = {str(k): v for k, v in palette.items()}
         self.legend = legend
         self.legend_labels = {str(k): v for k, v in (legend_labels or {}).items()}
         self.title = title
@@ -153,6 +158,10 @@ class States:
     def rows(self):
         return self.matrix.rows
 
+    def _fill(self, j, v):
+        pal = self.col_palettes[j] if self.col_palettes else self.palette
+        return pal.get(str(v), self.other)
+
     def draw(self, canvas, x0, x1, rows, style):
         ncol = len(self.matrix.cols)
         cw = (x1 - x0) / ncol
@@ -160,7 +169,7 @@ class States:
         for label, y in rows:
             for j, v in enumerate(self.matrix.row(label)):
                 canvas.raw_rect(x0 + j * cw, y - rh / 2, cw, rh,
-                                fill=self.palette.get(str(v), self.other),
+                                fill=self._fill(j, v),
                                 stroke=self.grid, stroke_width=0.8)
         top = min(y for _, y in rows) - rh / 2
         if self.col_labels:
@@ -170,7 +179,7 @@ class States:
         if self.title:
             canvas.raw_text((x0 + x1) / 2, top - 26, self.title, anchor="middle",
                             size=style.font_size, weight="bold")
-        if self.legend:
+        if self.legend and self.palette:      # a shared-palette key; per-column panels label elsewhere
             self._legend(canvas, x0, max(y for _, y in rows) + rh / 2 + 20, style)
 
     def _legend(self, canvas, x0, y, style):

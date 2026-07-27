@@ -2,7 +2,7 @@
 
 import pytest
 
-from phylustrator.trees import color_branches, loads, plot
+from phylustrator.trees import color_branches, color_lanes, loads, plot
 
 
 @pytest.mark.parametrize("layout", ["rectangular", "radial", "unrooted"])
@@ -35,6 +35,22 @@ def test_color_branches_dashed():
     tree = loads("((A:1,B:1)C:1,D:2)R;")
     svg = (plot(tree) + color_branches({"A": 1.0, "B": 2.0, "C": 1.5, "D": 0.5}, dashed={"A", "B"})).as_svg()
     assert "stroke-dasharray" in svg   # coloured branches can still be dashed
+
+
+def test_color_lanes_paints_two_traits():
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    names = ("A", "B", "C", "D", "R")
+    x = {n: [("1", 1.0)] for n in names}          # trait X present everywhere
+    y = {n: [("0", 1.0)] for n in names}          # trait Y absent everywhere
+    svg = (plot(tree, skeleton=False)
+           + color_lanes([(x, {"1": "#123456"}), (y, {"0": "#abcdef"})])).as_svg()
+    assert "#123456" in svg and "#abcdef" in svg   # both lanes drawn
+
+
+def test_color_lanes_needs_rectangular():
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    with pytest.raises(ValueError):
+        (plot(tree, layout="radial") + color_lanes([({}, {})])).as_svg()
 
 
 def test_composable_grammar_returns_new_figure():

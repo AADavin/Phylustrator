@@ -72,3 +72,17 @@ def test_states_panel_beside_tree():
     svg = beside(tree, states(m, palette={"0": "#ffffff", "1": "#1a1a1a"},
                               legend_labels={"1": "present", "0": "absent"})).as_svg()
     assert svg.lstrip().startswith("<") and "#1a1a1a" in svg
+
+
+def test_states_panel_per_column_palettes():
+    tree = tree_plot(loads("(a:1,b:1)R;"))
+    m = Matrix(rows=["a", "b"], cols=["X", "Y"], values=[["1", "1"], ["0", "0"]])
+    svg = beside(tree, states(m, col_palettes=[{"1": "#2E6E8E"}, {"1": "#C55A3B"}],
+                              legend=False)).as_svg()          # each column its own trait colour
+    assert "#2E6E8E" in svg and "#C55A3B" in svg
+
+
+def test_states_panel_needs_a_palette():
+    m = Matrix(rows=["a"], cols=["X"], values=[["1"]])
+    with pytest.raises(ValueError):
+        states(m)
