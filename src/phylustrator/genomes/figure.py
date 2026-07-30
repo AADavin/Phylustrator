@@ -35,7 +35,7 @@ class Figure:
         self.layers = tuple(layers)
 
     def _make_layout(self) -> Layout:
-        return _LAYOUTS[self.layout](self.genome, coordinates=self.coordinates)
+        return _LAYOUTS[self.layout](self.genome, coordinates=self.coordinates, style=self.style)
 
     def _clone(self, **kw) -> "Figure":
         base = dict(layout=self.layout, coordinates=self.coordinates, style=self.style,
@@ -76,7 +76,7 @@ class StackFigure(Figure):
         self.genome = self.genomes[0] if self.genomes else None
 
     def _make_layout(self) -> Layout:
-        return stacked(self.genomes, coordinates=self.coordinates)
+        return stacked(self.genomes, coordinates=self.coordinates, style=self.style)
 
     def _clone(self, **kw) -> "StackFigure":
         base = dict(coordinates=self.coordinates, style=self.style, layers=self.layers)
@@ -99,8 +99,9 @@ def _draw_base(canvas: Canvas, layout: Layout, style: Style) -> None:
     """The base map: a faint backbone per track, and the gene arrows in the default colour (a
     ``genes`` layer overdraws them coloured)."""
     if layout.kind == "circular":
-        for R in layout.rings or []:
-            canvas.data_ring(R, "#d8ddda", 1.4)
+        if getattr(style, "ring_backbone", True):
+            for R in layout.rings or []:
+                canvas.data_ring(R, "#c9d2ce", 1.2, dash=True)   # a faint dashed loop behind the genes
     else:
         for y, x0, x1 in layout.backbones:
             canvas.line(x0, y, x1, y, "#d8ddda", 1.4)

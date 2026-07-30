@@ -43,17 +43,27 @@ def _arc(a0: float, a1: float, r: float, step: float = 0.12):
 
 
 def _draw_circular(canvas, layout, color, style) -> None:
+    """Each gene an arrow bent along its ring. ``gene_style="arrow"`` (default) is a chunky body with a
+    flared arrowhead (head wider than the body, tapering to a point — the beautiful genome look);
+    ``"wedge"`` is the thin, un-flared shape."""
     hh = layout.ring_hh
+    chunky = getattr(style, "gene_style", "arrow") != "wedge"
+    head_hh = hh * 1.5 if chunky else hh        # arrowhead half-thickness (flared past the body)
     for gene in layout.genes:
         a0, a1, R = layout.box(gene)
         ri, ro = R - hh, R + hh
         span = a1 - a0
-        tip = 0.4 * span                       # angular length of the arrowhead
+        tip = min(0.45 * span, math.radians(11.0))   # arrowhead angular length (capped for long genes)
         if gene.strand >= 0:                    # arrow points toward a1
             base = a1 - tip
-            pts = _arc(a0, base, ro) + [_polar(a1, R)] + _arc(base, a0, ri)
+            pts = (_arc(a0, base, ro)
+                   + [_polar(base, R + head_hh), _polar(a1, R), _polar(base, R - head_hh)]
+                   + _arc(base, a0, ri))
         else:                                   # arrow points toward a0
             base = a0 + tip
-            pts = _arc(base, a1, ro) + _arc(a1, base, ri) + [_polar(a0, R)]
+            pts = ([_polar(a0, R), _polar(base, R + head_hh)]
+                   + _arc(base, a1, ro)
+                   + _arc(a1, base, ri)
+                   + [_polar(base, R - head_hh)])
         canvas.polygon(pts, fill=color(gene), stroke=style.gene_stroke,
                        stroke_width=style.gene_stroke_width)

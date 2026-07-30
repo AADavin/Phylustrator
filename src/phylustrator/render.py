@@ -104,14 +104,14 @@ class Canvas:
 
     # --- genome primitives (gene arrows, synteny ribbons, coordinate rings, embedded rasters) ---
 
-    def polygon(self, points, *, fill, stroke="none", stroke_width=0.0) -> None:
+    def polygon(self, points, *, fill, stroke="none", stroke_width=0.0, opacity=1.0) -> None:
         """A filled polygon; ``points`` are ``(x, y)`` in *data* coordinates (gene arrows)."""
         flat = []
         for x, y in points:
             flat.append(self.px(x))
             flat.append(self.py(y))
-        self._d.append(draw.Lines(*flat, fill=fill, stroke=stroke, stroke_width=stroke_width,
-                                  close=True))
+        self._d.append(draw.Lines(*flat, fill=fill, fill_opacity=opacity, stroke=stroke,
+                                  stroke_width=stroke_width, close=True))
 
     def ribbon(self, xa0, xa1, ya, xb0, xb1, yb, *, fill: str, opacity: float = 0.32,
                stroke: str = "none") -> None:

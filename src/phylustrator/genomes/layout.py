@@ -39,7 +39,7 @@ class Layout:
         return self.boxes[id(gene)]
 
 
-def linear(genome, *, coordinates: str = "ordered", gap: float = 0.16) -> Layout:
+def linear(genome, *, coordinates: str = "ordered", gap: float = 0.16, style=None) -> Layout:
     """Genes on one horizontal track per chromosome."""
     boxes, owner, backbones, placed = {}, {}, [], []
     for row, chrom in enumerate(genome.chromosomes):
@@ -62,7 +62,7 @@ def linear(genome, *, coordinates: str = "ordered", gap: float = 0.16) -> Layout
 
 
 def stacked(genomes, *, coordinates: str = "ordered", gap: float = 0.16,
-            chrom_gap: float = 1.0) -> Layout:
+            chrom_gap: float = 1.0, style=None) -> Layout:
     """Several genomes, one horizontal track each (top genome first). Chromosomes of a genome sit
     left-to-right on its track separated by ``chrom_gap``. Same-family genes line up by colour, and a
     ``synteny`` layer links them between adjacent tracks."""
@@ -91,7 +91,7 @@ def stacked(genomes, *, coordinates: str = "ordered", gap: float = 0.16,
 
 def circular(genome, *, coordinates: str = "ordered", gap: float = 0.16,
              start_deg: float = 90.0, break_deg: float = 0.0,
-             band: float = 0.34, ring_gap: float = 0.10, min_deg: float = 2.2) -> Layout:
+             band: float = 0.34, ring_gap: float = 0.10, min_deg: float = 2.2, style=None) -> Layout:
     """Genes wrapped onto a ring, one concentric ring per chromosome (chromosome 0 outermost).
 
     Angles sweep **clockwise** from the top. By default the ring is closed (``break_deg=0``) so genes
@@ -111,6 +111,7 @@ def circular(genome, *, coordinates: str = "ordered", gap: float = 0.16,
         totals.append(total)
         # cap the minimum arc so a gene-dense genome (a real GFF) never forces genes to overlap
         min_arc = min(math.radians(min_deg), 0.9 * sweep / max(n, 1))
+        _ = style  # (thickness is read from style at draw time via ring_hh below)
         for rank, gene in enumerate(chrom.genes):        # rank, so "ordered" is even with no holes
             lo_v, hi_v = (float(gene.start), float(gene.end)) if nuc \
                 else (rank + gap / 2.0, rank + 1.0 - gap / 2.0)
@@ -122,7 +123,8 @@ def circular(genome, *, coordinates: str = "ordered", gap: float = 0.16,
             boxes[id(gene)] = (a0, a1, R)
             owner[id(gene)] = (genome, chrom)
             placed.append(gene)
-    hh = band * 0.11                            # thin arrow band so arrowheads read on the ring
+    frac = getattr(style, "ring_gene_frac", 0.42) if style is not None else 0.42
+    hh = band * frac                            # gene half-thickness (chunky by default; style-controlled)
     outer = (rings[0] if rings else 1.0) + hh
     lim = (-outer, outer)
     return Layout("circular", boxes, lim, lim, rows=len(genome.chromosomes),
