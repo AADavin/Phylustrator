@@ -8,20 +8,27 @@ All three draw in pixel space at a fixed spot on the page.
 from __future__ import annotations
 
 
-def colorbar(title: str = "", *, width: float = 130.0, height: float = 10.0,
+def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, height: float = 10.0,
              size: float | None = None):
-    """A gradient bar for a continuous scale, top-left. ``size`` sets the label font (default the
-    style's). No-op unless a continuous scale was set."""
+    """A gradient bar for a continuous scale, pinned to a left corner (``"top-left"`` default or
+    ``"bottom-left"`` — to clear the tree). ``size`` sets the label font (default the style's). No-op
+    unless a continuous scale was set."""
 
     def layer(canvas, tree, layout, style):
         scale = canvas.scale
         if not scale or scale.get("kind") != "continuous":
             return
+        _, h = canvas.size
         m = style.margin
         fs = size if size is not None else style.font_size
-        x, y = m, m + fs
+        x = m
+        if "bottom" in loc:
+            y = h - m * 0.5 - height - fs * 0.9        # bar top, leaving room for the min/max labels
+            title_y = y - fs * 0.6 - 2
+        else:
+            y, title_y = m + fs, m - 2
         if title:
-            canvas.raw_text(x, m - 2, title, anchor="start", weight="bold", size=fs)
+            canvas.raw_text(x, title_y, title, anchor="start", weight="bold", size=fs)
         canvas.gradient_bar(scale["cmap"], x, y, width, height)
         canvas.raw_text(x, y + height + fs * 0.9, f"{scale['vmin']:.2f}", anchor="start", size=fs * 0.9)
         canvas.raw_text(x + width, y + height + fs * 0.9, f"{scale['vmax']:.2f}", anchor="end", size=fs * 0.9)
