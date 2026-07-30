@@ -48,12 +48,14 @@ def _draw_circular(canvas, layout, color, style) -> None:
     ``"wedge"`` is the thin, un-flared shape."""
     hh = layout.ring_hh
     chunky = getattr(style, "gene_style", "arrow") != "wedge"
-    head_hh = hh * 1.5 if chunky else hh        # arrowhead half-thickness (flared past the body)
     for gene in layout.genes:
         a0, a1, R = layout.box(gene)
         ri, ro = R - hh, R + hh
         span = a1 - a0
         tip = min(0.45 * span, math.radians(11.0))   # arrowhead angular length (capped for long genes)
+        # flare the head past the body only when the tip has angular room; on a gene-dense ring the
+        # tip is tiny, so a fixed flare would stick out as a radial thorn — cap it to the tip's arc.
+        head_hh = max(hh, min(hh * 1.5, R * tip)) if chunky else hh
         if gene.strand >= 0:                    # arrow points toward a1
             base = a1 - tip
             pts = (_arc(a0, base, ro)
