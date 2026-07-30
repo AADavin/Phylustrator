@@ -123,8 +123,11 @@ def circular(genome, *, coordinates: str = "ordered", gap: float = 0.16,
             boxes[id(gene)] = (a0, a1, R)
             owner[id(gene)] = (genome, chrom)
             placed.append(gene)
-    frac = getattr(style, "ring_gene_frac", 0.42) if style is not None else 0.42
-    hh = band * frac                            # gene half-thickness (chunky by default; style-controlled)
+    gstyle = getattr(style, "gene_style", "arrow") if style is not None else "arrow"
+    frac = getattr(style, "ring_gene_frac", None) if style is not None else None
+    if frac is None:                            # chunky "arrow" vs the classic thin "wedge"
+        frac = 0.11 if gstyle == "wedge" else 0.30
+    hh = band * frac                            # gene half-thickness
     outer = (rings[0] if rings else 1.0) + hh
     lim = (-outer, outer)
     return Layout("circular", boxes, lim, lim, rows=len(genome.chromosomes),

@@ -22,9 +22,9 @@ class Style:
     gene_stroke: str = "#2a2a2a"
     gene_stroke_width: float = 0.7
     default_color: str = "#9fb2ac"
-    gene_style: str = "arrow"           # circular gene shape: "arrow" (chunky, flared head) or "wedge" (thin)
-    ring_gene_frac: float = 0.30        # circular: gene half-thickness as a fraction of the per-ring band
-    ring_backbone: bool = True          # circular: draw the faint dashed backbone loop behind the genes
+    gene_style: str = "arrow"           # circular gene shape: "arrow" (chunky, flared head, dashed backbone) or "wedge" (the classic thin genes on a solid backbone)
+    ring_gene_frac: float | None = None  # circular gene half-thickness (fraction of the per-ring band); None → 0.30 for "arrow", 0.11 for "wedge"
+    ring_backbone: bool = True          # circular: draw the backbone loop behind the genes
     # shared text / background
     font_family: str = "Helvetica"
     font_size: float = 12.0

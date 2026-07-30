@@ -100,8 +100,10 @@ def _draw_base(canvas: Canvas, layout: Layout, style: Style) -> None:
     ``genes`` layer overdraws them coloured)."""
     if layout.kind == "circular":
         if getattr(style, "ring_backbone", True):
+            dash = getattr(style, "gene_style", "arrow") != "wedge"     # arrow: dashed loop; wedge: the classic solid one
+            color, width = ("#c9d2ce", 1.2) if dash else ("#d8ddda", 1.4)
             for R in layout.rings or []:
-                canvas.data_ring(R, "#c9d2ce", 1.2, dash=True)   # a faint dashed loop behind the genes
+                canvas.data_ring(R, color, width, dash=dash)
     else:
         for y, x0, x1 in layout.backbones:
             canvas.line(x0, y, x1, y, "#d8ddda", 1.4)

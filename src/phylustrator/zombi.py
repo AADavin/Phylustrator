@@ -109,8 +109,9 @@ def read_profiles(run, *, transpose: bool = True) -> Matrix:
 
 
 def read_alignment(run, family, *, kind: str = "nt") -> Alignment:
-    """One gene ``family``'s alignment, **keyed by genome**: each gene-copy header (``g1200``) is mapped
-    back to its genome (``n12``) via ``gene_order.tsv``, so rows line up with a species tree."""
+    """One gene ``family``'s alignment, **keyed by genome**, so rows line up with a species tree. A
+    FASTA header is mapped back to its genome via ``gene_order.tsv`` — accepting both the bare copy id
+    (``g1200``) and the genome-qualified form ZOMBI2 now writes (``n12_g1200``)."""
     run = Path(run)
     gdir = _genomes_dir(run)
     adir = run / "sequences" / "alignments"
@@ -118,6 +119,15 @@ def read_alignment(run, family, *, kind: str = "nt") -> Alignment:
         adir = run / "alignments"
     with open(gdir / "gene_order.tsv") as handle:
         copy2genome = {r["copy"]: r["lineage"] for r in csv.DictReader(handle, delimiter="\t")}
+
+    def genome_of(header: str) -> str:
+        if header in copy2genome:                       # bare copy id, e.g. "g1200"
+            return copy2genome[header]
+        copy = header.rsplit("_", 1)[-1]                # "n12_g1200" -> copy "g1200"
+        if copy in copy2genome:
+            return copy2genome[copy]
+        return header.rsplit("_g", 1)[0] if "_g" in header else header   # last resort: the "n12" prefix
+
     seqs, name = {}, None
     raw: dict[str, list] = {}
     for line in open(adir / f"fam{family}.fasta"):
@@ -127,7 +137,7 @@ def read_alignment(run, family, *, kind: str = "nt") -> Alignment:
             raw[name] = []
         elif name is not None:
             raw[name].append(line.strip())
-    seqs = {copy2genome.get(copy, copy): "".join(v) for copy, v in raw.items()}
+    seqs = {genome_of(header): "".join(v) for header, v in raw.items()}
     return Alignment(rows=list(seqs), seqs=seqs, kind=kind)
 
 
