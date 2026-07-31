@@ -71,20 +71,34 @@ def normalize(values: Iterable[float]) -> tuple[float, float, Callable[[float], 
     return vmin, vmax, lambda v: (float(v) - vmin) / span
 
 
+def _clamped_unit(lo: float, span: float) -> Callable[[float], float]:
+    """``to_unit`` for a range given rather than derived: values outside it clamp to the ends."""
+    return lambda v: min(max((float(v) - lo) / span, 0.0), 1.0)
+
+
 def _is_number(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
-def map_values(values: dict, *, cmap: str = "viridis",
-               palette: dict | None = None) -> tuple[dict, dict | None]:
+def map_values(values: dict, *, cmap: str = "viridis", palette: dict | None = None,
+               limits: tuple[float, float] | None = None) -> tuple[dict, dict | None]:
     """Turn ``{key: value}`` into ``({key: hex colour}, scale)``, dispatching on the data: numbers get
     the colormap (and a ``continuous`` scale for a colour bar), labels get a palette (and a
-    ``categorical`` scale for a legend). ``scale`` is ``None`` if there is nothing to colour."""
+    ``categorical`` scale for a legend). ``scale`` is ``None`` if there is nothing to colour.
+
+    ``limits`` fixes the numeric range instead of taking it from the values. Panels drawn separately
+    otherwise each normalise to their own min and max, so the same colour means a different number in
+    each — fine for one figure, wrong for a row of them meant to be compared. Values outside the
+    range clamp to the ends. Ignored for categorical data, which has a palette instead."""
     present = {k: v for k, v in values.items() if v is not None}
     if not present:
         return {}, None
     if all(_is_number(v) for v in present.values()):
-        vmin, vmax, to_unit = normalize(present.values())
+        if limits is not None:
+            vmin, vmax = (float(x) for x in limits)
+            to_unit = _clamped_unit(vmin, (vmax - vmin) or 1.0)
+        else:
+            vmin, vmax, to_unit = normalize(present.values())
         sample = colormap(cmap)
         colors = {k: to_hex(sample(to_unit(v))) for k, v in present.items()}
         return colors, {"kind": "continuous", "vmin": vmin, "vmax": vmax, "cmap": cmap}

@@ -14,13 +14,17 @@ from ..skeleton import draw_branches
 
 
 def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None, width=None,
-                   dashed=None):
+                   dashed=None, limits: tuple[float, float] | None = None):
     """Colour every branch by ``values`` (``{node name: value}``). Numeric → colormap gradient;
     categorical → palette. ``dashed`` is an optional set of node names to draw dashed (e.g. extinct
-    lineages), since the colour overdraws the base skeleton. Returns a layer."""
+    lineages), since the colour overdraws the base skeleton. Returns a layer.
+
+    ``limits`` fixes the numeric range rather than deriving it from ``values``, so several figures
+    can share one colour scale — without it each normalises to its own min and max, and the same
+    colour means a different number in each. A ``colorbar`` on the same figure follows the range."""
 
     def layer(canvas, tree, layout, style):
-        by_name, scale = map_values(values, cmap=cmap, palette=palette)
+        by_name, scale = map_values(values, cmap=cmap, palette=palette, limits=limits)
         if scale is None:
             return
         canvas.scale = scale
