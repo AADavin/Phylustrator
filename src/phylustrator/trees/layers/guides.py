@@ -9,10 +9,15 @@ from __future__ import annotations
 
 
 def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, height: float = 10.0,
-             size: float | None = None):
+             size: float | None = None, labels: tuple[str, str] | None = None):
     """A gradient bar for a continuous scale, pinned to a left corner (``"top-left"`` default or
     ``"bottom-left"`` — to clear the tree). ``size`` sets the label font (default the style's). No-op
-    unless a continuous scale was set."""
+    unless a continuous scale was set.
+
+    ``labels`` replaces the two end labels. The bar otherwise prints the values it was coloured by,
+    which is wrong whenever those are a transform of the quantity the reader cares about: colour a
+    tree by ``log10(rate)`` and the ends read ``-1.31`` and ``-0.33`` rather than the rates
+    themselves. Pass the strings you want instead."""
 
     def layer(canvas, tree, layout, style):
         scale = canvas.scale
@@ -30,8 +35,9 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
         if title:
             canvas.raw_text(x, title_y, title, anchor="start", weight="bold", size=fs)
         canvas.gradient_bar(scale["cmap"], x, y, width, height)
-        canvas.raw_text(x, y + height + fs * 0.9, f"{scale['vmin']:.2f}", anchor="start", size=fs * 0.9)
-        canvas.raw_text(x + width, y + height + fs * 0.9, f"{scale['vmax']:.2f}", anchor="end", size=fs * 0.9)
+        lo, hi = labels if labels else (f"{scale['vmin']:.2f}", f"{scale['vmax']:.2f}")
+        canvas.raw_text(x, y + height + fs * 0.9, lo, anchor="start", size=fs * 0.9)
+        canvas.raw_text(x + width, y + height + fs * 0.9, hi, anchor="end", size=fs * 0.9)
 
     return layer
 
