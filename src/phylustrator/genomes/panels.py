@@ -259,3 +259,111 @@ def states(matrix, **kw) -> States:
 def alignment(aln, **kw) -> Alignment:
     """An alignment panel for an :class:`~genustrator.matrix.Alignment` (genomes × sites)."""
     return Alignment(aln, **kw)
+
+
+class Tracks:
+    """Several genomes as one horizontal gene track each, drawn at rows someone else places.
+
+    The stacked-genome view of :func:`~genustrator.genomes.figure.stack`, rebuilt as a **panel** so it
+    can sit beside a tree: :func:`~genustrator.compose.beside` supplies one pixel ``y`` per tip, and
+    each genome is drawn on its tip's row. That is the figure this exists for — a phylogeny with the
+    gene order of every leaf next to it, homologues linked — which ``stack`` alone cannot make,
+    because it places its own rows evenly and knows nothing about the tree.
+
+    Genes are drawn as arrows pointing the way their strand reads, so an inversion is visible as a
+    run that flips. ``ribbons`` links each pair of vertically adjacent genomes wherever they share a
+    family, which is what turns a column of tracks into a synteny picture: collinear stretches run
+    straight, rearrangements cross.
+
+    **Colour.** ``reference`` is a gene order — an ancestral or a chosen genome's — and colours each
+    family by its **rank in it**, along ``cmap``. That is the reading this figure wants: a genome
+    still in the reference order comes out a clean gradient, and every rearrangement is a break in
+    it, so the eye finds the events rather than having to match arbitrary hues. Without a reference
+    the families take evenly-spaced colours from ``cmap`` in sorted order, and an explicit
+    ``palette`` (``{family: colour}``) overrides either.
+    """
+
+    def __init__(self, genomes, *, reference=None, cmap: str = "viridis", palette=None,
+                 ribbons: bool = True, opacity: float = 0.30, gene_gap: float = 0.16,
+                 gene_height: float = 0.58):
+        self.genomes = list(genomes)
+        self.ribbons = ribbons
+        self.opacity = opacity
+        self.gene_gap = gene_gap
+        # A track deliberately does NOT fill its row: the gap between rows is where the ribbons are
+        # drawn, so a taller gene is a thinner ribbon. At 30 rows a near-full-height gene leaves a
+        # few pixels of link, which reads as nothing at all — the links being the point of the figure.
+        self.gene_height = gene_height
+        families = sorted({g.family for genome in self.genomes for g in genome.genes}, key=str)
+        if palette is not None:
+            self.palette = dict(palette)
+        else:
+            sample = colormap(cmap)
+            order = list(reference) if reference is not None else families
+            rank = {fam: k for k, fam in enumerate(order)}
+            span = max(len(order) - 1, 1)
+            # a family absent from the reference (born after it) sits at the far end rather than
+            # taking a colour that would read as a position it never had
+            self.palette = {fam: to_hex(sample(rank.get(fam, span) / span)) for fam in families}
+
+    @property
+    def rows(self):
+        return [g.name for g in self.genomes]
+
+    def _arrow(self, x, y, w, h, strand):
+        """A gene as a pentagon pointing the way its strand reads."""
+        head = min(w * 0.34, 7.0)
+        body = max(w - head, 0.0)
+        if strand >= 0:
+            return [(x, y - h / 2), (x + body, y - h / 2), (x + w, y),
+                    (x + body, y + h / 2), (x, y + h / 2)]
+        return [(x + w, y - h / 2), (x + head, y - h / 2), (x, y),
+                (x + head, y + h / 2), (x + w, y + h / 2)]
+
+    def draw(self, canvas, x0, x1, rows, style):
+        by_name = {g.name: g for g in self.genomes}
+        longest = max((len(by_name[label].genes) for label, _ in rows if label in by_name), default=0)
+        if not longest:
+            return
+        cw = (x1 - x0) / longest
+        rh = _row_height(rows)
+        gh = min(rh * self.gene_height, 20.0)
+        gap = cw * self.gene_gap
+        placed: list[tuple[float, dict]] = []          # (y, {family: [(left, right), …]}) in row order
+
+        for label, y in rows:
+            genome = by_name.get(label)
+            if genome is None:
+                continue
+            spans: dict = {}
+            for j, gene in enumerate(genome.genes):
+                left = x0 + j * cw
+                canvas.raw_polygon(self._arrow(left, y, cw - gap, gh, gene.strand),
+                                   fill=self.palette.get(gene.family, "#c8cdd2"),
+                                   stroke="#ffffff", stroke_width=0.7)
+                spans.setdefault(gene.family, []).append((left, left + cw - gap))
+            placed.append((y, spans))
+
+        if not self.ribbons:
+            return
+        for (ya, above), (yb, below) in zip(placed, placed[1:]):
+            for family, tops in above.items():
+                # pair them off in order: the k-th copy above links to the k-th below, so a family
+                # present twice does not draw a link to every other copy of itself
+                for (ax0, ax1), (bx0, bx1) in zip(tops, below.get(family, [])):
+                    canvas.raw_ribbon(ax0, ax1, ya + gh / 2, bx0, bx1, yb - gh / 2,
+                                      fill=self.palette.get(family, "#c8cdd2"),
+                                      opacity=self.opacity)
+
+
+def tracks(genomes, *, reference=None, cmap: str = "viridis", palette=None,
+           ribbons: bool = True, opacity: float = 0.30, gene_height: float = 0.58) -> Tracks:
+    """Genomes as gene tracks beside a tree, homologues ribboned between neighbouring rows.
+
+    Pass to :func:`~genustrator.compose.beside` with a tree; rows are matched to tips by name, so a
+    genome whose name is not a tip is simply not drawn. See :class:`Tracks` for the colour rules —
+    in particular ``reference``, which colours by position in a reference gene order and is what
+    makes a rearrangement visible as a break in a gradient.
+    """
+    return Tracks(genomes, reference=reference, cmap=cmap, palette=palette,
+                  ribbons=ribbons, opacity=opacity, gene_height=gene_height)

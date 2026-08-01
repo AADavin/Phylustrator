@@ -94,6 +94,26 @@ class Canvas:
         self._d.append(draw.Rectangle(x, y, w, h, fill=fill, stroke=stroke, rx=rx,
                                       stroke_width=stroke_width, fill_opacity=opacity))
 
+    def raw_polygon(self, points, *, fill, stroke="none", stroke_width=0.0, opacity=1.0) -> None:
+        """A filled polygon in **pixel** space — the twin of :meth:`polygon`, for a panel that is
+        handed its row positions in pixels and so has no data coordinates of its own."""
+        flat = [c for xy in points for c in xy]
+        self._d.append(draw.Lines(*flat, fill=fill, fill_opacity=opacity, stroke=stroke,
+                                  stroke_width=stroke_width, close=True))
+
+    def raw_ribbon(self, xa0, xa1, ya, xb0, xb1, yb, *, fill: str, opacity: float = 0.32,
+                   stroke: str = "none") -> None:
+        """An S-curved band linking ``[xa0,xa1]`` at ``ya`` to ``[xb0,xb1]`` at ``yb``, in **pixel**
+        space — :meth:`ribbon` for a panel placed by someone else (see :func:`~genustrator.genomes.panels.tracks`)."""
+        my = (ya + yb) / 2.0
+        p = draw.Path(fill=fill, fill_opacity=opacity, stroke=stroke, stroke_width=0.5)
+        p.M(xa0, ya).L(xa1, ya)
+        p.C(xa1, my, xb1, my, xb1, yb)
+        p.L(xb0, yb)
+        p.C(xb0, my, xa0, my, xa0, ya)
+        p.Z()
+        self._d.append(p)
+
     def region(self, x0, y0, x1, y1, *, fill, opacity=1.0, stroke="none", stroke_width=0.0,
                rx=0.0) -> None:
         """A filled rectangle given in *data* coordinates (shade a clade, mark a segment)."""

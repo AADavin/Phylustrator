@@ -19,6 +19,7 @@ from phylustrator.genomes import (
     stack,
     states,
     synteny,
+    tracks,
 )
 from phylustrator.trees import loads
 from phylustrator.trees import plot as tree_plot
@@ -94,3 +95,54 @@ def test_bars_panel_beside_tree():
     svg = beside(tree, bars({"a": 10.0, "b": 4.0}, colors={"a": "#123456"},
                             label="size", tick_size=12, label_size=14)).as_svg()
     assert svg.lstrip().startswith("<") and "#123456" in svg   # a per-row bar was coloured
+
+
+# --- tracks: genomes as a panel beside a tree -------------------------------------------------
+
+def _tracks_tree():
+    return loads("((a:1,b:1):1,(c:1,d:1):1);")
+
+
+def test_tracks_rows_are_the_genome_names():
+    panel = tracks([_genome("a", "0123"), _genome("b", "0123")])
+    assert panel.rows == ["a", "b"]
+
+
+def test_tracks_beside_a_tree_draws_every_tip():
+    """The figure this panel exists for: a tree with each leaf's gene order next to it. `stack`
+    cannot make it — it places its own rows evenly and knows nothing about the tree."""
+    genomes = [_genome(n, "0123") for n in ("a", "b", "c", "d")]
+    svg = beside(tree_plot(_tracks_tree()), tracks(genomes), width=600).as_svg()
+    assert svg.count("<path") + svg.count("<polyline") > 0        # ribbons and/or arrows drawn
+    assert len(svg) > 500
+
+
+def test_tracks_colours_by_position_in_the_reference():
+    """``reference`` is what makes a rearrangement legible: a family's colour is its rank in the
+    ancestral order, so a collinear genome reads as a gradient and a break in it is an event."""
+    genomes = [_genome("a", "0123")]
+    forward = tracks(genomes, reference=["0", "1", "2", "3"]).palette
+    reversed_ = tracks(genomes, reference=["3", "2", "1", "0"]).palette
+    assert forward["0"] != forward["3"]                            # the ends differ
+    assert forward["0"] == reversed_["3"] and forward["3"] == reversed_["0"]
+
+
+def test_tracks_palette_overrides_the_colormap():
+    panel = tracks([_genome("a", "01")], palette={"0": "#ff0000", "1": "#00ff00"})
+    assert panel.palette == {"0": "#ff0000", "1": "#00ff00"}
+
+
+def test_tracks_can_omit_the_ribbons():
+    genomes = [_genome(n, "0123") for n in ("a", "b")]
+    with_links = beside(tree_plot(loads("(a:1,b:1);")), tracks(genomes), width=600).as_svg()
+    without = beside(tree_plot(loads("(a:1,b:1);")), tracks(genomes, ribbons=False),
+                     width=600).as_svg()
+    assert len(without) < len(with_links)
+
+
+def test_tracks_ignores_a_genome_that_is_not_a_tip():
+    """`beside` matches rows to tips by name, so a genome with no tip is simply not drawn —
+    the same rule every other panel follows."""
+    genomes = [_genome(n, "0123") for n in ("a", "b", "stranger")]
+    svg = beside(tree_plot(loads("(a:1,b:1);")), tracks(genomes), width=600).as_svg()
+    assert len(svg) > 500
