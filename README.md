@@ -4,7 +4,7 @@ A small, composable plotter for evolutionary figures. Two domains share one gram
 plots phylogenetic trees and **`ph.genomes`** plots genomes, synteny and alignments. Start a figure,
 add layers with `+`, and save it to SVG, PDF, or PNG.
 
-![A 100-tip tree with branches coloured by a Brownian-motion trait](docs/img/tree.png)
+![A 100-tip tree with branches coloured by a Brownian-motion trait](https://raw.githubusercontent.com/AADavin/Phylustrator/main/docs/img/tree.png)
 
 ## Install
 
@@ -90,4 +90,4 @@ Only `drawsvg` (plus `cairosvg` for PDF/PNG). No `ete3`, no `matplotlib`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/AADavin/Phylustrator/blob/main/LICENSE).

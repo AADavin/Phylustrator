@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The README's figure and LICENSE link now use absolute GitHub URLs. PyPI does not rewrite relative
+  paths, so on the project page the figure rendered as a broken image and the link 404'd.
+
 ### Added
 - `phyl`, a one-shot command-line viewer: `phyl tree.nwk` renders a Newick tree to a temporary PDF
   and opens it; `-o FILE` saves to SVG/PDF/PNG instead. Flags for layout (`--radial`/`--unrooted`),
