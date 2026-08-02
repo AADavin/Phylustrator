@@ -9,13 +9,34 @@ from __future__ import annotations
 import math
 from typing import Callable, Iterable
 
-# viridis, 16 anchor colours (R, G, B in 0–255), sampled evenly from matplotlib.
+# 16 anchor colours (R, G, B in 0–255) per map, sampled evenly from matplotlib. The three sequential
+# maps are perceptually uniform; `coolwarm` is diverging, for a value read against a midpoint. A
+# figure that shows two characters at once needs two maps that cannot be mistaken for each other,
+# which is why more than one sequential map is here.
 _COLORMAPS: dict[str, list[tuple[int, int, int]]] = {
     "viridis": [
         (68, 1, 84), (72, 26, 108), (71, 47, 125), (65, 68, 135),
         (57, 86, 140), (49, 104, 142), (42, 120, 142), (35, 136, 142),
         (31, 152, 139), (34, 168, 132), (53, 183, 121), (84, 197, 104),
         (122, 209, 81), (165, 219, 54), (210, 226, 27), (253, 231, 37),
+    ],
+    "magma": [
+        (0, 0, 4), (11, 9, 36), (32, 17, 75), (59, 15, 112),
+        (87, 21, 126), (114, 31, 129), (140, 41, 129), (168, 50, 125),
+        (196, 60, 117), (222, 73, 104), (241, 96, 93), (250, 127, 94),
+        (254, 159, 109), (254, 191, 132), (253, 222, 160), (252, 253, 191),
+    ],
+    "cividis": [
+        (0, 34, 78), (0, 46, 108), (30, 58, 111), (53, 69, 108),
+        (71, 81, 108), (87, 93, 109), (102, 105, 112), (117, 117, 117),
+        (132, 130, 121), (148, 142, 119), (165, 156, 116), (183, 169, 110),
+        (200, 184, 102), (219, 199, 90), (238, 214, 73), (254, 232, 56),
+    ],
+    "coolwarm": [
+        (59, 76, 192), (79, 105, 217), (100, 133, 236), (123, 159, 249),
+        (147, 181, 254), (170, 199, 253), (192, 212, 245), (212, 219, 230),
+        (229, 216, 209), (242, 203, 183), (247, 184, 156), (245, 160, 129),
+        (238, 132, 104), (224, 101, 79), (204, 64, 58), (180, 4, 38),
     ],
 }
 

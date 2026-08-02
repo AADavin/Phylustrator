@@ -58,3 +58,18 @@ def test_composable_grammar_returns_new_figure():
     base = plot(tree)
     added = base + (lambda canvas, tree, layout, style: None)
     assert added is not base and len(added.layers) == len(base.layers) + 1
+
+
+def test_every_colormap_runs_dark_to_light_and_is_sampled_end_to_end():
+    """Each named map must be usable, and `colormap` must return its first and last anchor at the
+    ends of the range — a map registered with too few anchors, or sampled off by one, would show up
+    here rather than as a figure that is subtly the wrong colour."""
+    from phylustrator.color import _COLORMAPS, colormap, colormap_hex
+
+    assert set(_COLORMAPS) >= {"viridis", "magma", "cividis", "coolwarm"}
+    for name, anchors in _COLORMAPS.items():
+        assert len(anchors) >= 8, name
+        sample = colormap(name)
+        assert sample(0.0) == anchors[0] and sample(1.0) == anchors[-1], name
+        assert len(colormap_hex(name)) == len(anchors)
+        assert all(h.startswith("#") and len(h) == 7 for h in colormap_hex(name)), name
