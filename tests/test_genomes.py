@@ -13,6 +13,7 @@ from phylustrator.genomes import (
     alignment,
     bars,
     genes,
+    grid,
     heatmap,
     plot,
     position_axis,
@@ -146,3 +147,43 @@ def test_tracks_ignores_a_genome_that_is_not_a_tip():
     genomes = [_genome(n, "0123") for n in ("a", "b", "stranger")]
     svg = beside(tree_plot(loads("(a:1,b:1);")), tracks(genomes), width=600).as_svg()
     assert len(svg) > 500
+
+
+# --- a matrix as a figure in its own right --------------------------------------------------------
+
+def _matrix(nrow=5, ncol=4):
+    return Matrix(rows=[f"f{i}" for i in range(nrow)],
+                             cols=[f"g{j}" for j in range(ncol)],
+                             values=[[(i + j) % 2 for j in range(ncol)] for i in range(nrow)])
+
+
+def test_grid_draws_one_cell_per_value(tmp_path):
+    """`heatmap` is a panel and only exists beside a tree, which is placed by `beside`. A phyletic
+    profile of a few hundred families is the whole picture, so it needs a figure of its own."""
+    M = _matrix(5, 4)
+    svg = grid(M).as_svg()
+    assert svg.count("<rect") == 5 * 4 + 1              # cells, plus the background
+
+
+def test_grid_takes_a_palette_for_categories(tmp_path):
+    """Presence/absence is two categories, not a ramp: a colormap between them would imply an
+    ordering they do not have."""
+    svg = grid(_matrix(), palette={0: "#F4F3EE", 1: "#26565B"}).as_svg()
+    assert "#F4F3EE".lower() in svg.lower() and "#26565B".lower() in svg.lower()
+
+
+def test_grid_drops_the_cell_border_when_cells_are_tiny():
+    """At a few thousand cells a hairline stroke is most of the ink and the data hides behind a grey
+    mesh. A border needs a cell with an inside to be a border of."""
+    big = Matrix(rows=[str(i) for i in range(300)], cols=[str(j) for j in range(40)],
+                            values=[[1] * 40 for _ in range(300)])
+    assert 'stroke="#ffffff"' not in grid(big).as_svg()
+    assert 'stroke="#ffffff"' in grid(_matrix(4, 3)).as_svg()   # roomy cells keep it
+    # and the decision can be taken out of its hands, either way
+    assert 'stroke="#ffffff"' not in grid(_matrix(4, 3), borders=False).as_svg()
+    assert 'stroke="#ff0000"' in grid(big, borders="#ff0000").as_svg()
+
+
+def test_grid_is_empty_rather_than_broken_for_an_empty_matrix():
+    empty = Matrix(rows=[], cols=[], values=[])
+    assert grid(empty).as_svg().count("<rect") == 1              # background only

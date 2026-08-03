@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from .figure import Figure, StackFigure, plot, stack
+from .figure import Figure, GridFigure, StackFigure, grid, plot, stack
 from .genome import Chromosome, Gene, Genome
 from .io import read_gff
 from .layers import genes, highlight, position_axis, synteny
@@ -17,7 +17,7 @@ from .panels import alignment, bars, heatmap, states, tracks
 
 __all__ = [
     "Gene", "Chromosome", "Genome", "read_gff",
-    "plot", "stack", "Figure", "StackFigure",
+    "plot", "stack", "grid", "Figure", "StackFigure", "GridFigure",
     "genes", "synteny", "highlight", "position_axis",
     "Matrix", "Alignment", "heatmap", "alignment", "states", "bars", "tracks",
 ]
