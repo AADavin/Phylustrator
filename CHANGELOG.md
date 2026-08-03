@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-03
+
+### Added
+- `genomes.grid(matrix)` — a `Matrix` as a standalone figure, rows x columns of coloured cells with
+  no tree beside it. `heatmap` is a *panel*: `beside()` hands it one pixel row per tree tip, so it
+  only exists next to a tree, and a phyletic profile of a few hundred families sorted by prevalence
+  is a companion to nothing. `palette` colours values as categories (presence/absence), and
+  `borders` draws the line between cells — a colour, `False`, or by default by size, since at a few
+  hundred rows a hairline is a tenth of a cell and a solid block reads as criss-crossed.
+
 ## [0.1.3] - 2026-08-02
 
 ### Added
