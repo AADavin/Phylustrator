@@ -3,7 +3,9 @@
 ``color_branches`` dispatches on the data: **numbers** get a colormap and a gradient down each branch
 (and record a continuous scale, so ``colorbar()`` can draw itself); **labels** get a categorical
 palette and solid branches (recording a palette, so ``legend()`` can). Values are keyed by node name
-(or by node), and nodes with no value keep the default branch colour. Works on any layout, because it
+(or by node), and nodes with no value keep the default branch colour. ``color_history`` dispatches
+its segment states by the same rule, for a value that changes *along* a branch rather than once per
+branch. Works on any layout, because it
 draws through :func:`phylustrator.skeleton.draw_branches`.
 """
 
@@ -39,20 +41,33 @@ def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None
     return layer
 
 
-def color_history(history, *, palette: dict, width=None, default: str | None = None, dashed=None):
+def color_history(history, *, palette: dict | None = None, cmap: str = "viridis", width=None,
+                  default: str | None = None, dashed=None,
+                  limits: tuple[float, float] | None = None):
     """Paint each branch as coloured **segments** from its per-lineage state history — a list of
     ``(state, duration)`` running from the branch's start to its end. Use this (not
-    :func:`color_branches`) for a discrete trait whose state changes *along* a branch: the branch is a
-    mosaic, not one colour. ``dashed`` is an optional set of node names to draw dashed (e.g. extinct
-    lineages). Rectangular layout only; records the palette so ``legend`` can draw.
-    ``history``: ``{node name: [(state, dur), …]}``."""
+    :func:`color_branches`) for a value that changes *along* a branch: the branch is a mosaic, not
+    one colour. ``dashed`` is an optional set of node names to draw dashed (e.g. extinct lineages).
+    Rectangular layout only. ``history``: ``{node name: [(state, dur), …]}``.
+
+    Dispatches on the states the same way :func:`color_branches` dispatches on its values:
+    **labels** get a categorical palette (and record it, so ``legend`` can draw), **numbers** get a
+    colormap (and record a continuous scale, so ``colorbar`` can). A quantity that steps along a
+    branch — how much of a gene module a lineage still holds, say — is numeric and changes
+    mid-branch, so it needs both halves at once.
+
+    ``limits`` fixes the numeric range instead of taking it from the states, so panels drawn
+    separately share one scale. Ignored for categorical data."""
     dashed = dashed or set()
+    states = {state for segments in history.values() for state, _ in segments}
+    colors, scale = map_values({s: s for s in states}, cmap=cmap, palette=palette, limits=limits)
 
     def layer(canvas, tree, layout, style):
         if layout.kind != "rectangular":
             raise ValueError("color_history needs the rectangular layout (segments run along x)")
         w = width or style.branch_width
-        canvas.scale = {"kind": "categorical", "palette": dict(palette)}
+        if scale is not None:
+            canvas.scale = scale
         base = default or style.branch_color
         for node in tree.walk():
             y = layout.y(node)
@@ -67,13 +82,14 @@ def color_history(history, *, palette: dict, width=None, default: str | None = N
                 xx = x_start
                 for state, dur in segs:
                     x1 = xx + span * dur / total
-                    canvas.line(xx, y, x1, y, palette.get(state, base), w, dash=d)
+                    if x1 != xx:      # two changes at the same instant leave a zero-length segment
+                        canvas.line(xx, y, x1, y, colors.get(state, base), w, dash=d)
                     xx = x1
                 end_state = segs[-1][0]
             else:
                 canvas.line(x_start, y, x_end, y, base, w, dash=d)
             if not node.is_leaf:                              # connectors in the node's end state
-                cc = palette.get(end_state, base)
+                cc = colors.get(end_state, base)
                 for c in node.children:
                     canvas.line(x_end, y, x_end, layout.y(c), cc, w, dash=(c.name in dashed))
 

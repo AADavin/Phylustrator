@@ -2,7 +2,7 @@
 
 import pytest
 
-from phylustrator.trees import color_branches, color_lanes, loads, plot
+from phylustrator.trees import color_branches, color_history, color_lanes, loads, plot
 
 
 @pytest.mark.parametrize("layout", ["rectangular", "radial", "unrooted"])
@@ -73,3 +73,36 @@ def test_every_colormap_runs_dark_to_light_and_is_sampled_end_to_end():
         assert sample(0.0) == anchors[0] and sample(1.0) == anchors[-1], name
         assert len(colormap_hex(name)) == len(anchors)
         assert all(h.startswith("#") and len(h) == 7 for h in colormap_hex(name)), name
+
+
+def test_color_history_takes_a_palette_or_a_colormap():
+    """The states are labels or numbers, and the rule is `color_branches`'s: a palette for labels, a
+    colormap for numbers. A quantity that steps along a branch — how much of a gene module a lineage
+    still holds — is both numeric and mid-branch, which needs the two halves at once."""
+    tree = loads("((A:2,B:2)C:1,D:3)R:1;")
+    labels = {"A": [("on", 1.0), ("off", 1.0)], "B": [("off", 2.0)]}
+    svg = (plot(tree) + color_history(labels, palette={"on": "#111111", "off": "#eeeeee"})).as_svg()
+    assert "#111111" in svg and "#eeeeee" in svg          # both segments of A are painted
+
+    numbers = {"A": [(1.0, 1.0), (0.5, 1.0)], "B": [(0.0, 2.0)]}
+    numeric = (plot(tree) + color_history(numbers)).as_svg()
+    assert numeric.lstrip().startswith("<") and numeric.count("#") > 2   # a colormap, not a palette
+
+
+def test_color_history_survives_a_zero_length_segment():
+    """Two changes at the same instant leave a segment of duration 0. It has no length to draw, and
+    the states around it must still land in the right order."""
+    tree = loads("((A:2,B:2)C:1,D:3)R:1;")
+    hist = {"A": [(1.0, 1.0), (0.75, 0.0), (0.5, 1.0)]}
+    svg = (plot(tree) + color_history(hist)).as_svg()
+    assert svg.lstrip().startswith("<")
+
+
+def test_color_history_limits_fix_the_scale_across_panels():
+    """Without `limits` each panel normalises to its own states, so the same colour means a
+    different number in each — wrong for a row of panels meant to be compared."""
+    tree = loads("(A:1,B:1)R:1;")
+    narrow = {"A": [(0.4, 1.0)], "B": [(0.6, 1.0)]}
+    own = (plot(tree) + color_history(narrow)).as_svg()
+    fixed = (plot(tree) + color_history(narrow, limits=(0.0, 1.0))).as_svg()
+    assert own != fixed
