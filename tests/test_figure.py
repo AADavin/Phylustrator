@@ -117,6 +117,7 @@ def test_a_line_safe_colormap_never_goes_pale():
         r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
         return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
-    assert max(luminance(c) for c in colormap_hex("viridis")) > 200        # the problem
-    assert max(luminance(c) for c in colormap_hex("viridis_dark")) < 180   # the fix
-    assert colormap_hex("viridis_dark")[0] == colormap_hex("viridis")[0]   # same dark end, same order
+    for pale, safe in (("viridis", "viridis_dark"), ("magma", "magma_dark")):
+        assert max(luminance(c) for c in colormap_hex(pale)) > 200        # the problem
+        assert max(luminance(c) for c in colormap_hex(safe)) < 180        # the fix
+        assert colormap_hex(safe)[0] == colormap_hex(pale)[0]             # same dark end, same order

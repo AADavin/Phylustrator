@@ -14,6 +14,14 @@ from typing import Callable, Iterable
 # figure that shows two characters at once needs two maps that cannot be mistaken for each other,
 # which is why more than one sequential map is here.
 _COLORMAPS: dict[str, list[tuple[int, int, int]]] = {
+    # magma stopped before it goes pale, the same trade as `viridis_dark` below in a different hue.
+    # Two line-safe ramps, not one, because a figure that shows two different quantities beside each
+    # other needs them to look different — one ramp used twice reads as one quantity shown twice.
+    "magma_dark": [
+        (0, 0, 4), (11, 9, 36), (32, 17, 75), (59, 15, 112),
+        (87, 21, 126), (114, 31, 129), (140, 41, 129), (168, 50, 125),
+        (196, 60, 117), (222, 73, 104), (241, 96, 93), (250, 127, 94),
+    ],
     # viridis stopped before it goes pale. A sequential ramp on a *line* has a problem a heatmap does
     # not: the light end of every perceptually-uniform map (viridis 222, magma 248, cividis 224 in
     # luminance) vanishes against white at a few pixels wide, so the values that land there are
