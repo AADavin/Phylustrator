@@ -14,6 +14,16 @@ from typing import Callable, Iterable
 # figure that shows two characters at once needs two maps that cannot be mistaken for each other,
 # which is why more than one sequential map is here.
 _COLORMAPS: dict[str, list[tuple[int, int, int]]] = {
+    # viridis stopped before it goes pale. A sequential ramp on a *line* has a problem a heatmap does
+    # not: the light end of every perceptually-uniform map (viridis 222, magma 248, cividis 224 in
+    # luminance) vanishes against white at a few pixels wide, so the values that land there are
+    # invisible rather than merely faint. This keeps viridis's order and spacing and stops at its last
+    # clearly-drawn green, which costs a little range and makes every value readable.
+    "viridis_dark": [
+        (68, 1, 84), (72, 26, 108), (71, 47, 125), (65, 68, 135),
+        (57, 86, 140), (49, 104, 142), (42, 120, 142), (35, 136, 142),
+        (31, 152, 139), (34, 168, 132), (53, 183, 121), (84, 197, 104),
+    ],
     "viridis": [
         (68, 1, 84), (72, 26, 108), (71, 47, 125), (65, 68, 135),
         (57, 86, 140), (49, 104, 142), (42, 120, 142), (35, 136, 142),

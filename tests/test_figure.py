@@ -106,3 +106,17 @@ def test_color_history_limits_fix_the_scale_across_panels():
     own = (plot(tree) + color_history(narrow)).as_svg()
     fixed = (plot(tree) + color_history(narrow, limits=(0.0, 1.0))).as_svg()
     assert own != fixed
+
+
+def test_a_line_safe_colormap_never_goes_pale():
+    """Every perceptually-uniform sequential map ends near-white, which is fine for a heatmap and not
+    for a branch a few pixels wide: the values at that end vanish instead of being faint."""
+    from phylustrator.color import colormap_hex
+
+    def luminance(hex_colour):
+        r, g, b = (int(hex_colour[i:i + 2], 16) for i in (1, 3, 5))
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    assert max(luminance(c) for c in colormap_hex("viridis")) > 200        # the problem
+    assert max(luminance(c) for c in colormap_hex("viridis_dark")) < 180   # the fix
+    assert colormap_hex("viridis_dark")[0] == colormap_hex("viridis")[0]   # same dark end, same order
