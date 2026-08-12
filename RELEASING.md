@@ -1,6 +1,7 @@
 # Releasing Phylustrator
 
-Phylustrator publishes to PyPI **automatically when a version tag is pushed**, via
+Phylustrator publishes to PyPI **and creates the GitHub Release** automatically when a version
+tag is pushed, via
 [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC). No API token is stored
 anywhere — PyPI trusts this repo's release workflow (`.github/workflows/release.yml`).
 

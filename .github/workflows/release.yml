@@ -42,3 +42,20 @@ jobs:
           test "$tag" = "$pkg" || { echo "::error::tag v$tag does not match package version $pkg — bump pyproject.toml"; exit 1; }
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  # The tag alone leaves the repo showing "6 tags · Create a new release" and no version anywhere a
+  # reader looks. Publishing the Release is what puts the number on the repo page, so it is done here
+  # rather than by hand — a tag pushed without one is the state this fixes.
+  github_release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # creating a Release writes to the repo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # --generate-notes reads the log back to the previous tag
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
