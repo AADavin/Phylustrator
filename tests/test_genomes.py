@@ -22,6 +22,7 @@ from phylustrator.genomes import (
     synteny,
     tracks,
 )
+from phylustrator.genomes.layout import circular
 from phylustrator.trees import loads
 from phylustrator.trees import plot as tree_plot
 
@@ -55,6 +56,22 @@ def test_position_axis_on_nucleotide_ring():
     svg = (plot(_genome("g", ["1", "2", "3", "4"]), layout="circular", coordinates="nucleotide")
            + genes(by="strand") + position_axis()).as_svg()
     assert svg.lstrip().startswith("<")
+
+
+def test_circular_shared_scale_shortens_the_small_chromosome():
+    """A karyotype: under ``scale="shared"`` a short chromosome draws a short arc."""
+    big = _genome("g", list("12345678")).chromosomes[0]
+    small = Chromosome(id="c2", genes=_genome("s", ["9", "10"]).chromosomes[0].genes,
+                       topology="circular", length=200)
+    g = Genome(name="k", chromosomes=[big, small])
+    arc = {}
+    for scale in ("each", "shared"):
+        lay = circular(g, scale=scale)
+        a0, a1, _ = lay.boxes[id(small.genes[0])]
+        arc[scale] = abs(a1 - a0)
+    assert arc["shared"] < arc["each"] / 3          # 8 slots wide, not 2
+    with pytest.raises(ValueError, match="unknown scale"):
+        circular(g, scale="both")
 
 
 def test_heatmap_panel_beside_tree():

@@ -90,27 +90,40 @@ def stacked(genomes, *, coordinates: str = "ordered", gap: float = 0.16,
 
 
 def circular(genome, *, coordinates: str = "ordered", gap: float = 0.16,
-             start_deg: float = 90.0, break_deg: float = 0.0,
+             start_deg: float = 90.0, break_deg: float = 0.0, scale: str = "each",
              band: float = 0.34, ring_gap: float = 0.10, min_deg: float = 2.2, style=None) -> Layout:
     """Genes wrapped onto a ring, one concentric ring per chromosome (chromosome 0 outermost).
 
     Angles sweep **clockwise** from the top. By default the ring is closed (``break_deg=0``) so genes
     are evenly spaced all the way round; set ``break_deg`` to leave a wedge marking a linear
     chromosome's ends. ``coordinates`` chooses equal angular slots by **rank** (``"ordered"``) or
-    base-proportional arcs (``"nucleotide"``)."""
+    base-proportional arcs (``"nucleotide"``).
+
+    ``scale`` decides what a ring's angles mean when a genome has several chromosomes:
+
+    ``"each"`` (default) gives every chromosome the whole circle, so gene *order* is comparable ring
+    to ring and a chromosome's size is not. ``"shared"`` gives every gene the same angular width,
+    taken from the largest chromosome, so a short chromosome draws a short arc — which is what a
+    **karyotype** needs. Under ``"each"`` a three-gene chromosome is a full circle of three enormous
+    wedges beside a seventy-gene ring, and the picture says they are the same size."""
     start = math.radians(start_deg)
     sweep = 2.0 * math.pi - math.radians(break_deg)
     boxes, owner, placed, rings, totals = {}, {}, [], [], []
+    if scale not in ("each", "shared"):
+        raise ValueError(f"unknown scale {scale!r}; choose 'each' or 'shared'")
+    widest = max((len(c.genes) for c in genome.chromosomes), default=1) or 1
     for k, chrom in enumerate(genome.chromosomes):
         R = 1.0 - band / 2.0 - k * (band + ring_gap)
         rings.append(R)
         n = len(chrom.genes)
         nuc = coordinates == "nucleotide" and n and chrom.genes[0].start is not None
         total = float(chrom.length or (chrom.genes[-1].end - chrom.genes[0].start) or 1.0) if nuc \
-            else float(n or 1)
+            else float(widest if scale == "shared" else (n or 1))
         totals.append(total)
-        # cap the minimum arc so a gene-dense genome (a real GFF) never forces genes to overlap
-        min_arc = min(math.radians(min_deg), 0.9 * sweep / max(n, 1))
+        # cap the minimum arc so a gene-dense genome (a real GFF) never forces genes to overlap.
+        # The cap counts the ring's own slots: under "shared" that is the widest chromosome, so a
+        # short ring is never inflated back to the width it would have had on its own.
+        min_arc = min(math.radians(min_deg), 0.9 * sweep / max(n if nuc else total, 1.0))
         _ = style  # (thickness is read from style at draw time via ring_hh below)
         for rank, gene in enumerate(chrom.genes):        # rank, so "ordered" is even with no holes
             lo_v, hi_v = (float(gene.start), float(gene.end)) if nuc \

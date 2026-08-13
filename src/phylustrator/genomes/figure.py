@@ -25,7 +25,7 @@ _LAYOUTS = {"linear": linear, "circular": circular}
 
 class Figure:
     def __init__(self, genome, *, layout: str = "linear", coordinates: str = "ordered",
-                 style: Style | None = None, layers: tuple = ()) -> None:
+                 style: Style | None = None, layers: tuple = (), **layout_kw) -> None:
         if layout not in _LAYOUTS:
             raise ValueError(f"unknown layout {layout!r}; choose from {sorted(_LAYOUTS)}")
         self.genome = genome
@@ -33,13 +33,15 @@ class Figure:
         self.coordinates = coordinates
         self.style = style or Style()
         self.layers = tuple(layers)
+        self.layout_kw = dict(layout_kw)          # e.g. scale="shared" on a circular genome
 
     def _make_layout(self) -> Layout:
-        return _LAYOUTS[self.layout](self.genome, coordinates=self.coordinates, style=self.style)
+        return _LAYOUTS[self.layout](self.genome, coordinates=self.coordinates, style=self.style,
+                                     **self.layout_kw)
 
     def _clone(self, **kw) -> "Figure":
         base = dict(layout=self.layout, coordinates=self.coordinates, style=self.style,
-                    layers=self.layers)
+                    layers=self.layers, **self.layout_kw)
         base.update(kw)
         return Figure(self.genome, **base)  # type: ignore[arg-type]  # kw dict, params are typed
 
@@ -85,9 +87,11 @@ class StackFigure(Figure):
 
 
 def plot(genome, *, layout: str = "linear", coordinates: str = "ordered",
-         style: Style | None = None) -> Figure:
-    """Start a figure for one ``genome``. Add layers with ``+``, then :meth:`Figure.save`."""
-    return Figure(genome, layout=layout, coordinates=coordinates, style=style)
+         style: Style | None = None, **layout_kw) -> Figure:
+    """Start a figure for one ``genome``. Add layers with ``+``, then :meth:`Figure.save`.
+
+    Extra keywords reach the layout — ``scale="shared"`` on a circular genome, for one."""
+    return Figure(genome, layout=layout, coordinates=coordinates, style=style, **layout_kw)
 
 
 def stack(genomes, *, coordinates: str = "ordered", style: Style | None = None) -> StackFigure:
