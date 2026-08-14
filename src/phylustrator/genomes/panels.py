@@ -14,6 +14,30 @@ from ..color import colormap, to_hex
 NT_COLORS = {"A": "#3a923a", "C": "#3a6ea5", "G": "#e0a327", "T": "#c1443c",
              "U": "#c1443c", "-": "#e9ecef", "N": "#c8cdd2"}
 
+# Amino acids coloured by **chemical class**, not one hue each: twenty hues are twenty things to
+# remember, and what a protein alignment is read for is where the chemistry is conserved and where it
+# changes. The classes are the usual ones (Clustal's grouping).
+AA_CLASSES: list[tuple[str, str, str]] = [
+    ("hydrophobic", "AVLIMC", "#3a6ea5"),
+    ("aromatic", "FWY", "#7b5ea7"),
+    ("polar", "STNQ", "#3a923a"),
+    ("positive", "KRH", "#c1443c"),
+    ("negative", "DE", "#e0a327"),
+    ("special", "GP", "#6c757d"),
+]
+AA_COLORS = {res: color for _, residues, color in AA_CLASSES for res in residues}
+AA_COLORS.update({"-": "#e9ecef", "X": "#c8cdd2", "*": "#c8cdd2"})
+
+
+def _legend_for(palette: dict) -> list[tuple[str, str]]:
+    """The key to draw under an alignment in this palette: the four bases, or the six classes.
+
+    A protein key names the classes rather than the residues — a row of twenty swatches is wider than
+    the alignment and says less."""
+    if "L" in palette and "K" in palette:                     # an amino-acid palette
+        return [(label, color) for label, _, color in AA_CLASSES]
+    return [(res, palette[res]) for res in ("A", "C", "G", "T") if res in palette]
+
 
 def _row_height(rows) -> float:
     ys = sorted(y for _, y in rows)
@@ -81,12 +105,16 @@ class Heatmap:
 
 
 class Alignment:
-    def __init__(self, alignment, *, palette=None, letters=None, title=None, legend=True):
+    def __init__(self, alignment, *, palette=None, letters=None, title=None, legend=True,
+                 legend_items=None):
         self.alignment = alignment
         self.palette = palette or NT_COLORS
         self.letters = letters            # None -> auto (draw letters if cells are wide enough)
         self.title = title
-        self.legend = legend              # a nucleotide colour key below the alignment
+        self.legend = legend              # a colour key below the alignment
+        #: what that key says: ``[(text, colour), …]``. By default the palette decides — the four
+        #: bases for DNA, the six chemical classes for protein.
+        self.legend_items = legend_items or _legend_for(self.palette)
 
     @property
     def rows(self):
@@ -125,11 +153,10 @@ class Alignment:
     def _legend(self, canvas, x0, y, style):
         sw, fs = 20.0, style.font_size * 1.15          # a visible key
         x = x0
-        for res in ("A", "C", "G", "T"):
-            canvas.raw_rect(x, y, sw, sw, fill=self.palette.get(res, "#c8cdd2"),
-                            stroke="#ffffff", stroke_width=0.8)
-            canvas.raw_text(x + sw + 6, y + sw / 2, res, anchor="start", size=fs, weight="bold")
-            x += sw + 6 + fs * 0.8 + 16
+        for text, color in self.legend_items:
+            canvas.raw_rect(x, y, sw, sw, fill=color, stroke="#ffffff", stroke_width=0.8)
+            canvas.raw_text(x + sw + 6, y + sw / 2, text, anchor="start", size=fs, weight="bold")
+            x += sw + 6 + fs * 0.62 * len(text) + 16
 
 
 class States:

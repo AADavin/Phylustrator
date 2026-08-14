@@ -8,6 +8,7 @@ import pytest
 
 from phylustrator import Style, beside
 from phylustrator.genomes import (
+    AA_COLORS,
     Alignment,
     Chromosome,
     Gene,
@@ -182,6 +183,20 @@ def test_alignment_panel_beside_tree():
     tree = tree_plot(loads("(a:1,b:1)R;"))
     aln = Alignment(rows=["a", "b"], seqs={"a": "ACGT", "b": "AGGT"}, kind="nt")
     assert beside(tree, alignment(aln, letters=False)).as_svg().lstrip().startswith("<")
+
+
+def test_a_protein_alignment_keys_the_chemical_classes_not_twenty_residues():
+    """The nucleotide key names the four bases; the protein one names the six classes, because a row
+    of twenty swatches is wider than the alignment and says less."""
+    tree = tree_plot(loads("(a:1,b:1)R;"))
+    aln = Alignment(rows=["a", "b"], seqs={"a": "MKLW", "b": "MRLF"}, kind="aa")
+    svg = beside(tree, alignment(aln, palette=AA_COLORS, letters=False)).as_svg()
+    for chemistry in ("hydrophobic", "aromatic", "positive"):
+        assert chemistry in svg
+    assert AA_COLORS["K"] == AA_COLORS["R"] != AA_COLORS["L"]      # class, not residue
+
+    nt = Alignment(rows=["a", "b"], seqs={"a": "ACGT", "b": "AGGT"}, kind="nt")
+    assert "hydrophobic" not in beside(tree, alignment(nt, letters=False)).as_svg()
 
 
 def test_states_panel_beside_tree():
