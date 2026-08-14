@@ -32,24 +32,25 @@ def _draw_linear(canvas, layout, color, style) -> None:
                        stroke_width=style.gene_stroke_width)
 
 
-def _polar(a: float, r: float) -> tuple[float, float]:
-    return r * math.cos(a), r * math.sin(a)
+def _polar(a: float, r: float, c: tuple[float, float] = (0.0, 0.0)) -> tuple[float, float]:
+    return c[0] + r * math.cos(a), c[1] + r * math.sin(a)
 
 
-def _arc(a0: float, a1: float, r: float, step: float = 0.12):
+def _arc(a0: float, a1: float, r: float, step: float = 0.12, c: tuple[float, float] = (0.0, 0.0)):
     """Points along the arc from ``a0`` to ``a1`` at radius ``r`` (data coords)."""
     n = max(1, int(math.ceil(abs(a1 - a0) / step)))
-    return [_polar(a0 + (a1 - a0) * i / n, r) for i in range(n + 1)]
+    return [_polar(a0 + (a1 - a0) * i / n, r, c) for i in range(n + 1)]
 
 
 def _draw_circular(canvas, layout, color, style) -> None:
     """Each gene an arrow bent along its ring. ``gene_style="arrow"`` (default) is a chunky body with a
     flared arrowhead (head wider than the body, tapering to a point — the beautiful genome look);
     ``"wedge"`` is the thin, un-flared shape."""
-    hh = layout.ring_hh
     chunky = getattr(style, "gene_style", "arrow") != "wedge"
     for gene in layout.genes:
         a0, a1, R = layout.box(gene)
+        c = layout.centre(gene)                 # a row of circles gives each chromosome its own
+        hh = layout.half_height(R)
         ri, ro = R - hh, R + hh
         span = a1 - a0
         tip = min(0.45 * span, math.radians(11.0))   # arrowhead angular length (capped for long genes)
@@ -58,14 +59,14 @@ def _draw_circular(canvas, layout, color, style) -> None:
         head_hh = max(hh, min(hh * 1.5, R * tip)) if chunky else hh
         if gene.strand >= 0:                    # arrow points toward a1
             base = a1 - tip
-            pts = (_arc(a0, base, ro)
-                   + [_polar(base, R + head_hh), _polar(a1, R), _polar(base, R - head_hh)]
-                   + _arc(base, a0, ri))
+            pts = (_arc(a0, base, ro, c=c)
+                   + [_polar(base, R + head_hh, c), _polar(a1, R, c), _polar(base, R - head_hh, c)]
+                   + _arc(base, a0, ri, c=c))
         else:                                   # arrow points toward a0
             base = a0 + tip
-            pts = ([_polar(a0, R), _polar(base, R + head_hh)]
-                   + _arc(base, a1, ro)
-                   + _arc(a1, base, ri)
-                   + [_polar(base, R - head_hh)])
+            pts = ([_polar(a0, R, c), _polar(base, R + head_hh, c)]
+                   + _arc(base, a1, ro, c=c)
+                   + _arc(a1, base, ri, c=c)
+                   + [_polar(base, R - head_hh, c)])
         canvas.polygon(pts, fill=color(gene), stroke=style.gene_stroke,
                        stroke_width=style.gene_stroke_width)

@@ -33,11 +33,12 @@ def highlight(genome, chromosome=None, start: int = 0, end: int = 0, *,
             a_lo = min(min(b[0], b[1]) for b in boxes)
             a_hi = max(max(b[0], b[1]) for b in boxes)
             R = boxes[0][2]
-            hh = layout.ring_hh * 1.9 + pad                 # a halo a touch wider than the genes
-            band = _arc(a_lo, a_hi, R + hh) + _arc(a_hi, a_lo, R - hh)
+            c = layout.centre(sel[0])                       # the circle this chromosome is drawn on
+            hh = layout.half_height(R) * 1.9 + pad          # a halo a touch wider than the genes
+            band = _arc(a_lo, a_hi, R + hh, c=c) + _arc(a_hi, a_lo, R - hh, c=c)
             canvas.polygon(band, fill=color, opacity=0.55, stroke=color, stroke_width=1.2)
             if label:
-                mx, my = _polar((a_lo + a_hi) / 2.0, R + hh + 0.06)
+                mx, my = _polar((a_lo + a_hi) / 2.0, R + hh + 0.06, c)
                 canvas.text(mx, my, label, anchor="middle", color=color, size=style.font_size)
             return
         x0 = min(b[0] for b in boxes)

@@ -43,16 +43,21 @@ def _linear(canvas, layout, style, label, ticks) -> None:
 def _circular(canvas, layout, style) -> None:
     total = layout.totals[0] if layout.totals else 1.0
     start, sweep = layout.angle_start, layout.angle_sweep
-    inner = (min(layout.rings) if layout.rings else 0.85) - layout.ring_hh - 0.06
-    canvas.data_ring(inner, "#c7d0cc", 1.0)                       # the coordinate ring
+    # the axis sits inside the innermost circle — and on *its* centre, which a row of circles moves
+    k = min(range(len(layout.rings)), key=lambda i: layout.rings[i]) if layout.rings else 0
+    R0 = layout.rings[k] if layout.rings else 0.85
+    cx, cy = layout.ring_centre(k)
+    inner = R0 - layout.half_height(R0) - 0.06
+    canvas.data_ring(inner, "#c7d0cc", 1.0, centre=(cx, cy))      # the coordinate ring
     step = _nice_step(total, 8)
     small = style.font_size * 0.9
     v = 0.0
     while v < total - step * 1e-6:
         a = start - (v / total) * sweep
-        canvas.line(inner * math.cos(a), inner * math.sin(a),
-                    (inner - 0.03) * math.cos(a), (inner - 0.03) * math.sin(a), "#5a6763", 1.1)
-        lx, ly = (inner - 0.10) * math.cos(a), (inner - 0.10) * math.sin(a)
+        canvas.line(cx + inner * math.cos(a), cy + inner * math.sin(a),
+                    cx + (inner - 0.03) * math.cos(a), cy + (inner - 0.03) * math.sin(a),
+                    "#5a6763", 1.1)
+        lx, ly = cx + (inner - 0.10) * math.cos(a), cy + (inner - 0.10) * math.sin(a)
         canvas.text(lx, ly, _fmt_bp(v), anchor="middle", size=small)
         v += step
 

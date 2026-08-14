@@ -57,6 +57,14 @@ class Figure:
             layer(canvas, primary, layout, self.style)
         return canvas
 
+    def extent(self) -> tuple[tuple[float, float], tuple[float, float]]:
+        """The ``(xlim, ylim)`` the canvas fits to, in layout units — the figure's shape before any
+        page size is chosen. Sizing several canvases from this puts their figures on one absolute
+        scale, which is what comparing genomes side by side needs: a genome half the size of another
+        should be drawn half the size, not blown up to fill its own square."""
+        layout = self._make_layout()
+        return layout.xlim, layout.ylim
+
     def as_svg(self) -> str:
         return self._build().as_svg()
 
@@ -106,8 +114,8 @@ def _draw_base(canvas: Canvas, layout: Layout, style: Style) -> None:
         if getattr(style, "ring_backbone", True):
             dash = getattr(style, "gene_style", "arrow") != "wedge"     # arrow: dashed loop; wedge: the classic solid one
             color, width = ("#c9d2ce", 1.2) if dash else ("#d8ddda", 1.4)
-            for R in layout.rings or []:
-                canvas.data_ring(R, color, width, dash=dash)
+            for k, R in enumerate(layout.rings or []):
+                canvas.data_ring(R, color, width, dash=dash, centre=layout.ring_centre(k))
     else:
         for y, x0, x1 in layout.backbones:
             canvas.line(x0, y, x1, y, "#d8ddda", 1.4)

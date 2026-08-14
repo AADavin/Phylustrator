@@ -74,6 +74,46 @@ def test_circular_shared_scale_shortens_the_small_chromosome():
         circular(g, scale="both")
 
 
+def _karyotype():
+    big = _genome("g", list("12345678")).chromosomes[0]
+    small = Chromosome(id="c2", genes=_genome("s", ["9", "10"]).chromosomes[0].genes,
+                       topology="circular", length=200)
+    return Genome(name="k", chromosomes=[big, small]), big, small
+
+
+def test_circular_row_puts_each_chromosome_on_its_own_circle():
+    """A karyotype: ``arrange="row"`` gives every chromosome a centre of its own, left to right."""
+    g, big, small = _karyotype()
+    lay = circular(g, arrange="row")
+    cx = [lay.centre(c.genes[0])[0] for c in (big, small)]
+    assert cx[0] < cx[1]                                  # chromosome 0 leftmost
+    assert len(set(lay.ring_centres)) == 2
+    assert lay.xlim[1] - lay.xlim[0] > lay.ylim[1] - lay.ylim[0]     # a row is wider than it is tall
+    assert (plot(g, layout="circular", arrange="row") + genes(by="family")).as_svg().startswith("<")
+    with pytest.raises(ValueError, match="unknown arrange"):
+        circular(g, arrange="stack")
+
+
+def test_circular_row_scale_shared_sizes_the_circle_by_gene_count():
+    """Under ``scale="shared"`` the radius follows the gene count, so the thickness must follow it
+    too — one absolute thickness would draw the short chromosome as a blob."""
+    g, big, small = _karyotype()
+    each, shared = circular(g, arrange="row"), circular(g, arrange="row", scale="shared")
+    assert each.rings[0] == each.rings[1]                      # every circle the same
+    assert shared.rings[1] == pytest.approx(shared.rings[0] * 2 / 8)
+    assert shared.half_height(shared.rings[1]) < shared.half_height(shared.rings[0])
+    # a number fixes the reference explicitly, so two genomes can be drawn to one scale
+    assert circular(g, arrange="row", scale=16).rings[0] == pytest.approx(0.5)
+    with pytest.raises(ValueError, match="positive number"):
+        circular(g, scale=0)
+
+
+def test_extent_reports_the_layout_the_canvas_fits_to():
+    g, _, _ = _karyotype()
+    fig = plot(g, layout="circular", arrange="row")
+    assert fig.extent() == (circular(g, arrange="row").xlim, circular(g, arrange="row").ylim)
+
+
 def test_heatmap_panel_beside_tree():
     tree = tree_plot(loads("(a:1,b:1)R;"))
     m = Matrix(rows=["a", "b"], cols=["f1", "f2", "f3"], values=[[1, 0, 2], [0, 1, 1]])

@@ -148,10 +148,12 @@ class Canvas:
         p.Z()
         self._d.append(p)
 
-    def data_ring(self, r: float, color: str, width: float, *, dash: bool = False) -> None:
-        """A circle of *data* radius ``r`` centred on the data origin (a chromosome backbone / ruler)."""
-        cx, cy = self.px(0.0), self.py(0.0)
-        rpx = self.px(r) - cx
+    def data_ring(self, r: float, color: str, width: float, *, dash: bool = False,
+                  centre: tuple[float, float] = (0.0, 0.0)) -> None:
+        """A circle of *data* radius ``r`` (a chromosome backbone / ruler), on the data origin unless
+        ``centre`` moves it — a karyotype draws each chromosome on its own centre."""
+        cx, cy = self.px(centre[0]), self.py(centre[1])
+        rpx = self.px(centre[0] + r) - cx
         extra = {"stroke_dasharray": "5,4"} if dash else {}
         self._d.append(draw.Circle(cx, cy, abs(rpx), fill="none", stroke=color,
                                    stroke_width=width, **extra))
