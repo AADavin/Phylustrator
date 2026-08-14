@@ -52,18 +52,24 @@ def _draw_circular(canvas, layout, color, style) -> None:
         c = layout.centre(gene)                 # a row of circles gives each chromosome its own
         hh = layout.half_height(R)
         ri, ro = R - hh, R + hh
-        span = a1 - a0
+        # Angles run clockwise, so a1 < a0 and the raw difference is NEGATIVE. Everything below is
+        # sized on the magnitude and placed with `way`, the direction position runs in. Taking the
+        # difference signed instead made `min(0.45 * span, 11°)` pick the 45% every time — the cap
+        # never bound, so a five-gene ring drew heads nearly half the gene long — and made the flare
+        # term negative, so `max(hh, …)` collapsed to `hh` and no arrow ever flared at all.
+        way = 1.0 if a1 >= a0 else -1.0
+        span = abs(a1 - a0)
         tip = min(0.45 * span, math.radians(11.0))   # arrowhead angular length (capped for long genes)
         # flare the head past the body only when the tip has angular room; on a gene-dense ring the
         # tip is tiny, so a fixed flare would stick out as a radial thorn — cap it to the tip's arc.
         head_hh = max(hh, min(hh * 1.5, R * tip)) if chunky else hh
         if gene.strand >= 0:                    # arrow points toward a1
-            base = a1 - tip
+            base = a1 - way * tip
             pts = (_arc(a0, base, ro, c=c)
                    + [_polar(base, R + head_hh, c), _polar(a1, R, c), _polar(base, R - head_hh, c)]
                    + _arc(base, a0, ri, c=c))
         else:                                   # arrow points toward a0
-            base = a0 + tip
+            base = a0 + way * tip
             pts = ([_polar(a0, R, c), _polar(base, R + head_hh, c)]
                    + _arc(base, a1, ro, c=c)
                    + _arc(a1, base, ri, c=c)

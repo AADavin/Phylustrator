@@ -1,9 +1,11 @@
 """Genomes domain: the three layouts render, the gene/synteny/axis layers draw, and the
 heatmap / alignment panels produce SVG. Mirrors ``test_figure.py`` for the trees domain."""
 
+import math
+
 import pytest
 
-from phylustrator import beside
+from phylustrator import Style, beside
 from phylustrator.genomes import (
     Alignment,
     Chromosome,
@@ -23,6 +25,7 @@ from phylustrator.genomes import (
     tracks,
 )
 from phylustrator.genomes.layout import circular
+from phylustrator.genomes.track import _draw_circular
 from phylustrator.trees import loads
 from phylustrator.trees import plot as tree_plot
 
@@ -112,6 +115,33 @@ def test_extent_reports_the_layout_the_canvas_fits_to():
     g, _, _ = _karyotype()
     fig = plot(g, layout="circular", arrange="row")
     assert fig.extent() == (circular(g, arrange="row").xlim, circular(g, arrange="row").ylim)
+
+
+def test_a_circular_arrow_flares_its_head_and_caps_its_length():
+    """The arrowhead is sized on the *magnitude* of the gene's arc.
+
+    Angles run clockwise, so the arc is negative, and taking it signed made `min(0.45 * span, 11°)`
+    always pick the 45% — a five-gene ring drew heads nearly half the gene long — while the flare
+    term went negative and `max(hh, …)` collapsed to the body width, so no arrow ever flared. Both
+    read as a wedge rather than an arrow, which is what the shape is for."""
+    class _Recorder:
+        def __init__(self):
+            self.shapes = []
+
+        def polygon(self, pts, **kw):
+            self.shapes.append(pts)
+
+    gs = [Gene(family=str(i), strand=1, position=i) for i in range(5)]   # long genes: 72° apiece
+    lay = circular(Genome("g", [Chromosome("c1", gs, topology="circular")]))
+    rec = _Recorder()
+    _draw_circular(rec, lay, lambda g: "#000000", Style())
+    a0, a1, R = lay.box(gs[0])
+    hh = lay.half_height(R)
+    radii = [math.hypot(x, y) for x, y in rec.shapes[0]]
+    assert max(radii) > R + hh * 1.05                # the head flares past the body
+    # the head is at most 11 degrees of arc, not 45% of a 72-degree gene
+    beyond = [math.atan2(y, x) for x, y in rec.shapes[0] if math.hypot(x, y) > R + hh * 1.001]
+    assert max(beyond) - min(beyond) < math.radians(11) * 1.2
 
 
 def test_heatmap_panel_beside_tree():
