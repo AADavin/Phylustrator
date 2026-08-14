@@ -4,7 +4,8 @@ import re
 
 import pytest
 
-from phylustrator.trees import color_branches, color_history, color_lanes, loads, note, plot
+from phylustrator.trees import (branch_events, color_branches, color_history, color_lanes,
+                                loads, note, plot)
 
 
 @pytest.mark.parametrize("layout", ["rectangular", "radial", "unrooted"])
@@ -134,3 +135,16 @@ def test_note_dy_nudges_the_text_without_moving_the_tree():
     lifted = (plot(tree) + note("A  on time", dy=-14)).as_svg()
     assert y_of(lifted) == pytest.approx(y_of(plain) - 14)
     assert lifted.count("#333333") == plain.count("#333333")    # the tree itself has not moved
+
+
+def test_a_ring_is_an_open_marker_and_a_circle_is_not():
+    """A ring marks something present but not counted — an unsampled tip — so it is hollow: the
+    fill is the page and the colour is in the stroke."""
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    ring = (plot(tree) + branch_events([{"kind": "unsampled", "node": "A", "x": 1.5}],
+                                       styles={"unsampled": ("ring", "#111111")})).as_svg()
+    disc = (plot(tree) + branch_events([{"kind": "unsampled", "node": "A", "x": 1.5}],
+                                       styles={"unsampled": ("circle", "#111111")})).as_svg()
+    assert '<circle' in ring and 'fill="#ffffff"' in ring and 'stroke="#111111"' in ring
+    assert 'fill="#111111"' in disc          # the filled one puts the colour in the fill
+    assert 'fill="#111111"' not in ring.split("<circle", 1)[1].split(">", 1)[0]

@@ -166,7 +166,11 @@ class Canvas:
     def raw_marker(self, cx, cy, shape: str, color: str, size: float, *,
                    stroke: str = "#ffffff", stroke_width: float = 0.8) -> None:
         """A small glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` / ``diamond``
-        (filled) or ``cross`` (an ✕, for a loss)."""
+        (filled), ``ring`` (open), or ``cross`` (an ✕, for a loss).
+
+        ``ring`` is the marker for something that is there but not counted — a lineage alive at the
+        present that sampling did not take — which is why it is the same shape as ``circle`` and
+        hollow rather than a shape of its own."""
         r = size
         if shape == "square":
             self._d.append(draw.Rectangle(cx - r, cy - r, 2 * r, 2 * r, fill=color,
@@ -181,6 +185,9 @@ class Canvas:
                    else [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)])
             self._d.append(draw.Lines(*[c for p in pts for c in p], fill=color,
                                       stroke=stroke, stroke_width=stroke_width, close=True))
+        elif shape == "ring":
+            self._d.append(draw.Circle(cx, cy, r, fill="#ffffff", stroke=color,
+                                       stroke_width=max(1.4, r * 0.45)))
         else:
             self._d.append(draw.Circle(cx, cy, r, fill=color, stroke=stroke,
                                        stroke_width=stroke_width))
