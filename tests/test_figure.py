@@ -4,7 +4,17 @@ import re
 
 import pytest
 
-from phylustrator.trees import branch_events, color_branches, color_history, color_lanes, loads, note, plot
+from phylustrator.trees import (
+    branch_events,
+    color_branches,
+    color_history,
+    color_lanes,
+    colorbar,
+    legend,
+    loads,
+    note,
+    plot,
+)
 
 
 @pytest.mark.parametrize("layout", ["rectangular", "radial", "unrooted"])
@@ -168,3 +178,17 @@ def test_a_coloured_branch_keeps_the_dash_the_figure_gave_it():
                 + color_branches(values, dashed=set())).as_svg()
     assert "stroke-dasharray" in both
     assert "stroke-dasharray" not in override
+
+
+def test_a_key_clears_the_tree_behind_it():
+    """A colorbar or a legend is drawn inside the plot, so it paints the page colour behind itself.
+
+    Without it a branch runs under the letters and neither is readable — which is what a tall stem
+    does to a top-left key on any tree deep enough to reach the corner."""
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    bar = (plot(tree) + color_branches({"A": 0.0, "B": 1.0, "C": 0.5, "D": 0.2})
+           + colorbar("rate")).as_svg()
+    key = (plot(tree) + color_branches({"A": "x", "B": "y", "C": "x", "D": "y"})
+           + legend("state")).as_svg()
+    for svg in (bar, key):
+        assert '<rect' in svg and 'fill="#ffffff"' in svg

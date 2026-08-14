@@ -7,6 +7,22 @@ All three draw in pixel space at a fixed spot on the page.
 
 from __future__ import annotations
 
+#: A key drawn inside the plotting area sits on top of the tree, and a branch running under the
+#: letters makes both unreadable. Every key here paints this behind itself first: the page colour,
+#: no border, so it reads as a gap in the tree rather than as a box someone added.
+_KEY_BACKDROP = "#ffffff"
+
+
+def _clear_behind(canvas, x, y, w, h, pad: float = 6.0) -> None:
+    canvas.raw_rect(x - pad, y - pad, w + 2 * pad, h + 2 * pad,
+                    fill=_KEY_BACKDROP, stroke="none", stroke_width=0.0)
+
+
+def _text_width(text: str, size: float) -> float:
+    """A serviceable width for a string at this font size — the canvas has no font metrics, and this
+    only has to be close enough to clear the tree behind it."""
+    return len(text) * size * 0.58
+
 
 def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, height: float = 10.0,
              size: float | None = None, labels: tuple[str, str] | None = None):
@@ -32,10 +48,14 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
             title_y = y - fs * 0.6 - 2
         else:
             y, title_y = m + fs, m - 2
+        lo, hi = labels if labels else (f"{scale['vmin']:.2f}", f"{scale['vmax']:.2f}")
+        top = min(title_y - fs, y) if title else y
+        bottom = y + height + fs * 1.1
+        wide = max(width, _text_width(title, fs) if title else 0.0)
+        _clear_behind(canvas, x, top, wide, bottom - top)
         if title:
             canvas.raw_text(x, title_y, title, anchor="start", weight="bold", size=fs)
         canvas.gradient_bar(scale["cmap"], x, y, width, height)
-        lo, hi = labels if labels else (f"{scale['vmin']:.2f}", f"{scale['vmax']:.2f}")
         canvas.raw_text(x, y + height + fs * 0.9, lo, anchor="start", size=fs * 0.9)
         canvas.raw_text(x + width, y + height + fs * 0.9, hi, anchor="end", size=fs * 0.9)
 
@@ -54,6 +74,10 @@ def legend(title: str = "", *, swatch: float | None = None, size: float | None =
         fs = size if size is not None else style.font_size
         sw = swatch if swatch is not None else fs * 0.95
         x, y = m, m
+        rows = len(scale["palette"]) + (1 if title else 0)
+        widest = max([_text_width(str(k), fs) for k in scale["palette"]] +
+                     [_text_width(title, fs) if title else 0.0])
+        _clear_behind(canvas, x, y - fs, sw + 8 + widest, rows * fs * 1.65)
         if title:
             canvas.raw_text(x, y, title, anchor="start", weight="bold", size=fs)
             y += fs * 1.7
