@@ -85,9 +85,13 @@ def time_marker(*times, color: str = "#444444", width: float = 1.5, dash: bool =
 
 
 def note(text: str, *, loc: str = "top-left", size: float | None = None,
-         color: str | None = None, weight: str = "bold"):
+         color: str | None = None, weight: str = "bold", dy: float = 0.0):
     """A short text note pinned to a corner (``"top-left"`` / ``"top-right"`` / ``"bottom-left"`` /
-    ``"bottom-right"``) — e.g. to name the model or clock a figure was drawn under."""
+    ``"bottom-right"``) — e.g. to name the model or clock a figure was drawn under.
+
+    ``dy`` nudges it in pixels, negative up. The corner is fixed to the margin, which is the right
+    place for a note *about* the figure; a note read as a **title** wants a little more air between
+    it and the tree than a margin the tree also uses can give."""
 
     def layer(canvas, tree, layout, style):
         w, h = canvas.size
@@ -95,6 +99,7 @@ def note(text: str, *, loc: str = "top-left", size: float | None = None,
         fs = size if size is not None else style.font_size
         x = m if "left" in loc else w - m
         y = (m * 0.6 + fs) if "top" in loc else (h - m * 0.5)
+        y += dy
         anchor = "start" if "left" in loc else "end"
         canvas.raw_text(x, y, text, anchor=anchor, size=fs,
                         color=color or style.label_color, weight=weight)

@@ -1,8 +1,10 @@
 """Figure: the skeleton renders to SVG, and the stem shows up as one extra branch."""
 
+import re
+
 import pytest
 
-from phylustrator.trees import color_branches, color_history, color_lanes, loads, plot
+from phylustrator.trees import color_branches, color_history, color_lanes, loads, note, plot
 
 
 @pytest.mark.parametrize("layout", ["rectangular", "radial", "unrooted"])
@@ -121,3 +123,14 @@ def test_a_line_safe_colormap_never_goes_pale():
         assert max(luminance(c) for c in colormap_hex(pale)) > 200        # the problem
         assert max(luminance(c) for c in colormap_hex(safe)) < 180        # the fix
         assert colormap_hex(safe)[0] == colormap_hex(pale)[0]             # same dark end, same order
+
+
+def test_note_dy_nudges_the_text_without_moving_the_tree():
+    """A note read as a panel title wants air between it and the tree; ``dy`` gives it."""
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    def y_of(svg):
+        return float(re.search(r'<text[^>]*\by="([-\d.]+)"', svg).group(1))
+    plain = (plot(tree) + note("A  on time")).as_svg()
+    lifted = (plot(tree) + note("A  on time", dy=-14)).as_svg()
+    assert y_of(lifted) == pytest.approx(y_of(plain) - 14)
+    assert lifted.count("#333333") == plain.count("#333333")    # the tree itself has not moved
