@@ -14,9 +14,10 @@ from ..color import colormap, to_hex
 NT_COLORS = {"A": "#3a923a", "C": "#3a6ea5", "G": "#e0a327", "T": "#c1443c",
              "U": "#c1443c", "-": "#e9ecef", "N": "#c8cdd2"}
 
-# Amino acids coloured by **chemical class**, not one hue each: twenty hues are twenty things to
-# remember, and what a protein alignment is read for is where the chemistry is conserved and where it
-# changes. The classes are the usual ones (Clustal's grouping).
+# Amino acids coloured by **chemical class**, each residue its own shade of the class hue. Twenty
+# unrelated hues are twenty things to remember, and what a protein alignment is read for is where the
+# chemistry holds; twenty *shades of six hues* say both — the class at a glance, the residue on a
+# second look. The classes are the usual ones (Clustal's grouping).
 AA_CLASSES: list[tuple[str, str, str]] = [
     ("hydrophobic", "AVLIMC", "#3a6ea5"),
     ("aromatic", "FWY", "#7b5ea7"),
@@ -25,7 +26,29 @@ AA_CLASSES: list[tuple[str, str, str]] = [
     ("negative", "DE", "#e0a327"),
     ("special", "GP", "#6c757d"),
 ]
-AA_COLORS = {res: color for _, residues, color in AA_CLASSES for res in residues}
+
+
+def _shades(hex_color: str, n: int, spread: float = 0.40) -> list[str]:
+    """``n`` shades of one colour, dark to light, the class hue itself in the middle.
+
+    White letters are drawn on these cells, so the range stops well short of white: the lightest
+    shade still has to carry them."""
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    if n == 1:
+        return [hex_color]
+    out = []
+    for i in range(n):
+        t = (i / (n - 1) - 0.5) * 2 * spread          # -spread (darker) .. +spread (lighter)
+        if t < 0:
+            out.append(to_hex((r * (1 + t), g * (1 + t), b * (1 + t))))
+        else:
+            out.append(to_hex((r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t)))
+    return out
+
+
+AA_COLORS = {res: shade
+             for _, residues, color in AA_CLASSES
+             for res, shade in zip(residues, _shades(color, len(residues)))}
 AA_COLORS.update({"-": "#e9ecef", "X": "#c8cdd2", "*": "#c8cdd2"})
 
 

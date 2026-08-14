@@ -193,7 +193,13 @@ def test_a_protein_alignment_keys_the_chemical_classes_not_twenty_residues():
     svg = beside(tree, alignment(aln, palette=AA_COLORS, letters=False)).as_svg()
     for chemistry in ("hydrophobic", "aromatic", "positive"):
         assert chemistry in svg
-    assert AA_COLORS["K"] == AA_COLORS["R"] != AA_COLORS["L"]      # class, not residue
+    # every residue its own shade, but a class shares its hue: K and R are both reds, and neither
+    # is any shade of the hydrophobic blue
+    assert len({AA_COLORS[r] for r in "AVLIMCFWYSTNQKRHDEGP"}) == 20
+    assert AA_COLORS["K"] != AA_COLORS["R"]
+    reds = {AA_COLORS[r] for r in "KRH"}
+    assert all(c[1:3] > c[5:7] for c in reds)                 # more red than blue in every one
+    assert not reds & {AA_COLORS[r] for r in "AVLIMC"}
 
     nt = Alignment(rows=["a", "b"], seqs={"a": "ACGT", "b": "AGGT"}, kind="nt")
     assert "hydrophobic" not in beside(tree, alignment(nt, letters=False)).as_svg()
