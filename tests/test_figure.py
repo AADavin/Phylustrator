@@ -4,8 +4,7 @@ import re
 
 import pytest
 
-from phylustrator.trees import (branch_events, color_branches, color_history, color_lanes,
-                                loads, note, plot)
+from phylustrator.trees import branch_events, color_branches, color_history, color_lanes, loads, note, plot
 
 
 @pytest.mark.parametrize("layout", ["rectangular", "radial", "unrooted"])
