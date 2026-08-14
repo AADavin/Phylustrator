@@ -192,3 +192,16 @@ def test_a_key_clears_the_tree_behind_it():
            + legend("state")).as_svg()
     for svg in (bar, key):
         assert '<rect' in svg and 'fill="#ffffff"' in svg
+
+
+def test_headroom_pushes_the_tree_down_and_leaves_the_bottom_alone():
+    """A key drawn top-left shares a row with the first branch unless the tree is given headroom."""
+    from phylustrator import Style
+
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    plain = plot(tree, style=Style(width=400, height=300, margin=20))
+    lifted = plot(tree, style=Style(width=400, height=300, margin=20, headroom=60))
+    top = lambda fig: min(t.y for t in fig.geometry().tips)      # noqa: E731
+    bottom = lambda fig: max(t.y for t in fig.geometry().tips)   # noqa: E731
+    assert top(lifted) > top(plain) + 30
+    assert bottom(lifted) == pytest.approx(bottom(plain))

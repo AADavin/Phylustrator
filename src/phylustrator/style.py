@@ -14,6 +14,10 @@ class Style:
     width: float = 800.0
     height: float = 600.0
     margin: float = 50.0
+    #: extra space above the plot, on top of ``margin``. A colorbar or legend is drawn inside
+    #: the plotting area, so on a tree whose first branch reaches the top corner the two share
+    #: a row; this pushes the tree down instead of moving the key somewhere worse.
+    headroom: float = 0.0
     # trees
     branch_color: str = "#333333"
     branch_width: float = 1.6

@@ -31,12 +31,14 @@ class Canvas:
         self._x0, self._x1 = xlim
         self._y0, self._y1 = ylim
         self._m = style.margin
+        self._top = style.margin + getattr(style, "headroom", 0.0)
         # equal_aspect keeps circles round (radial/unrooted): one scale for x and y, centred.
         self._equal = None
         if equal_aspect:
             xspan = (self._x1 - self._x0) or 1.0
             yspan = (self._y1 - self._y0) or 1.0
-            s = min((style.width - 2 * self._m) / xspan, (style.height - 2 * self._m) / yspan)
+            s = min((style.width - 2 * self._m) / xspan,
+                    (style.height - self._m - self._top) / yspan)
             self._equal = (s, style.width / 2 - s * (self._x0 + self._x1) / 2,
                            style.height / 2 - s * (self._y0 + self._y1) / 2)
 
@@ -54,7 +56,7 @@ class Canvas:
             s, _, oy = self._equal
             return oy + s * y
         span = (self._y1 - self._y0) or 1.0
-        return self._m + (y - self._y0) / span * (self.style.height - 2 * self._m)
+        return self._top + (y - self._y0) / span * (self.style.height - self._m - self._top)
 
     def line(self, x1, y1, x2, y2, color: str, width: float, *, dash: bool = False) -> None:
         extra = {"stroke_dasharray": "5,4"} if dash else {}
