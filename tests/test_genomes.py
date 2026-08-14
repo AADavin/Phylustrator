@@ -302,3 +302,28 @@ def test_grid_drops_the_cell_border_when_cells_are_tiny():
 def test_grid_is_empty_rather_than_broken_for_an_empty_matrix():
     empty = Matrix(rows=[], cols=[], values=[])
     assert grid(empty).as_svg().count("<rect") == 1              # background only
+
+
+def test_a_bar_panel_puts_its_axis_under_the_tree_not_under_the_last_bar():
+    """Two axes beside each other have to sit at the same height.
+
+    `beside` used to hand a panel only the rows it had values for, and `Bars` puts its axis under the
+    last row it is handed — so a tree whose bottom tips carry no value drew the bar axis above the
+    tree's own time axis. Every conditioned figure with an extinct tip at the foot of the tree had
+    the two out by tens of pixels."""
+    def axis_y(values):
+        tree = tree_plot(loads("(((a:1,b:1):1,c:2):1,d:3)R;"))
+        svg = beside(tree, bars(values, label="x"), width=600).as_svg()
+        ticks = re.findall(r'<text x="[\d.]+" y="([\d.]+)"[^>]*>0</text>', svg)
+        return float(ticks[-1])
+
+    all_four = axis_y({"a": 1.0, "b": 2.0, "c": 1.5, "d": 0.5})
+    top_two = axis_y({"a": 1.0, "b": 2.0})          # c and d have no value
+    assert top_two == all_four, ("the axis moved up to the last valued tip; it belongs under the "
+                                 "tree, so that it lines up with the tree's own axis")
+
+
+def test_bar_axis_ticks_say_where_they_are():
+    """`round()` wrote the middle tick of a 0–3 axis as '1'. It is at 1.5."""
+    svg = beside(tree_plot(loads("(a:1,b:1)R;")), bars({"a": 3.0, "b": 1.0}), width=600).as_svg()
+    assert ">1.5<" in svg.replace("</text>", "<"), "the halfway tick is not labelled 1.5"

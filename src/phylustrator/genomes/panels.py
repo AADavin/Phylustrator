@@ -209,6 +209,11 @@ class Bars:
         self.tick_size = tick_size          # axis tick font (default: from the style)
         self.label_size = label_size        # axis label font (default: from the style)
 
+    #: Take every tip row, not only the ones with a value. A tip with no value draws a zero-width
+    #: bar (nothing), and in exchange the axis below lands under the tree rather than under the last
+    #: bar — the two are the same only when every tip has a value.
+    all_rows = True
+
     @property
     def rows(self):
         return list(self.values)
@@ -234,7 +239,9 @@ class Bars:
         for frac in (0.0, 0.5, 1.0):
             tx = x0 + (x1 - x0) * frac
             canvas.raw_line(tx, y, tx, y + 5, "#333333", 1.2)
-            canvas.raw_text(tx, y + ts + 3, f"{round(vmax * frac)}", anchor="middle", size=ts)
+            # two significant figures, as trees.time_axis writes its ticks. `round()` wrote the
+            # halfway tick of a 0-3 axis as "1", which is not where it is and not what it is.
+            canvas.raw_text(tx, y + ts + 3, f"{vmax * frac:.2g}", anchor="middle", size=ts)
         if self.label:
             canvas.raw_text((x0 + x1) / 2, y + ts + ls + 4, self.label, anchor="middle", size=ls)
 

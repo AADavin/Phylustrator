@@ -54,8 +54,13 @@ def beside(tree, panel, *, width: float = 1100.0, height: float | None = None,
     canvas = Canvas(Style(width=width, height=H, margin=0, background=background), (0.0, 1.0), (0.0, 1.0))
     canvas.embed_png(png, 0, 0, tree_w, tree_h)
 
+    # A panel that wants **every** tip row says so, and gets them all — including tips it has no
+    # value for. `Bars` does: its axis sits under the last row it is handed, and filtering the rows
+    # down to the ones it has values for put that axis under the last *valued* tip instead of under
+    # the tree, so a tree with extinct tips below the last bar drew its two axes at different heights.
     wanted = set(panel.rows)
-    rows = [(t.name, t.y) for t in geom.tips if t.name in wanted]
+    rows = [(t.name, t.y) for t in geom.tips
+            if getattr(panel, "all_rows", False) or t.name in wanted]
     if rows:
         panel.draw(canvas, tree_w + gap, width - pad, rows, canvas.style)
     return Composite(canvas)
