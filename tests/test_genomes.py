@@ -2,6 +2,7 @@
 heatmap / alignment panels produce SVG. Mirrors ``test_figure.py`` for the trees domain."""
 
 import math
+import re
 
 import pytest
 
@@ -142,6 +143,33 @@ def test_a_circular_arrow_flares_its_head_and_caps_its_length():
     # the head is at most 11 degrees of arc, not 45% of a 72-degree gene
     beyond = [math.atan2(y, x) for x, y in rec.shapes[0] if math.hypot(x, y) > R + hh * 1.001]
     assert max(beyond) - min(beyond) < math.radians(11) * 1.2
+
+
+def test_a_ring_runs_clockwise_from_the_top_like_the_linear_track():
+    """A forward gene points the way the coordinate increases — right on a track, clockwise on a ring.
+
+    The page's y grows downward and the layout's angles do not, so drawing sin(a) straight reflected
+    the picture: the ring began at the bottom and ran anticlockwise, and a forward gene at the top of
+    it pointed left — the mirror image of the same genome drawn linearly. `_polar` negates y to undo
+    that, and this pins it, because it is invisible in any single ring."""
+    def centres(layout_kind):
+        gs = [Gene(family=str(i), strand=1, position=i) for i in range(4)]
+        g = Genome("g", [Chromosome("c1", gs, topology="circular")])
+        svg = (plot(g, layout=layout_kind, style=Style(width=400, height=400, margin=40))
+               + genes(by="family")).as_svg()
+        out = []
+        for s in re.findall(r'<[^>]*?(?:points|d)="([^"]{25,})"', svg)[:4]:
+            v = [float(x) for x in re.findall(r"-?\d+\.?\d*", s)]
+            out.append((sum(v[0::2]) / len(v[0::2]), sum(v[1::2]) / len(v[1::2])))
+        return out
+
+    ring = centres("circular")
+    assert len(ring) == 4
+    # clockwise from the top, on a page whose y grows down: right, then down, then left, then up
+    assert ring[0][0] > 200 and ring[0][1] < 200, "position 0 is not in the top-right quadrant"
+    assert ring[1][1] > ring[0][1], "the coordinate does not run downward on the right — not clockwise"
+    assert ring[2][0] < ring[1][0], "the coordinate does not run leftward along the bottom"
+    assert ring[3][1] < ring[2][1], "the coordinate does not run upward on the left"
 
 
 def test_heatmap_panel_beside_tree():

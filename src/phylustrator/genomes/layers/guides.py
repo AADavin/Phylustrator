@@ -54,10 +54,11 @@ def _circular(canvas, layout, style) -> None:
     v = 0.0
     while v < total - step * 1e-6:
         a = start - (v / total) * sweep
-        canvas.line(cx + inner * math.cos(a), cy + inner * math.sin(a),
-                    cx + (inner - 0.03) * math.cos(a), cy + (inner - 0.03) * math.sin(a),
+        # y negated, as in track._polar: the page's y grows downward and the angles do not
+        canvas.line(cx + inner * math.cos(a), cy - inner * math.sin(a),
+                    cx + (inner - 0.03) * math.cos(a), cy - (inner - 0.03) * math.sin(a),
                     "#5a6763", 1.1)
-        lx, ly = cx + (inner - 0.10) * math.cos(a), cy + (inner - 0.10) * math.sin(a)
+        lx, ly = cx + (inner - 0.10) * math.cos(a), cy - (inner - 0.10) * math.sin(a)
         canvas.text(lx, ly, _fmt_bp(v), anchor="middle", size=small)
         v += step
 

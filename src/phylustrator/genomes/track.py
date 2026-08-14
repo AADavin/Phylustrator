@@ -33,7 +33,16 @@ def _draw_linear(canvas, layout, color, style) -> None:
 
 
 def _polar(a: float, r: float, c: tuple[float, float] = (0.0, 0.0)) -> tuple[float, float]:
-    return c[0] + r * math.cos(a), c[1] + r * math.sin(a)
+    """A point at angle ``a`` on radius ``r``, in the layout's own coordinates.
+
+    The **y is negated**, and that is the whole reason a ring reads the right way round. The layout
+    computes angles in the usual mathematical convention — 90° at the top, and the coordinate
+    increasing clockwise — but the page's y grows *downward*, so drawing sin(a) straight would
+    reflect the picture: the ring started at the bottom and ran anticlockwise, and a forward gene at
+    the top of it pointed left. Cut open and laid flat, that is the mirror image of the same genome
+    drawn linearly, where a forward gene points right. Negating y here is the reflection that undoes
+    the page's, so the ring matches both the linear layout and the way genome maps are drawn."""
+    return c[0] + r * math.cos(a), c[1] - r * math.sin(a)
 
 
 def _arc(a0: float, a1: float, r: float, step: float = 0.12, c: tuple[float, float] = (0.0, 0.0)):
