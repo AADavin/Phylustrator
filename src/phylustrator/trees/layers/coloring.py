@@ -15,6 +15,17 @@ from ...color import map_values
 from ..skeleton import draw_branches
 
 
+def _dashed_or_figure(dashed, canvas) -> set:
+    """The layer's own ``dashed``, or the figure's if it was not given one.
+
+    A colouring layer overdraws the skeleton, so unless it knows which branches were dashed it paints
+    them solid and a run's extinct lineages quietly become survivors. `plot(dashed=...)` puts the set
+    on the canvas for exactly this."""
+    if dashed is not None:
+        return set(dashed)
+    return set(getattr(canvas, "dashed", None) or ())
+
+
 def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None, width=None,
                    dashed=None, limits: tuple[float, float] | None = None):
     """Colour every branch by ``values`` (``{node name: value}``). Numeric → colormap gradient;
@@ -36,7 +47,8 @@ def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None
             return by_name.get(node.name, default)
 
         draw_branches(canvas, tree, layout, color=color, width=width or style.branch_width,
-                      gradient=(scale["kind"] == "continuous"), dashed=dashed)
+                      gradient=(scale["kind"] == "continuous"),
+                      dashed=_dashed_or_figure(dashed, canvas))
 
     return layer
 
@@ -58,13 +70,13 @@ def color_history(history, *, palette: dict | None = None, cmap: str = "viridis"
 
     ``limits`` fixes the numeric range instead of taking it from the states, so panels drawn
     separately share one scale. Ignored for categorical data."""
-    dashed = dashed or set()
     states = {state for segments in history.values() for state, _ in segments}
     colors, scale = map_values({s: s for s in states}, cmap=cmap, palette=palette, limits=limits)
 
     def layer(canvas, tree, layout, style):
         if layout.kind != "rectangular":
             raise ValueError("color_history needs the rectangular layout (segments run along x)")
+        marks = _dashed_or_figure(dashed, canvas)
         w = width or style.branch_width
         if scale is not None:
             canvas.scale = scale
@@ -73,7 +85,7 @@ def color_history(history, *, palette: dict | None = None, cmap: str = "viridis"
             y = layout.y(node)
             x_end = layout.x(node)
             x_start = (x_end - layout.root_branch) if node.is_root else layout.x(node.parent)
-            d = node.name in dashed
+            d = node.name in marks
             segs = history.get(node.name)
             end_state = None
             if segs:
@@ -91,7 +103,7 @@ def color_history(history, *, palette: dict | None = None, cmap: str = "viridis"
             if not node.is_leaf:                              # connectors in the node's end state
                 cc = colors.get(end_state, base)
                 for c in node.children:
-                    canvas.line(x_end, y, x_end, layout.y(c), cc, w, dash=(c.name in dashed))
+                    canvas.line(x_end, y, x_end, layout.y(c), cc, w, dash=(c.name in marks))
 
     return layer
 
@@ -108,11 +120,11 @@ def color_lanes(lanes, *, width=None, gap: float = 1.0, connectors: bool = True,
     the plain grey skeleton for structure (``plot(tree)`` with ``skeleton=True``) and pass
     ``connectors=False`` here, so the lanes only paint the horizontal branches and the skeleton shows
     the tree. Rectangular layout only. ``lanes``: a list of ``(history, palette)`` pairs."""
-    dashed = dashed or set()
 
     def layer(canvas, tree, layout, style):
         if layout.kind != "rectangular":
             raise ValueError("color_lanes needs the rectangular layout (segments run along x)")
+        marks = _dashed_or_figure(dashed, canvas)
         w = width or style.branch_width
         n = len(lanes)
         # lane widths/offsets are in pixels; x, y are data-space — convert via the canvas scales so
@@ -128,7 +140,7 @@ def color_lanes(lanes, *, width=None, gap: float = 1.0, connectors: bool = True,
             y = layout.y(node)
             x_end = layout.x(node)
             x_start = (x_end - layout.root_branch) if node.is_root else layout.x(node.parent)
-            d = node.name in dashed
+            d = node.name in marks
             end_states = []
             for (history, palette), ox, oy in zip(lanes, offs_x, offs_y):
                 yy = y + oy
@@ -158,6 +170,6 @@ def color_lanes(lanes, *, width=None, gap: float = 1.0, connectors: bool = True,
                     cc = (joint or palette.get(es, base)) if es is not None else (joint or base)
                     for c in node.children:          # so the speciation verticals match the branches
                         canvas.line(x_end + ox, y + oy, x_end + ox, layout.y(c) + oy, cc, w,
-                                    dash=(c.name in dashed))
+                                    dash=(c.name in marks))
 
     return layer

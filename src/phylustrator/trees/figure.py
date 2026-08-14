@@ -92,6 +92,11 @@ class Figure:
         layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(layout.kind != "rectangular"))
+        # A colouring layer overdraws the skeleton, so it has to know which branches were dashed or
+        # it silently paints them solid — a run's extinct lineages disappearing into the colour is
+        # exactly how that has gone wrong. The figure knows; the layers see the canvas; so it goes
+        # here, and `color_branches(dashed=...)` overrides it when a caller wants something else.
+        canvas.dashed = self.dashed
         if self.skeleton:
             _draw_skeleton(canvas, self.tree, layout, self.style, self.dashed)
         for layer in self.layers:

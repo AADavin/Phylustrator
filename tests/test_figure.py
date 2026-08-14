@@ -147,3 +147,24 @@ def test_a_ring_is_an_open_marker_and_a_circle_is_not():
     assert '<circle' in ring and 'fill="#ffffff"' in ring and 'stroke="#111111"' in ring
     assert 'fill="#111111"' in disc          # the filled one puts the colour in the fill
     assert 'fill="#111111"' not in ring.split("<circle", 1)[1].split(">", 1)[0]
+
+
+def test_a_coloured_branch_keeps_the_dash_the_figure_gave_it():
+    """`plot(dashed=…)` survives a colouring layer drawn over it.
+
+    A colouring layer overdraws the skeleton, so before it knew about the figure's `dashed` it
+    painted extinct lineages solid — a run's dead branches quietly becoming survivors in every
+    coloured figure. The layer's own `dashed=` still wins when it is given one."""
+    tree = loads("((A:1,B:1)C:1,D:2)R;")
+    values = {"A": 0.0, "B": 1.0, "C": 0.5, "D": 0.2, "R": 0.4}
+    dashes = (plot(tree, dashed={"D"}) + color_branches(values)).as_svg()
+    none = (plot(tree) + color_branches(values)).as_svg()
+    assert "stroke-dasharray" in dashes
+    assert "stroke-dasharray" not in none
+    # the layer's own set still wins. With the skeleton off, nothing else can draw a dash, so what
+    # is left in the SVG is the colouring layer's own doing
+    both = (plot(tree, dashed={"D"}, skeleton=False) + color_branches(values)).as_svg()
+    override = (plot(tree, dashed={"D"}, skeleton=False)
+                + color_branches(values, dashed=set())).as_svg()
+    assert "stroke-dasharray" in both
+    assert "stroke-dasharray" not in override
