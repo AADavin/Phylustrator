@@ -28,22 +28,31 @@ AA_CLASSES: list[tuple[str, str, str]] = [
 ]
 
 
-def _shades(hex_color: str, n: int, spread: float = 0.40) -> list[str]:
-    """``n`` shades of one colour, dark to light, the class hue itself in the middle.
+def _shades(hex_color: str, n: int, dark: float = 0.26, light: float = 0.42) -> list[str]:
+    """``n`` shades of one colour, dark to light, the class hue itself in between.
 
-    White letters are drawn on these cells, so the range stops well short of white: the lightest
-    shade still has to carry them."""
+    Neither end runs to black or to white: a near-black cell reads as a different class rather than
+    a shade of this one, and a near-white one loses the letter drawn on it."""
     r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
     if n == 1:
         return [hex_color]
     out = []
     for i in range(n):
-        t = (i / (n - 1) - 0.5) * 2 * spread          # -spread (darker) .. +spread (lighter)
+        t = -dark + (dark + light) * i / (n - 1)
         if t < 0:
             out.append(to_hex((r * (1 + t), g * (1 + t), b * (1 + t))))
         else:
             out.append(to_hex((r + (255 - r) * t, g + (255 - g) * t, b + (255 - b) * t)))
     return out
+
+
+def _ink(fill: str) -> str:
+    """Black or white, whichever the letter drawn on this cell can be read in."""
+    try:
+        r, g, b = (int(fill[i:i + 2], 16) for i in (1, 3, 5))
+    except ValueError:
+        return "#ffffff"
+    return "#ffffff" if (0.299 * r + 0.587 * g + 0.114 * b) < 150 else "#1a1a1a"
 
 
 AA_COLORS = {res: shade
@@ -154,12 +163,12 @@ class Alignment:
             seq = self.alignment.seqs.get(label, "")
             for s, res in enumerate(seq):
                 cx = x0 + s * cw
-                canvas.raw_rect(cx, y - rh / 2, cw, rh,
-                                fill=self.palette.get(res, "#c8cdd2"),
+                fill = self.palette.get(res, "#c8cdd2")
+                canvas.raw_rect(cx, y - rh / 2, cw, rh, fill=fill,
                                 stroke="#ffffff", stroke_width=0.4)
                 if letters:
                     canvas.raw_text(cx + cw / 2, y, res, anchor="middle",
-                                    color="#ffffff", size=min(rh, cw) * 0.72, weight="bold")
+                                    color=_ink(fill), size=min(rh, cw) * 0.72, weight="bold")
         top = min(y for _, y in rows) - rh / 2
         # a light ruler every 10 sites
         for s in range(0, L + 1, 10):
