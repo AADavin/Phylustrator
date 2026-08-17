@@ -167,7 +167,8 @@ class Canvas:
 
     def raw_marker(self, cx, cy, shape: str, color: str, size: float, *,
                    stroke: str = "#ffffff", stroke_width: float = 0.8) -> None:
-        """A small glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` / ``diamond``
+        """A small glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` /
+        ``triangle_right`` (points along the time axis, for a state transition) / ``diamond``
         (filled), ``ring`` (open), or ``cross`` (an ✕, for a loss).
 
         ``ring`` is the marker for something that is there but not counted — a lineage alive at the
@@ -181,10 +182,15 @@ class Canvas:
             for a, b, c, d in ((-r, -r, r, r), (-r, r, r, -r)):
                 self._d.append(draw.Line(cx + a, cy + b, cx + c, cy + d, stroke=color,
                                          stroke_width=max(1.6, r * 0.55), stroke_linecap="round"))
-        elif shape in ("triangle", "diamond"):
-            pts = ([(cx, cy - r), (cx + r, cy + r * 0.85), (cx - r, cy + r * 0.85)]
-                   if shape == "triangle"
-                   else [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)])
+        elif shape in ("triangle", "triangle_right", "diamond"):
+            pts = {"triangle": [(cx, cy - r), (cx + r, cy + r * 0.85),
+                                (cx - r, cy + r * 0.85)],
+                   # points along the time axis — a state transition carries its
+                   # lineage forward into the new state
+                   "triangle_right": [(cx + r, cy), (cx - r * 0.85, cy - r),
+                                      (cx - r * 0.85, cy + r)],
+                   "diamond": [(cx, cy - r), (cx + r, cy), (cx, cy + r),
+                               (cx - r, cy)]}[shape]
             self._d.append(draw.Lines(*[c for p in pts for c in p], fill=color,
                                       stroke=stroke, stroke_width=stroke_width, close=True))
         elif shape == "ring":
