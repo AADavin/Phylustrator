@@ -161,6 +161,24 @@ def _round_nice(v: float) -> float:
     return float(nice * (10 ** exp))
 
 
+def _round_ticks(span: float, target: int) -> list[float]:
+    """About ``target`` tick positions from 0 to at most ``span``, at multiples of a
+    round step (1, 2, 2.5 or 5 times a power of ten). The last tick may stop short
+    of the axis end; a round number short of the edge beats an exact ugly one."""
+    import math
+    if span <= 0:
+        return [0.0]
+    raw = span / max(target - 1, 1)
+    mag = 10 ** math.floor(math.log10(raw))
+    step = 10 * mag
+    for mult in (1, 2, 2.5, 5, 10):
+        if span / (mult * mag) <= target - 1 + 1e-9:
+            step = mult * mag
+            break
+    n = int(span / step + 1e-9)
+    return [round(i * step, 10) for i in range(n + 1)]
+
+
 def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = None,
               label_size: float | None = None, bold: bool | None = None):
     """A horizontal scale along the bottom, in the layout's distance units (0 at the origin).
@@ -179,11 +197,13 @@ def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = 
         ls = label_size if label_size is not None else style.font_size
         y = height - m + 14  # just below the tree area, inside the bottom margin
         canvas.raw_line(canvas.px(x0), y, canvas.px(x1), y, "#333333", 1.2)
-        for i in range(ticks):
-            t = x0 + (x1 - x0) * i / (ticks - 1)
-            tx = canvas.px(t)
+        # ticks at round numbers (a 1 / 2 / 2.5 / 5 step), not at even fractions of the
+        # height: dividing a height of 3.96 into quarters gave "0, 0.99, 2, 3, 4",
+        # where the "2" was really 1.98 — ugly and, worse, slightly wrong
+        for t in _round_ticks(x1 - x0, ticks):
+            tx = canvas.px(x0 + t)
             canvas.raw_line(tx, y, tx, y + 5, "#333333", 1.2)
-            canvas.raw_text(tx, y + ts + 3, f"{t:.2g}", anchor="middle", size=ts)
+            canvas.raw_text(tx, y + ts + 3, f"{t:g}", anchor="middle", size=ts)
         if label:
             mid = (canvas.px(x0) + canvas.px(x1)) / 2
             is_bold = (label_size is not None) if bold is None else bold
