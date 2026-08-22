@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-08-22
+
+### Added
+- `trees.ring(values)` — an outer ring of coloured arcs around a radial tree, one contiguous segment
+  per tip merging same-coloured neighbours into a band; `radius_pct` sets where the ring sits.
+- `trees.tip_track(..., shape=…)` — the tip chip can now be any marker glyph (`"circle"`, `"square"`,
+  …), not only a square.
+- `trees.rubberband(values)` — a smooth, round population band wrapped around a radial tree, coloured
+  by `values` like `color_branches`. It traces the tree's outline from the root, holds it a constant
+  distance out from the branches (so the margin is even all the way around), rounds it by smoothing
+  over angle, and clamps it so it never crosses a branch. `gap` sets that constant distance, `smooth`
+  the roundness (fraction of the turn averaged over), `width` the band thickness.
+
 ## [0.1.4] - 2026-08-03
 
 ### Added

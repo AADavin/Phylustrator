@@ -10,7 +10,7 @@ from .coloring import color_branches, color_history, color_lanes
 from .events import branch_events
 from .guides import colorbar, legend, note, scale_bar, time_axis, time_marker
 from .labels import node_labels, tip_labels
-from .tracks import tip_track
+from .tracks import ring, rubberband, tip_track
 
 __all__ = [
     "color_branches",
@@ -19,6 +19,8 @@ __all__ = [
     "tip_labels",
     "node_labels",
     "tip_track",
+    "ring",
+    "rubberband",
     "branch_events",
     "colorbar",
     "legend",

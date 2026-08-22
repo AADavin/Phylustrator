@@ -14,6 +14,7 @@ from phylustrator.trees import (
     loads,
     note,
     plot,
+    rubberband,
 )
 
 
@@ -205,3 +206,28 @@ def test_headroom_pushes_the_tree_down_and_leaves_the_bottom_alone():
     bottom = lambda fig: max(t.y for t in fig.geometry().tips)   # noqa: E731
     assert top(lifted) > top(plain) + 30
     assert bottom(lifted) == pytest.approx(bottom(plain))
+
+
+def test_rubberband_wraps_a_radial_tree_in_its_population_colours():
+    """The band renders on a radial tree and paints each population's colour."""
+    tree = loads("((A:1,B:1)C:1,(D:1,E:1)F:1,(G:1,H:1)I:1)R:1;")
+    pops = {"A": "p0", "B": "p0", "D": "p1", "E": "p1", "G": "p2", "H": "p2"}
+    palette = {"p0": "#207080", "p1": "#c77bad", "p2": "#9060b0"}
+    svg = (plot(tree, layout="radial")
+           + rubberband(pops, palette=palette)).as_svg()
+    assert svg.lstrip().startswith("<")
+    for colour in palette.values():
+        assert colour in svg
+
+
+def test_rubberband_survives_a_lopsided_tree_and_stays_smooth():
+    """A near cluster and a far one on a long branch is the case the clamp must survive: the band
+    still renders, and rounding it (a bigger ``smooth``) does not error or drop the colours."""
+    tree = loads("((A:0.1,B:0.1)C:0.1,((D:0.1,E:0.1)F:0.1):5.0)R:1;")
+    pops = {"A": "p0", "B": "p0", "D": "p1", "E": "p1"}
+    palette = {"p0": "#207080", "p1": "#c77bad"}
+    for smooth in (0.0, 0.18, 0.4):
+        svg = (plot(tree, layout="radial")
+               + rubberband(pops, palette=palette, gap=8.0, smooth=smooth)).as_svg()
+        assert svg.count("<path") > 0
+        assert "#207080" in svg and "#c77bad" in svg

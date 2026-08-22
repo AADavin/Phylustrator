@@ -19,6 +19,8 @@ from .layers import (
                      legend,
                      node_labels,
                      note,
+                     ring,
+                     rubberband,
                      scale_bar,
                      time_axis,
                      time_marker,
@@ -30,7 +32,8 @@ from .tree import Node, Tree
 __all__ = [
     "Node", "Tree", "read", "loads", "write", "dumps",
     "plot", "Figure", "Geometry", "TipPos",
-    "color_branches", "color_history", "color_lanes", "tip_labels", "node_labels", "tip_track",
+    "color_branches", "color_history", "color_lanes", "tip_labels", "node_labels", "tip_track", "ring",
+    "rubberband",
     "branch_events", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar",
     "highlight_clade",
 ]

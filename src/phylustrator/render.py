@@ -103,6 +103,19 @@ class Canvas:
         self._d.append(draw.Lines(*flat, fill=fill, fill_opacity=opacity, stroke=stroke,
                                   stroke_width=stroke_width, close=True))
 
+    def raw_annulus_sector(self, cx, cy, r_in, r_out, a0, a1, *, fill,
+                           stroke="#ffffff", stroke_width=0.5, opacity=1.0) -> None:
+        """A filled arc segment (annulus sector) between angles ``a0..a1`` (radians) and radii
+        ``r_in..r_out``, centred at pixel ``(cx, cy)`` — the building block of an outer ring around a
+        radial tree."""
+        a0d, a1d = math.degrees(a0), math.degrees(a1)
+        p = draw.Path(fill=fill, fill_opacity=opacity, stroke=stroke,
+                      stroke_opacity=opacity, stroke_width=stroke_width)
+        p.arc(cx, cy, r_out, a0d, a1d, cw=True)
+        p.arc(cx, cy, r_in, a1d, a0d, cw=False, include_m=False, include_l=True)
+        p.Z()
+        self._d.append(p)
+
     def raw_ribbon(self, xa0, xa1, ya, xb0, xb1, yb, *, fill: str, opacity: float = 0.32,
                    stroke: str = "none") -> None:
         """An S-curved band linking ``[xa0,xa1]`` at ``ya`` to ``[xb0,xb1]`` at ``yb``, in **pixel**
