@@ -49,15 +49,18 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
 
         by_name = {n.name: n for n in tree.walk() if n.name}
         radial = layout.kind == "radial"
+        # events carry distance on the stem-inclusive scale (the rectangular default); the radial
+        # layout drops the stem (its radius starts at the crown), so shift by the stem's length
+        stem_off = float(tree.root.length or 0.0) if radial else 0.0
 
         def rad(node):
             return math.hypot(layout.x(node), layout.y(node))
 
         def place(node, t):
-            """An event at time ``t`` on ``node``'s branch, in layout coordinates."""
+            """An event at distance ``t`` on ``node``'s branch, in layout coordinates."""
             if not radial:
                 return t, layout.y(node)
-            a = layout.angle[node]                       # time is the radius in a radial layout
+            a = layout.angle[node]                       # the distance is the radius
             return t * math.cos(a), t * math.sin(a)
 
         used: dict[str, tuple] = {}
@@ -70,15 +73,15 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                     continue
                 # scale the arrow with `size` (as the point glyphs do) so the head reads as an arrow,
                 # not a tick, on a large figure
-                dx, dy = place(donor, ev["x"])
-                rx, ry = place(recip, ev["x"])
+                dx, dy = place(donor, ev["x"] - stem_off)
+                rx, ry = place(recip, ev["x"] - stem_off)
                 canvas.arrow(dx, dy, rx, ry, color,
                              width=max(1.8, size * 0.42), head=max(9.0, size * 2.4))
             else:
                 node = by_name.get(ev.get("node"))
                 if node is None:
                     continue
-                x = ev["x"]
+                x = ev["x"] - stem_off        # onto the layout's own distance scale
                 if clamp and node.parent is not None:
                     if radial:
                         lo, hi = sorted((rad(node.parent), rad(node)))
@@ -90,10 +93,18 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                     # the glyph's "forward" must follow the branch: rotate by the branch
                     # direction in PIXEL space (py may flip y, so measure it there)
                     ax, ay = place(node, max(x - 1e-6, 0.0))
-                    ang = math.atan2(canvas.py(my) - canvas.py(ay),
-                                     canvas.px(mx) - canvas.px(ax))
-                    canvas.marker(mx, my, glyph, color, size, angle=ang, stroke=color,
-                                  stroke_width=0.0)
+                    px, py = canvas.px(mx), canvas.py(my)
+                    ang = math.atan2(py - canvas.py(ay), px - canvas.px(ax))
+                    if glyph == "triangle_right":
+                        # tip AT the event's instant, body trailing over the state it leaves:
+                        # centred, the glyph swallows a short old-state segment and reads as a
+                        # switch inside its own destination colour
+                        px -= size * math.cos(ang)
+                        py -= size * math.sin(ang)
+                    # an ink outline, not white: the tip sits against a branch of its own
+                    # colour, and without a silhouette the flared base reads as the point
+                    canvas.raw_marker(px, py, glyph, color, size, angle=ang,
+                                      stroke="#1a1a1a", stroke_width=1.1)
                 else:
                     canvas.marker(mx, my, glyph, color, size)
             used[ev["kind"]] = (glyph, color)

@@ -25,9 +25,10 @@ def _text_width(text: str, size: float) -> float:
 
 
 def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, height: float = 10.0,
-             size: float | None = None, labels: tuple[str, str] | None = None):
+             size: float | None = None, labels: tuple[str, str] | None = None,
+             inset: float | None = None):
     """A gradient bar for a continuous scale, pinned to a left corner (``"top-left"`` default or
-    ``"bottom-left"`` — to clear the tree). ``size`` sets the label font (default the style's). No-op
+    ``"bottom-left"`` — to clear the tree). ``size`` sets the label font (default the style's). ``inset`` anchors the corner at a fixed distance instead of the style margin, so a large-margin figure can still tuck its guides into the corner. No-op
     unless a continuous scale was set.
 
     ``labels`` replaces the two end labels. The bar otherwise prints the values it was coloured by,
@@ -40,7 +41,7 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
         if not scale or scale.get("kind") != "continuous":
             return
         _, h = canvas.size
-        m = style.margin
+        m = inset if inset is not None else style.margin
         fs = size if size is not None else style.font_size
         x = m
         if "bottom" in loc:
@@ -62,26 +63,33 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
     return layer
 
 
-def legend(title: str = "", *, swatch: float | None = None, size: float | None = None):
+def legend(title: str = "", *, swatch: float | None = None, size: float | None = None,
+           entries: dict | None = None, dy: float = 0.0, inset: float | None = None):
     """A category swatch list, top-left. ``size`` sets the label font (default the style's) and the
-    swatch scales with it. No-op unless a categorical scale was set."""
+    swatch scales with it. Reads the recorded categorical scale, or ``entries``
+    (``{label: colour}``) to draw an explicit list — a figure whose scale slot is taken by a
+    continuous ring still gets its categorical legend that way. ``dy`` shifts the list down, so it
+    can sit below a ``colorbar`` on the same corner. No-op without a source of entries."""
 
     def layer(canvas, tree, layout, style):
-        scale = canvas.scale
-        if not scale or scale.get("kind") != "categorical":
-            return
-        m = style.margin
+        palette = entries
+        if palette is None:
+            scale = canvas.scale
+            if not scale or scale.get("kind") != "categorical":
+                return
+            palette = scale["palette"]
+        m = inset if inset is not None else style.margin
         fs = size if size is not None else style.font_size
         sw = swatch if swatch is not None else fs * 0.95
-        x, y = m, m
-        rows = len(scale["palette"]) + (1 if title else 0)
-        widest = max([_text_width(str(k), fs) for k in scale["palette"]] +
+        x, y = m, m + dy
+        rows = len(palette) + (1 if title else 0)
+        widest = max([_text_width(str(k), fs) for k in palette] +
                      [_text_width(title, fs) if title else 0.0])
         _clear_behind(canvas, x, y - fs, sw + 8 + widest, rows * fs * 1.65)
         if title:
             canvas.raw_text(x, y, title, anchor="start", weight="bold", size=fs)
             y += fs * 1.7
-        for label, color in scale["palette"].items():
+        for label, color in palette.items():
             canvas.raw_rect(x, y - sw / 2, sw, sw, fill=color, stroke="#666", stroke_width=0.5)
             canvas.raw_text(x + sw + 8, y, str(label), anchor="start", size=fs)
             y += fs * 1.6
