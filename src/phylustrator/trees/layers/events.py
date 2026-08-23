@@ -45,7 +45,21 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
     styles = {**DEFAULT_EVENT_STYLES, **(styles or {})}
 
     def layer(canvas, tree, layout, style):
+        import math
+
         by_name = {n.name: n for n in tree.walk() if n.name}
+        radial = layout.kind == "radial"
+
+        def rad(node):
+            return math.hypot(layout.x(node), layout.y(node))
+
+        def place(node, t):
+            """An event at time ``t`` on ``node``'s branch, in layout coordinates."""
+            if not radial:
+                return t, layout.y(node)
+            a = layout.angle[node]                       # time is the radius in a radial layout
+            return t * math.cos(a), t * math.sin(a)
+
         used: dict[str, tuple] = {}
         for raw in events:
             ev = _unpack(raw)
@@ -56,7 +70,9 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                     continue
                 # scale the arrow with `size` (as the point glyphs do) so the head reads as an arrow,
                 # not a tick, on a large figure
-                canvas.arrow(ev["x"], layout.y(donor), ev["x"], layout.y(recip), color,
+                dx, dy = place(donor, ev["x"])
+                rx, ry = place(recip, ev["x"])
+                canvas.arrow(dx, dy, rx, ry, color,
                              width=max(1.8, size * 0.42), head=max(9.0, size * 2.4))
             else:
                 node = by_name.get(ev.get("node"))
@@ -64,9 +80,22 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                     continue
                 x = ev["x"]
                 if clamp and node.parent is not None:
-                    lo, hi = sorted((layout.x(node.parent), layout.x(node)))
+                    if radial:
+                        lo, hi = sorted((rad(node.parent), rad(node)))
+                    else:
+                        lo, hi = sorted((layout.x(node.parent), layout.x(node)))
                     x = min(max(x, lo), hi)
-                canvas.marker(x, layout.y(node), glyph, color, size)
+                mx, my = place(node, x)
+                if radial:
+                    # the glyph's "forward" must follow the branch: rotate by the branch
+                    # direction in PIXEL space (py may flip y, so measure it there)
+                    ax, ay = place(node, max(x - 1e-6, 0.0))
+                    ang = math.atan2(canvas.py(my) - canvas.py(ay),
+                                     canvas.px(mx) - canvas.px(ax))
+                    canvas.marker(mx, my, glyph, color, size, angle=ang, stroke=color,
+                                  stroke_width=0.0)
+                else:
+                    canvas.marker(mx, my, glyph, color, size)
             used[ev["kind"]] = (glyph, color)
         if legend and used:
             _draw_legend(canvas, style, used, legend_title, size, legend_loc, legend_size)

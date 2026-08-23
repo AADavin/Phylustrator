@@ -39,11 +39,11 @@ def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
 
 def ring(values, *, cmap: str = "viridis", palette: dict | None = None,
          gap: float | None = None, width: float | None = None, radius_pct: float = 100.0,
-         opacity: float = 1.0):
+         opacity: float = 1.0, edge: str | None = None, edge_width: float = 0.6):
     """An outer ring of coloured arcs — one contiguous segment per tip at a fixed radius — the
     classic circular-tree "population ring". Best with a ``radial`` (or ``unrooted``) layout: each
     tip's arc spans the angle halfway to its neighbours, so same-coloured neighbours merge into a
-    band. ``radius_pct`` sets the ring's radius as that percentile of the tip distances (100 = at the
+    band. ``edge`` outlines every sector in one colour (so a white sector still shows). ``radius_pct`` sets the ring's radius as that percentile of the tip distances (100 = at the
     outermost tip; lower brings it in, so a few long branches can extend past it instead of blowing
     the ring outward). Colours ``values`` like :func:`color_branches` and records the scale for a
     ``legend``. Returns a layer."""
@@ -81,7 +81,8 @@ def ring(values, *, cmap: str = "viridis", palette: dict | None = None,
             color = colors.get(lf.name)
             if color is not None:
                 canvas.raw_annulus_sector(cx0, cy0, r_in, r_out, b[i], b[i + 1],
-                                          fill=color, stroke=color, stroke_width=0.4,
+                                          fill=color, stroke=edge or color,
+                                          stroke_width=edge_width if edge else 0.4,
                                           opacity=opacity)
 
     return layer

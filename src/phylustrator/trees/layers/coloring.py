@@ -60,7 +60,7 @@ def color_history(history, *, palette: dict | None = None, cmap: str = "viridis"
     ``(state, duration)`` running from the branch's start to its end. Use this (not
     :func:`color_branches`) for a value that changes *along* a branch: the branch is a mosaic, not
     one colour. ``dashed`` is an optional set of node names to draw dashed (e.g. extinct lineages).
-    Rectangular layout only. ``history``: ``{node name: [(state, dur), …]}``.
+    Rectangular and radial layouts. ``history``: ``{node name: [(state, dur), …]}``.
 
     Dispatches on the states the same way :func:`color_branches` dispatches on its values:
     **labels** get a categorical palette (and record it, so ``legend`` can draw), **numbers** get a
@@ -74,13 +74,16 @@ def color_history(history, *, palette: dict | None = None, cmap: str = "viridis"
     colors, scale = map_values({s: s for s in states}, cmap=cmap, palette=palette, limits=limits)
 
     def layer(canvas, tree, layout, style):
-        if layout.kind != "rectangular":
-            raise ValueError("color_history needs the rectangular layout (segments run along x)")
+        if layout.kind not in ("rectangular", "radial"):
+            raise ValueError("color_history supports the rectangular and radial layouts")
         marks = _dashed_or_figure(dashed, canvas)
         w = width or style.branch_width
         if scale is not None:
             canvas.scale = scale
         base = default or style.branch_color
+        if layout.kind == "radial":
+            _history_radial(canvas, tree, layout, history, colors, base, w, marks)
+            return
         for node in tree.walk():
             y = layout.y(node)
             x_end = layout.x(node)
@@ -106,6 +109,47 @@ def color_history(history, *, palette: dict | None = None, cmap: str = "viridis"
                     canvas.line(x_end, y, x_end, layout.y(c), cc, w, dash=(c.name in marks))
 
     return layer
+
+
+def _history_radial(canvas, tree, layout, history, colors, base, w, marks) -> None:
+    """The radial half of :func:`color_history`: each branch is a mosaic running OUT along the
+    node's angle, from the parent's radius to the node's, and the speciation connector is an arc
+    at the node's radius in the branch's end state — mirrors ``skeleton._radial``."""
+    import math
+
+    from ..skeleton import _arc
+
+    ang = layout.angle
+
+    def radius(node):
+        return math.hypot(layout.x(node), layout.y(node))
+
+    for node in tree.walk():
+        a = ang[node]
+        r_end = radius(node)
+        r_start = max(0.0, r_end - layout.root_branch) if node.is_root else radius(node.parent)
+        d = node.name in marks
+        ca, sa = math.cos(a), math.sin(a)
+        segs = history.get(node.name)
+        end_state = None
+        if segs:
+            total = sum(dur for _, dur in segs) or 1.0
+            span = r_end - r_start
+            rr = r_start
+            for state, dur in segs:
+                r1 = rr + span * dur / total
+                if r1 != rr:      # two changes at the same instant leave a zero-length segment
+                    canvas.line(rr * ca, rr * sa, r1 * ca, r1 * sa,
+                                colors.get(state, base), w, dash=d)
+                rr = r1
+            end_state = segs[-1][0]
+        else:
+            canvas.line(r_start * ca, r_start * sa, r_end * ca, r_end * sa, base, w, dash=d)
+        if not node.is_leaf and r_end > 1e-9:     # angular connectors in the node's end state
+            cc = colors.get(end_state, base)
+            for c in node.children:
+                _arc(canvas, r_end, min(a, ang[c]), max(a, ang[c]), cc, w,
+                     dash=(c.name in marks))
 
 
 def color_lanes(lanes, *, width=None, gap: float = 1.0, connectors: bool = True,

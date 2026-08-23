@@ -179,7 +179,8 @@ class Canvas:
         self._d.append(draw.Image(x, y, w, h, data=data, embed=True, mime_type="image/png"))
 
     def raw_marker(self, cx, cy, shape: str, color: str, size: float, *,
-                   stroke: str = "#ffffff", stroke_width: float = 0.8) -> None:
+                   stroke: str = "#ffffff", stroke_width: float = 0.8,
+                   angle: float = 0.0) -> None:
         """A small glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` /
         ``triangle_right`` (points along the time axis, for a state transition) / ``diamond``
         (filled), ``ring`` (open), or ``cross`` (an ✕, for a loss).
@@ -204,6 +205,12 @@ class Canvas:
                                       (cx - r * 0.85, cy + r)],
                    "diamond": [(cx, cy - r), (cx + r, cy), (cx, cy + r),
                                (cx - r, cy)]}[shape]
+            if angle:
+                # rotate the glyph around its centre, so "along the time axis" can follow a
+                # radial branch's direction rather than always pointing right
+                ca, sa = math.cos(angle), math.sin(angle)
+                pts = [(cx + (x - cx) * ca - (y - cy) * sa,
+                        cy + (x - cx) * sa + (y - cy) * ca) for x, y in pts]
             self._d.append(draw.Lines(*[c for p in pts for c in p], fill=color,
                                       stroke=stroke, stroke_width=stroke_width, close=True))
         elif shape == "ring":
