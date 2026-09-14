@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-14
+
 ### Added
 - `ph.below(tree, panel)` — the x-axis twin of `beside`: a panel under a rectangular tree that shares
   its time axis, with an optional time axis under the panel. The tree keeps its size and margins,
