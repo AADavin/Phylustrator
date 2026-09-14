@@ -116,15 +116,14 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
 
 def _draw_legend(canvas, style, used, title, marker, loc, fsize) -> None:
     width, height = canvas.size
-    m = style.margin
     fs = fsize if fsize is not None else style.font_size
     ms = marker * (fs / style.font_size)                            # glyphs scale with the legend text
     row_h = fs * 1.7
     labels = ([title] if title else []) + list(used)
     box_w = ms * 2 + 14 + max(len(s) for s in labels) * fs * 0.62
     n_rows = len(used) + (1 if title else 0)
-    x = (m + ms + 6) if "left" in loc else (width - m - box_w)
-    y = (m * 0.6 + fs) if "top" in loc else (height - m - row_h * n_rows)
+    x = (style.margin_at("left") + ms + 6) if "left" in loc else (width - style.margin_at("right") - box_w)
+    y = (style.margin_at("top") * 0.6 + fs) if "top" in loc else (height - style.margin_at("bottom") - row_h * n_rows)
     if title:
         canvas.raw_text(x, y, title, anchor="start", weight="bold", size=fs)
         y += fs * 1.8

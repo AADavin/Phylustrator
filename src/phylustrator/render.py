@@ -30,17 +30,22 @@ class Canvas:
             self._d.append(draw.Rectangle(0, 0, style.width, style.height, fill=style.background))
         self._x0, self._x1 = xlim
         self._y0, self._y1 = ylim
-        self._m = style.margin
-        self._top = style.margin + getattr(style, "headroom", 0.0)
+        self._left = style.margin_at("left")
+        self._right = style.margin_at("right")
+        self._bottom = style.margin_at("bottom")
+        self._top = style.margin_at("top") + getattr(style, "headroom", 0.0)
         # equal_aspect keeps circles round (radial/unrooted): one scale for x and y, centred.
         self._equal = None
         if equal_aspect:
             xspan = (self._x1 - self._x0) or 1.0
             yspan = (self._y1 - self._y0) or 1.0
-            s = min((style.width - 2 * self._m) / xspan,
-                    (style.height - self._m - self._top) / yspan)
-            self._equal = (s, style.width / 2 - s * (self._x0 + self._x1) / 2,
-                           style.height / 2 - s * (self._y0 + self._y1) / 2)
+            s = min((style.width - self._left - self._right) / xspan,
+                    (style.height - self._bottom - self._top) / yspan)
+            # centred between the margins; headroom shrinks the scale but does not shift the centre
+            cx = (self._left + style.width - self._right) / 2
+            cy = (style.margin_at("top") + style.height - self._bottom) / 2
+            self._equal = (s, cx - s * (self._x0 + self._x1) / 2,
+                           cy - s * (self._y0 + self._y1) / 2)
 
     # --- data-space (transformed through the layout extent) ---------------
 
@@ -49,14 +54,14 @@ class Canvas:
             s, ox, _ = self._equal
             return ox + s * x
         span = (self._x1 - self._x0) or 1.0
-        return self._m + (x - self._x0) / span * (self.style.width - 2 * self._m)
+        return self._left + (x - self._x0) / span * (self.style.width - self._left - self._right)
 
     def py(self, y: float) -> float:
         if self._equal:
             s, _, oy = self._equal
             return oy + s * y
         span = (self._y1 - self._y0) or 1.0
-        return self._top + (y - self._y0) / span * (self.style.height - self._m - self._top)
+        return self._top + (y - self._y0) / span * (self.style.height - self._bottom - self._top)
 
     def line(self, x1, y1, x2, y2, color: str, width: float, *, dash: bool = False) -> None:
         extra = {"stroke_dasharray": "5,4"} if dash else {}

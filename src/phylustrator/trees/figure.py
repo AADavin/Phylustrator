@@ -12,7 +12,7 @@ contract, so new decorations never touch the figure.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 from ..render import Canvas
@@ -36,14 +36,38 @@ class TipPos:
 
 
 @dataclass
+class NodePos:
+    """Where any node — a tip or an internal node — lands on the rendered page, in pixels."""
+
+    name: str
+    x: float
+    y: float
+    is_leaf: bool
+
+
+@dataclass
 class Geometry:
     """The rendered figure's pixel geometry — enough to align something else (a heatmap, an
     alignment) to the tree's tips without redrawing the tree. ``tips`` are in top-to-bottom order;
-    ``tip_x`` is the pixel x where the tips end (where a companion panel can begin)."""
+    ``tip_x`` is the pixel x where the tips end (where a companion panel can begin).
+
+    The x axis too: ``nodes`` holds every node, internal ones included, in preorder, and :meth:`px`
+    turns a layout x (a time, under the rectangular layout) into a pixel x. ``xlim`` is the layout's
+    x range and ``x_pixels`` its two ends on the page — where a panel under the tree starts and stops
+    (see :func:`~phylustrator.compose.below`)."""
 
     size: tuple[float, float]
     tips: list[TipPos]
     tip_x: float
+    nodes: list[NodePos] = field(default_factory=list)
+    xlim: tuple[float, float] = (0.0, 1.0)
+    x_pixels: tuple[float, float] = (0.0, 1.0)
+
+    def px(self, x: float) -> float:
+        """The pixel x of layout x ``x``. The canvas maps x linearly in every layout, so two points
+        fix it."""
+        (x0, x1), (p0, p1) = self.xlim, self.x_pixels
+        return p0 + (x - x0) / ((x1 - x0) or 1.0) * (p1 - p0)
 
 
 class Figure:
@@ -73,20 +97,26 @@ class Figure:
     def with_size(self, width: float, height: float) -> "Figure":
         """A copy of this figure rendered at a given pixel size (same tree, layers, style otherwise).
         Used to fit the tree into a column beside a companion panel."""
-        return Figure(self.tree, layout=self.layout, stem=self.stem,
-                      style=replace(self.style, width=width, height=height),
+        return self.with_style(replace(self.style, width=width, height=height))
+
+    def with_style(self, style: Style) -> "Figure":
+        """A copy of this figure drawn with ``style`` (same tree, layers and options otherwise)."""
+        return Figure(self.tree, layout=self.layout, stem=self.stem, style=style,
                       dashed=self.dashed, skeleton=self.skeleton, layers=self.layers)
 
     def geometry(self) -> Geometry:
-        """The pixel positions of the tips for this figure's current style — so a companion panel can
-        line its rows up with the tree without redrawing it."""
+        """The pixel positions of the tips and of every node for this figure's current style, and
+        the x-to-pixel mapping — so a companion panel can line up with the tree without redrawing it."""
         layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(self.layout != "rectangular"))
         tips = [TipPos(leaf.name or "", canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf)))
                 for leaf in self.tree.leaves]
         tip_x = max((t.x for t in tips), default=canvas.size[0])
-        return Geometry(canvas.size, tips, tip_x)
+        nodes = [NodePos(node.name or "", canvas.px(layout.x(node)), canvas.py(layout.y(node)), node.is_leaf)
+                 for node in self.tree.walk()]
+        x_pixels = (canvas.px(layout.xlim[0]), canvas.px(layout.xlim[1]))
+        return Geometry(canvas.size, tips, tip_x, nodes, layout.xlim, x_pixels)
 
     def _build(self) -> Canvas:
         layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)

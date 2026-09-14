@@ -41,14 +41,15 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
         if not scale or scale.get("kind") != "continuous":
             return
         _, h = canvas.size
-        m = inset if inset is not None else style.margin
+        left, top, bottom = ((inset, inset, inset) if inset is not None else
+                             (style.margin_at("left"), style.margin_at("top"), style.margin_at("bottom")))
         fs = size if size is not None else style.font_size
-        x = m
+        x = left
         if "bottom" in loc:
-            y = h - m * 0.5 - height - fs * 0.9        # bar top, leaving room for the min/max labels
+            y = h - bottom * 0.5 - height - fs * 0.9   # bar top, leaving room for the min/max labels
             title_y = y - fs * 0.6 - 2
         else:
-            y, title_y = m + fs, m - 2
+            y, title_y = top + fs, top - 2
         lo, hi = labels if labels else (f"{scale['vmin']:.2f}", f"{scale['vmax']:.2f}")
         top = min(title_y - fs, y) if title else y
         bottom = y + height + fs * 1.1
@@ -78,10 +79,10 @@ def legend(title: str = "", *, swatch: float | None = None, size: float | None =
             if not scale or scale.get("kind") != "categorical":
                 return
             palette = scale["palette"]
-        m = inset if inset is not None else style.margin
         fs = size if size is not None else style.font_size
         sw = swatch if swatch is not None else fs * 0.95
-        x, y = m, m + dy
+        x = inset if inset is not None else style.margin_at("left")
+        y = (inset if inset is not None else style.margin_at("top")) + dy
         rows = len(palette) + (1 if title else 0)
         widest = max([_text_width(str(k), fs) for k in palette] +
                      [_text_width(title, fs) if title else 0.0])
@@ -127,10 +128,9 @@ def note(text: str, *, loc: str = "top-left", size: float | None = None,
 
     def layer(canvas, tree, layout, style):
         w, h = canvas.size
-        m = style.margin
         fs = size if size is not None else style.font_size
-        x = m if "left" in loc else w - m
-        y = (m * 0.6 + fs) if "top" in loc else (h - m * 0.5)
+        x = style.margin_at("left") if "left" in loc else w - style.margin_at("right")
+        y = (style.margin_at("top") * 0.6 + fs) if "top" in loc else (h - style.margin_at("bottom") * 0.5)
         y += dy
         anchor = "start" if "left" in loc else "end"
         canvas.raw_text(x, y, text, anchor=anchor, size=fs,
@@ -145,11 +145,10 @@ def scale_bar(length: float | None = None, label: str | None = None):
 
     def layer(canvas, tree, layout, style):
         width, height = canvas.size
-        m = style.margin
         span = layout.xlim[1] - layout.xlim[0]
         L = length if length is not None else _round_nice(span / 5 or 1.0)
         px_len = abs(canvas.px(L) - canvas.px(0.0))
-        x1, y = width - m, height - m * 0.5
+        x1, y = width - style.margin_at("right"), height - style.margin_at("bottom") * 0.5
         x0 = x1 - px_len
         canvas.raw_line(x0, y, x1, y, "#333333", 1.6)
         canvas.raw_text((x0 + x1) / 2, y - 8, label or f"{L:.2g}",
@@ -173,18 +172,23 @@ def _round_ticks(span: float, target: int) -> list[float]:
     """About ``target`` tick positions from 0 to at most ``span``, at multiples of a
     round step (1, 2, 2.5 or 5 times a power of ten). The last tick may stop short
     of the axis end; a round number short of the edge beats an exact ugly one."""
-    import math
     if span <= 0:
         return [0.0]
-    raw = span / max(target - 1, 1)
-    mag = 10 ** math.floor(math.log10(raw))
-    step = 10 * mag
-    for mult in (1, 2, 2.5, 5, 10):
-        if span / (mult * mag) <= target - 1 + 1e-9:
-            step = mult * mag
-            break
+    step = _round_step(span, target)
     n = int(span / step + 1e-9)
     return [round(i * step, 10) for i in range(n + 1)]
+
+
+def _round_step(span: float, target: int) -> float:
+    """The round step (1, 2, 2.5 or 5 times a power of ten) that cuts ``span`` into at most
+    ``target - 1`` intervals. ``span`` must be positive."""
+    import math
+    raw = span / max(target - 1, 1)
+    mag = 10 ** math.floor(math.log10(raw))
+    for mult in (1, 2, 2.5, 5, 10):
+        if span / (mult * mag) <= target - 1 + 1e-9:
+            return mult * mag
+    return 10 * mag
 
 
 def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = None,
@@ -192,30 +196,37 @@ def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = 
     """A horizontal scale along the bottom, in the layout's distance units (0 at the origin).
     Rectangular only (distance maps to x); use ``scale_bar`` for radial/unrooted. ``tick_size`` /
     ``label_size`` set the tick-number and axis-label font sizes (default: the style's font size);
-    the vertical spacing follows the font, so give the figure enough bottom ``margin`` for big text.
+    the vertical spacing follows the font, so give the figure enough bottom margin for big text.
     ``bold`` sets the label weight (default: bold only when a ``label_size`` is given)."""
 
     def layer(canvas, tree, layout, style):
         if layout.kind != "rectangular":
             return
         _, height = canvas.size
-        m = style.margin
-        x0, x1 = 0.0, layout.xlim[1]
         ts = tick_size if tick_size is not None else style.font_size * 0.85
         ls = label_size if label_size is not None else style.font_size
-        y = height - m + 14  # just below the tree area, inside the bottom margin
-        canvas.raw_line(canvas.px(x0), y, canvas.px(x1), y, "#333333", 1.2)
-        # ticks at round numbers (a 1 / 2 / 2.5 / 5 step), not at even fractions of the
-        # height: dividing a height of 3.96 into quarters gave "0, 0.99, 2, 3, 4",
-        # where the "2" was really 1.98 — ugly and, worse, slightly wrong
-        for t in _round_ticks(x1 - x0, ticks):
-            tx = canvas.px(x0 + t)
-            canvas.raw_line(tx, y, tx, y + 5, "#333333", 1.2)
-            canvas.raw_text(tx, y + ts + 3, f"{t:g}", anchor="middle", size=ts)
-        if label:
-            mid = (canvas.px(x0) + canvas.px(x1)) / 2
-            is_bold = (label_size is not None) if bold is None else bold
-            weight = "bold" if is_bold else "normal"
-            canvas.raw_text(mid, y + ts + ls + 4, label, anchor="middle", size=ls, weight=weight)
+        is_bold = (label_size is not None) if bold is None else bold
+        y = height - style.margin_at("bottom") + 14  # just below the tree area, inside the bottom margin
+        draw_time_axis(canvas, canvas.px, layout.xlim[1], y, label, ticks=ticks, tick_size=ts,
+                       label_size=ls, weight="bold" if is_bold else "normal")
 
     return layer
+
+
+def draw_time_axis(canvas, px, x_end: float, y: float, label: str | None, *, ticks: int = 5,
+                   tick_size: float, label_size: float, weight: str = "normal") -> None:
+    """Draw a time axis from 0 to ``x_end`` at pixel height ``y``, with ``px`` mapping a time to a
+    pixel x. Shared by :func:`time_axis` and :func:`~phylustrator.compose.below`, so an axis under a
+    panel is the same axis a tree draws under itself."""
+    canvas.raw_line(px(0.0), y, px(x_end), y, "#333333", 1.2)
+    # ticks at round numbers (a 1 / 2 / 2.5 / 5 step), not at even fractions of the
+    # height: dividing a height of 3.96 into quarters gave "0, 0.99, 2, 3, 4",
+    # where the "2" was really 1.98 — ugly and, worse, slightly wrong
+    for t in _round_ticks(x_end, ticks):
+        tx = px(t)
+        canvas.raw_line(tx, y, tx, y + 5, "#333333", 1.2)
+        canvas.raw_text(tx, y + tick_size + 3, f"{t:g}", anchor="middle", size=tick_size)
+    if label:
+        mid = (px(0.0) + px(x_end)) / 2
+        canvas.raw_text(mid, y + tick_size + label_size + 4, label, anchor="middle", size=label_size,
+                        weight=weight)

@@ -36,6 +36,8 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
 - **Layers** — `color_branches`, `color_history`, `tip_labels`, `node_labels`, `tip_track`,
   `branch_events`, `colorbar`, `legend`, `time_axis`, `time_marker`, `scale_bar`, `note`,
   `highlight_clade`.
+- **Panels** — `node_points`, placed under a rectangular tree with `ph.below(tree, panel)`. The panel
+  shares the tree's time axis, so a value measured at a node sits directly under that node.
 
 ## Genomes
 

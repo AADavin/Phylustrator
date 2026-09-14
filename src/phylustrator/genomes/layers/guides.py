@@ -25,9 +25,8 @@ def position_axis(label: str = "position", *, ticks: int = 6):
 
 def _linear(canvas, layout, style, label, ticks) -> None:
     _, height = canvas.size
-    m = style.margin
     x0, x1 = layout.xlim
-    y = height - m * 0.62
+    y = height - style.margin_at("bottom") * 0.62
     canvas.raw_line(canvas.px(x0), y, canvas.px(x1), y, "#333333", 1.2)
     small = style.font_size * 0.85
     for i in range(ticks):

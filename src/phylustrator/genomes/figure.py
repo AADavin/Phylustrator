@@ -173,14 +173,13 @@ class GridFigure(Figure):
     def _build(self) -> Canvas:
         from ..color import colormap, to_hex
 
-        m = self.style.margin
         canvas = Canvas(self.style, (0.0, 1.0), (0.0, 1.0))
         nrow, ncol = len(self.matrix.rows), len(self.matrix.cols)
         if not nrow or not ncol:
             return canvas
-        x0, y0 = m, m
-        w = self.style.width - 2 * m
-        h = self.style.height - 2 * m
+        x0, y0 = self.style.margin_at("left"), self.style.margin_at("top")
+        w = self.style.width - x0 - self.style.margin_at("right")
+        h = self.style.height - y0 - self.style.margin_at("bottom")
         cw, ch = w / ncol, h / nrow
 
         sample = colormap(self.cmap)

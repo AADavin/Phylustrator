@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `ph.below(tree, panel)` — the x-axis twin of `beside`: a panel under a rectangular tree that shares
+  its time axis, with an optional time axis under the panel. The tree keeps its size and margins,
+  every node stays on its pixel, and the composite is drawn as vectors, so it needs no cairosvg (#7).
+- `trees.node_points({node: value})` — the panel for it: one point per named node, internal nodes
+  included, at the node's time. Options: per-node `colors`, `line=True` to join the points, a zero
+  line when the range crosses 0, and round y ticks. A name not in the tree raises an error.
+- `Figure.geometry()` now also gives `nodes` (every node's pixel position, internal ones included)
+  and `px(x)`, the time-to-pixel mapping, so other panels can line up with the x axis.
+- `Style` gains `margin_left`, `margin_right`, `margin_top` and `margin_bottom`. Each defaults to
+  `margin`, so existing figures render byte for byte as before. The tree guides use the side they sit on.
+
 ## [0.2.16] - 2026-08-22
 
 ### Added

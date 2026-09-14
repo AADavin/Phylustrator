@@ -14,6 +14,13 @@ class Style:
     width: float = 800.0
     height: float = 600.0
     margin: float = 50.0
+    #: one side's margin, when it should differ from ``margin``; ``None`` takes ``margin``. A
+    #: composite reserves room on one side — a y axis on the left, a panel underneath — without
+    #: moving the other three. Read a side through :meth:`margin_at`, never the field itself.
+    margin_left: float | None = None
+    margin_right: float | None = None
+    margin_top: float | None = None
+    margin_bottom: float | None = None
     #: extra space above the plot, on top of ``margin``. A colorbar or legend is drawn inside
     #: the plotting area, so on a tree whose first branch reaches the top corner the two share
     #: a row; this pushes the tree down instead of moving the key somewhere worse.
@@ -34,3 +41,14 @@ class Style:
     font_size: float = 12.0
     label_color: str = "#222222"
     background: str | None = "white"
+
+    def margin_at(self, side: str) -> float:
+        """The margin on ``side`` (``"left"`` / ``"right"`` / ``"top"`` / ``"bottom"``): that side's
+        own value if set, else ``margin``.
+
+        Resolved on every read, not once in ``__post_init__``: ``replace(style, margin=10)`` copies
+        the side fields as they are, so a side filled in from the old ``margin`` would keep it."""
+        if side not in ("left", "right", "top", "bottom"):
+            raise ValueError(f"side must be 'left', 'right', 'top' or 'bottom', got {side!r}")
+        own = getattr(self, f"margin_{side}")
+        return self.margin if own is None else own
