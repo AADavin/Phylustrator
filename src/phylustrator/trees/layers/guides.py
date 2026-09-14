@@ -184,7 +184,7 @@ def _round_step(span: float, target: int) -> float:
     ``target - 1`` intervals. ``span`` must be positive."""
     import math
     raw = span / max(target - 1, 1)
-    mag = 10 ** math.floor(math.log10(raw))
+    mag = 10.0 ** math.floor(math.log10(raw))
     for mult in (1, 2, 2.5, 5, 10):
         if span / (mult * mag) <= target - 1 + 1e-9:
             return mult * mag

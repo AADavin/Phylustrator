@@ -10,6 +10,7 @@ through cairosvg, falling back to ``.svg`` (with a note) when it is absent.
 from __future__ import annotations
 
 import math
+from collections.abc import Collection
 from pathlib import Path
 
 import drawsvg as draw
@@ -25,6 +26,8 @@ class Canvas:
                  *, equal_aspect: bool = False) -> None:
         self.style = style
         self.scale = None  # set by a colouring layer; read by colorbar()/legend()
+        # node names whose branch is dashed; set by the tree figure, read by a colouring layer
+        self.dashed: Collection[str] | None = None
         self._d = draw.Drawing(style.width, style.height, origin=(0, 0))
         if style.background:
             self._d.append(draw.Rectangle(0, 0, style.width, style.height, fill=style.background))
