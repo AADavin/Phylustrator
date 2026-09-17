@@ -100,15 +100,35 @@ def legend(title: str = "", *, swatch: float | None = None, size: float | None =
 
 def time_marker(*times, color: str = "#444444", width: float = 1.5, dash: bool = True,
                 label: str | None = None, label_size: float | None = None):
-    """Vertical reference line(s) crossing the tree at the given distance/time value(s) — e.g. to mark
-    a mass-extinction moment or a rate shift. Rectangular only (distance maps to x). ``label`` (if
-    given) is written above the first line."""
+    """Reference marker(s) at the given distance/time value(s) — e.g. a mass-extinction moment or a
+    rate shift. Rectangular: a vertical line crossing the tree. Radial: a circle at that distance
+    from the centre, which is what a depth threshold looks like on a tree too big to read as a
+    rectangle. The unrooted layout places branches by angle and has no distance-from-origin axis, so
+    it raises rather than drawing nothing. ``label`` (if given) is written above the first marker.
+
+    Times come on the stem-inclusive scale of the rectangular layout, the same scale
+    ``branch_events`` takes. The radial layout starts at the crown, so the stem comes off there."""
 
     def layer(canvas, tree, layout, style):
-        if layout.kind != "rectangular":
+        ls = label_size if label_size is not None else style.font_size
+        if layout.kind == "unrooted":
+            raise ValueError("time_marker needs a layout with a distance axis, and the unrooted "
+                             "layout has none: it places branches by angle, so a distance from the "
+                             "origin is not a place on it. Use rectangular or radial.")
+        if layout.kind == "radial":
+            # the radial layout drops the stem and starts at the crown, so shift the times by it —
+            # branch_events shifts the same way, for the same reason
+            stem = float(tree.root.length or 0.0)
+            for i, t in enumerate(times):
+                r = t - stem
+                if r < 0:
+                    raise ValueError(f"time_marker at {t:g} falls inside the root stem, which the "
+                                     f"radial layout does not draw: its centre is the crown, at {stem:g}")
+                canvas.data_ring(r, color, width, dash=dash)
+                if label and i == 0:
+                    canvas.text(0.0, -r, label, dy=-8, anchor="middle", color=color, size=ls)
             return
         y0, y1 = layout.ylim
-        ls = label_size if label_size is not None else style.font_size
         for i, t in enumerate(times):
             canvas.line(t, y0, t, y1, color, width, dash=dash)
             if label and i == 0:

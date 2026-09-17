@@ -1,5 +1,6 @@
 """Figure: the skeleton renders to SVG, and the stem shows up as one extra branch."""
 
+import math
 import re
 
 import pytest
@@ -15,6 +16,7 @@ from phylustrator.trees import (
     note,
     plot,
     rubberband,
+    time_marker,
 )
 
 
@@ -231,3 +233,59 @@ def test_rubberband_survives_a_lopsided_tree_and_stays_smooth():
                + rubberband(pops, palette=palette, gap=8.0, smooth=smooth)).as_svg()
         assert svg.count("<path") > 0
         assert "#207080" in svg and "#c77bad" in svg
+
+
+# --- time_marker across the layouts (issue #8) ------------------------------------------------
+
+_MARKER_TREE = "((((A:1,B:1)F:1,C:2)G:1,D:3)H:1,E:4)R;"
+
+
+def _circle(svg):
+    """The (cx, cy, r) of the one circle in the figure — the radial marker."""
+    found = re.findall(r'<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)"', svg)
+    assert len(found) == 1, f"expected one circle, found {len(found)}"
+    return tuple(float(v) for v in found[0])
+
+
+def test_time_marker_draws_in_rectangular_and_radial():
+    """It rendered nothing at all in radial, and said nothing about it."""
+    tree = loads(_MARKER_TREE)
+    for layout in ("rectangular", "radial"):
+        svg = (plot(tree, layout=layout) + time_marker(2.0, color="#D55E00", width=4)).as_svg()
+        assert "#D55E00" in svg, f"the marker is missing from the {layout} layout"
+
+
+def test_the_radial_marker_is_a_circle_through_the_nodes_at_that_distance():
+    tree = loads(_MARKER_TREE)
+    fig = plot(tree, layout="radial") + time_marker(2.0, color="#D55E00")
+    cx, cy, r = _circle(fig.as_svg())
+    at_two = [n for n in fig.geometry().nodes if n.name == "G"][0]      # G sits at distance 2
+    assert math.hypot(at_two.x - cx, at_two.y - cy) == pytest.approx(r)
+    assert r > 0
+
+
+def test_the_radial_marker_takes_the_stem_off_the_time():
+    """The radial layout starts at the crown, as branch_events already assumed for its events."""
+    tree = loads("((((A:1,B:1)F:1,C:2)G:1,D:3)H:1,E:4)R:1.5;")
+    fig = plot(tree, layout="radial") + time_marker(3.5)                # 2.0 past the crown
+    cx, cy, r = _circle(fig.as_svg())
+    at_two = [n for n in fig.geometry().nodes if n.name == "G"][0]
+    assert math.hypot(at_two.x - cx, at_two.y - cy) == pytest.approx(r)
+
+
+def test_the_radial_marker_keeps_its_dash():
+    tree = loads(_MARKER_TREE)
+    assert "stroke-dasharray" in (plot(tree, layout="radial") + time_marker(2.0)).as_svg()
+    assert "stroke-dasharray" not in (plot(tree, layout="radial")
+                                      + time_marker(2.0, dash=False)).as_svg()
+
+
+def test_time_marker_refuses_the_unrooted_layout():
+    """A distance from the origin is not a place on an equal-angle layout. Say so, do not skip."""
+    with pytest.raises(ValueError, match="unrooted"):
+        (plot(loads(_MARKER_TREE), layout="unrooted") + time_marker(2.0)).as_svg()
+
+
+def test_time_marker_refuses_a_time_the_radial_layout_cannot_show():
+    with pytest.raises(ValueError, match="stem"):
+        (plot(loads("((A:1,B:1)F:1,C:2)R:1.5;"), layout="radial") + time_marker(0.5)).as_svg()
