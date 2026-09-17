@@ -21,6 +21,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Style` gains `margin_left`, `margin_right`, `margin_top` and `margin_bottom`. Each defaults to
   `margin`, so existing figures render byte for byte as before. The tree guides use the side they sit on.
 
+## [0.2.17] - 2026-08-23
+
+### Added
+- `trees.color_history` works on the radial layout. Each branch is painted as its state mosaic,
+  running outward along the node's angle, and the arc at a speciation takes the branch's end state.
+- `trees.branch_events` works on the radial layout. Point marks and transfer arrows are placed in
+  polar coordinates, and each glyph turns to follow its branch.
+- `trees.ring` gains `edge` and `edge_width`, which outline every sector in one colour, so a white
+  sector still shows as a cell.
+- `trees.legend` gains `entries`, an explicit `{label: colour}` list, for a figure whose scale slot
+  holds a continuous ring. It also gains `dy`, to sit below a `colorbar` in the same corner.
+- `trees.legend` and `trees.colorbar` gain `inset`, which anchors the corner at a fixed distance
+  instead of the figure margin. A figure with a large margin keeps its guides in the corner, clear
+  of its rings.
+- `CITATION.cff`, the citation metadata for the Zenodo DOI.
+
+### Fixed
+- On a radial tree, `branch_events` marks landed one stem length too far out. The radial layout
+  drops the root stem, and the event distances now drop it too.
+- On a radial tree, a state-switch triangle puts its tip at the event's time, with its body over the
+  state it leaves, and has a thin dark outline. Before, its wide base read as the point.
+
 ## [0.2.16] - 2026-08-22
 
 ### Added
