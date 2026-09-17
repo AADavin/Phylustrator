@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-17
+
+### Fixed
+- `trees.time_marker` drew nothing on the radial and unrooted layouts, silently. It now draws a
+  circle at that distance from the centre on a radial tree, with the same colour, width and dash
+  arguments. A radial time is shifted by the root stem, as `branch_events` already shifts its
+  events, because the radial layout starts at the crown. The unrooted layout raises instead of
+  skipping: it places branches by angle, so a distance from the origin is not a place on it (#8).
+
 ## [0.3.0] - 2026-09-14
 
 ### Added
