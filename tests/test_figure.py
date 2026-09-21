@@ -452,3 +452,56 @@ def test_the_legend_shows_the_kind_colour_not_one_events_override():
 def test_a_tuple_event_still_works():
     svg = _events_svg([("A", 1.5, "duplication")], legend=False)
     assert "#3a7ca5" in svg and "fill-opacity" not in svg
+
+
+# --- a transfer has to be able to happen --------------------------------------------------------
+
+# A's branch runs 1..2, D's runs 0..2, so the two coexist over 1..2
+def test_a_transfer_outside_the_window_is_refused():
+    """Drawn, it sits on a row whose branch has already ended, and reads as a transfer that never
+    happened. Five arcs of a figure went out that way."""
+    with pytest.raises(ValueError, match=r"outside \[1, 2\]"):
+        _events_svg([_transfer(x=2.6)])
+    with pytest.raises(ValueError, match="A -> D"):
+        _events_svg([_transfer(x=0.4)])
+
+
+def test_a_transfer_between_lineages_that_never_meet_says_so():
+    """E ends at 1 and its grandchild A starts at 2, so no time can hold both. A parent and its
+    child do touch, at the instant of the split, and that stays drawable."""
+    tree = loads("(((A:1,B:1)C:1,D:2)E:1,F:3)R;")
+    with pytest.raises(ValueError, match="never exist at the same time"):
+        (plot(tree, style=_EV_STYLE)
+         + branch_events([{"kind": "transfer", "donor": "A", "recipient": "E", "x": 1.5}])).as_svg()
+    assert (plot(tree, style=_EV_STYLE)
+            + branch_events([{"kind": "transfer", "donor": "A", "recipient": "C",
+                              "x": 2.0}])).as_svg()
+
+
+def test_a_transfer_on_a_branch_end_is_kept():
+    """Branch lengths come from a reconstruction; a time on the boundary must not fail."""
+    for x in (1.0, 2.0):
+        assert _arcs(_events_svg([_transfer(x=x)]))
+
+
+def test_clamp_false_draws_a_transfer_exactly_where_it_says():
+    assert _arcs(_events_svg([_transfer(x=2.6)], clamp=False))
+
+
+def test_the_window_follows_the_layout_that_drops_the_stem():
+    """Times are given on the rectangular, stem-inclusive scale. The radial layout starts at the
+    crown, so the window has to shift with it rather than refusing a valid transfer."""
+    tree = loads("((A:1,B:1)C:1,D:2)R:0.5;")           # every distance moves out by the 0.5 stem
+    ev = [{"kind": "transfer", "donor": "A", "recipient": "D", "x": 2.1}]
+    for layout in ("rectangular", "radial"):
+        assert (plot(tree, layout=layout, style=_EV_STYLE) + branch_events(ev)).as_svg()
+    with pytest.raises(ValueError, match="outside"):
+        (plot(tree, layout="radial", style=_EV_STYLE)
+         + branch_events([{**ev[0], "x": 0.9}])).as_svg()
+
+
+def test_a_point_marker_outside_its_branch_is_still_pulled_onto_it():
+    """Markers clamp, as they always have: only a transfer is refused, because moving it would
+    redraw it at a time the caller did not give."""
+    svg = _events_svg([{"kind": "duplication", "node": "A", "x": 9.0}], legend=False)
+    assert _rect(svg, "#3a7ca5")[0] < _EV_STYLE.width, "the marker was not brought back on the page"

@@ -18,6 +18,12 @@ and the kind's full style, so hundreds of transfers summed over gene families re
 arcs and many faint ones. Divide by the largest count to get it: ``weight = n / n_max``. ``color``
 and ``size`` override the kind's colour and the layer's size for that one event. An event with none
 of them is drawn exactly as before, and the legend always shows the kind's own colour.
+
+**An event has to be able to happen.** A point marker outside its branch is pulled back onto it, and
+a transfer whose time is outside the window where donor and recipient both exist is refused: it
+would be drawn on a row where that lineage's branch has already ended, which reads as a transfer
+that never happened. Both are the ``clamp`` argument, on by default; ``clamp=False`` places every
+event exactly where it says.
 """
 
 from __future__ import annotations
@@ -62,6 +68,19 @@ def _weight_scale(weight, floor: float) -> float:
     return floor + (1.0 - floor) * min(max(float(weight), 0.0), 1.0)
 
 
+def _impossible(ev, lo: float, hi: float) -> str:
+    """Why this transfer cannot be drawn. It names the window rather than the offending time alone:
+    a whole figure of times measured from the present, or without the root stem, misses it the same
+    way, and the window is what says so."""
+    pair = f"{ev.get('donor')} -> {ev.get('recipient')}"
+    if lo > hi:
+        return (f"branch_events: the transfer {pair} at {ev['x']:g} cannot be drawn — those two "
+                f"lineages never exist at the same time")
+    return (f"branch_events: the transfer {pair} at {ev['x']:g} is outside [{lo:g}, {hi:g}], the "
+            f"window where donor and recipient both exist. Event times are distances from the root, "
+            f"on the same scale as the tree's branch lengths; pass clamp=False to draw it anyway")
+
+
 def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                   legend: bool = True, legend_title: str = "events",
                   legend_loc: str = "top-right", legend_size: float | None = None,
@@ -72,7 +91,12 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
 
     An event may carry its own ``weight`` (0-1), ``color`` and ``size`` — see the module docstring.
     ``weight_floor`` is how much of the kind's style a weight of 0 keeps, so the lightest mark is
-    still visible."""
+    still visible.
+
+    ``clamp`` also refuses a transfer whose time falls outside the window where the donor and the
+    recipient both exist, naming that window. Drawing it would put the arrow on a row whose branch
+    has already ended, and the usual cause is a time measured on another scale — from the present
+    rather than the root, or without the root stem."""
     styles = {**DEFAULT_EVENT_STYLES, **(styles or {})}
 
     def layer(canvas, tree, layout, style):
@@ -86,6 +110,17 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
 
         def rad(node):
             return math.hypot(layout.x(node), layout.y(node))
+
+        def span(node):
+            """The distance range over which this lineage's own branch is drawn."""
+            here = rad(node) if radial else layout.x(node)
+            if node.parent is None:                      # the root: its branch is the stem, if drawn
+                return 0.0, here
+            up = rad(node.parent) if radial else layout.x(node.parent)
+            return min(up, here), max(up, here)
+
+        # branch lengths come from a reconstruction, so let a time sit on a branch end
+        tol = 1e-6 * max(layout.xlim[1] - layout.xlim[0], 1.0)
 
         def place(node, t):
             """An event at distance ``t`` on ``node``'s branch, in layout coordinates."""
@@ -106,10 +141,16 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                 donor, recip = by_name.get(ev.get("donor")), by_name.get(ev.get("recipient"))
                 if donor is None or recip is None:
                     continue
+                x = ev["x"] - stem_off       # onto the layout's own distance scale
+                if clamp:
+                    lo = max(span(donor)[0], span(recip)[0])
+                    hi = min(span(donor)[1], span(recip)[1])
+                    if not lo - tol <= x <= hi + tol:
+                        raise ValueError(_impossible(ev, lo + stem_off, hi + stem_off))
                 # scale the arrow with `size` (as the point glyphs do) so the head reads as an arrow,
                 # not a tick, on a large figure
-                dx, dy = place(donor, ev["x"] - stem_off)
-                rx, ry = place(recip, ev["x"] - stem_off)
+                dx, dy = place(donor, x)
+                rx, ry = place(recip, x)
                 canvas.arrow(dx, dy, rx, ry, color,
                              width=max(1.8, float(ev.get("size", size)) * 0.42) * weight,
                              head=max(9.0, float(ev.get("size", size)) * 2.4) * weight,
