@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-21
+
+### Added
+- An event given to `trees.branch_events` may carry its own style. `weight` (0-1) scales the arrow's
+  width, the glyph's size and the opacity of both, between a floor and the kind's full style — the
+  figure this is for is transfers summed over gene families, where every pair carries a count and a
+  few hundred arcs only read if width follows it (`weight = n / n_max`). `color` and `size` override
+  the kind's colour and the layer's size for that one event. An event with no override is drawn
+  exactly as before, and the legend keeps showing the kind's own colour. `weight_floor` (default
+  0.25) is how much of the style a weight of 0 keeps, so the lightest mark stays on the page (#11).
+- `Canvas.arrow` and `Canvas.raw_marker` take an `opacity`. A fully opaque arrow or glyph writes no
+  opacity attribute, so every figure drawn before this renders byte for byte as it did.
+
 ## [0.4.0] - 2026-09-21
 
 ### Added
