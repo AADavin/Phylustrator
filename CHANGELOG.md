@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-21
+
+### Added
+- `trees.title(text)` — a title centred over the panel, in the top margin above the tree. `note`
+  pins text to a corner, which is where something *about* a figure belongs; a title belongs over the
+  middle of it. `size`, `dy` and `color` set the rest, and the title stays on the page even on a
+  thin top margin (#9).
+- `trees.legend` gains `loc`, the four corners `branch_events` already takes. The default stays
+  `"top-left"`, so no existing figure moves its legend. A right corner right-aligns the block on the
+  right margin, and a bottom corner ends it on the bottom margin. A rectangular tree fills the upper
+  left of its panel, so the top left is often the one corner a legend cannot share (#10).
+
+### Changed
+- `note` and `legend` raise on a `loc` that is not one of the four corners, at the point it is
+  written. `note(loc="top-centre")` used to fall through the `"left" in loc` test and print
+  right-aligned; the message names `title()` for the centred case.
+
 ## [0.3.1] - 2026-09-17
 
 ### Fixed
