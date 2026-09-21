@@ -11,6 +11,13 @@ Each event is a dict: ``{"kind": "duplication"|"loss", "node": name, "x": time}`
 ``{"kind": "transfer", "donor": name, "recipient": name, "x": time}``. A plain ``(node, x, kind)``
 tuple still works for point events. The x-axis is the layout's distance axis (absolute time under the
 stem-aware rectangular layout), so pass event times straight through.
+
+**One event may carry its own style.** ``weight`` (0-1) is the one to reach for when a mark stands
+for a count: it scales the arrow's width, the glyph's size and the opacity of both, between a floor
+and the kind's full style, so hundreds of transfers summed over gene families read as a few strong
+arcs and many faint ones. Divide by the largest count to get it: ``weight = n / n_max``. ``color``
+and ``size`` override the kind's colour and the layer's size for that one event. An event with none
+of them is drawn exactly as before, and the legend always shows the kind's own colour.
 """
 
 from __future__ import annotations
@@ -24,24 +31,48 @@ DEFAULT_EVENT_STYLES = {
 }
 
 
+#: What one event may say about its own drawing, on top of what its kind says.
+_OVERRIDES = ("weight", "color", "size")
+
+
 def _unpack(ev):
+    """One event as a dict, keeping any per-event override it carries and dropping the rest."""
     if isinstance(ev, dict):
         kind = ev.get("kind")
         x = float(ev.get("x", ev.get("time")))
+        out = {"kind": kind, "x": x}
         if "recipient" in ev or "donor" in ev:
-            return {"kind": kind, "x": x, "donor": ev.get("donor"), "recipient": ev.get("recipient")}
-        return {"kind": kind, "x": x, "node": ev.get("node", ev.get("lineage"))}
+            out.update({"donor": ev.get("donor"), "recipient": ev.get("recipient")})
+        else:
+            out["node"] = ev.get("node", ev.get("lineage"))
+        out.update({k: ev[k] for k in _OVERRIDES if k in ev})
+        return out
     node, x, kind = ev
     return {"kind": kind, "x": float(x), "node": node}
+
+
+def _weight_scale(weight, floor: float) -> float:
+    """An event's ``weight`` (0-1, clamped) as a multiplier between ``floor`` and 1.
+
+    No weight is 1, so an unweighted figure is drawn exactly as it was. The floor is what keeps the
+    lightest arc on the page: scaling straight to 0 would erase the pair seen twice, and the point of
+    a weighted figure is that it is still there, thin, beside the pair seen three hundred times."""
+    if weight is None:
+        return 1.0
+    return floor + (1.0 - floor) * min(max(float(weight), 0.0), 1.0)
 
 
 def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                   legend: bool = True, legend_title: str = "events",
                   legend_loc: str = "top-right", legend_size: float | None = None,
-                  clamp: bool = True):
+                  clamp: bool = True, weight_floor: float = 0.25):
     """Mark ``events`` on the tree. ``styles`` maps a kind to ``(glyph, colour)`` (merged over the
     D/T/L/O default). ``legend_loc`` is a corner; ``legend_size`` sets the legend font size (glyphs
-    scale with it). ``clamp`` keeps a point marker within its branch's span."""
+    scale with it). ``clamp`` keeps a point marker within its branch's span.
+
+    An event may carry its own ``weight`` (0-1), ``color`` and ``size`` — see the module docstring.
+    ``weight_floor`` is how much of the kind's style a weight of 0 keeps, so the lightest mark is
+    still visible."""
     styles = {**DEFAULT_EVENT_STYLES, **(styles or {})}
 
     def layer(canvas, tree, layout, style):
@@ -66,7 +97,11 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
         used: dict[str, tuple] = {}
         for raw in events:
             ev = _unpack(raw)
-            glyph, color = styles.get(ev["kind"], ("circle", "#8a8f94"))
+            glyph, kind_color = styles.get(ev["kind"], ("circle", "#8a8f94"))
+            # the kind says how an event is drawn; the event itself may say more
+            color = ev.get("color") or kind_color
+            weight = _weight_scale(ev.get("weight"), weight_floor)
+            marked = float(ev.get("size", size)) * weight
             if glyph == "arrow":                                    # transfer: donor -> recipient
                 donor, recip = by_name.get(ev.get("donor")), by_name.get(ev.get("recipient"))
                 if donor is None or recip is None:
@@ -76,7 +111,9 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                 dx, dy = place(donor, ev["x"] - stem_off)
                 rx, ry = place(recip, ev["x"] - stem_off)
                 canvas.arrow(dx, dy, rx, ry, color,
-                             width=max(1.8, size * 0.42), head=max(9.0, size * 2.4))
+                             width=max(1.8, float(ev.get("size", size)) * 0.42) * weight,
+                             head=max(9.0, float(ev.get("size", size)) * 2.4) * weight,
+                             opacity=weight)
             else:
                 node = by_name.get(ev.get("node"))
                 if node is None:
@@ -99,15 +136,16 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                         # tip AT the event's instant, body trailing over the state it leaves:
                         # centred, the glyph swallows a short old-state segment and reads as a
                         # switch inside its own destination colour
-                        px -= size * math.cos(ang)
-                        py -= size * math.sin(ang)
+                        px -= marked * math.cos(ang)
+                        py -= marked * math.sin(ang)
                     # an ink outline, not white: the tip sits against a branch of its own
                     # colour, and without a silhouette the flared base reads as the point
-                    canvas.raw_marker(px, py, glyph, color, size, angle=ang,
-                                      stroke="#1a1a1a", stroke_width=1.1)
+                    canvas.raw_marker(px, py, glyph, color, marked, angle=ang,
+                                      stroke="#1a1a1a", stroke_width=1.1, opacity=weight)
                 else:
-                    canvas.marker(mx, my, glyph, color, size)
-            used[ev["kind"]] = (glyph, color)
+                    canvas.marker(mx, my, glyph, color, marked, opacity=weight)
+            # the key names the kind, so it shows the kind's colour — never one event's override
+            used[ev["kind"]] = (glyph, kind_color)
         if legend and used:
             _draw_legend(canvas, style, used, legend_title, size, legend_loc, legend_size)
 

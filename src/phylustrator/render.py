@@ -188,22 +188,28 @@ class Canvas:
 
     def raw_marker(self, cx, cy, shape: str, color: str, size: float, *,
                    stroke: str = "#ffffff", stroke_width: float = 0.8,
-                   angle: float = 0.0) -> None:
+                   angle: float = 0.0, opacity: float = 1.0) -> None:
         """A small glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` /
         ``triangle_right`` (points along the time axis, for a state transition) / ``diamond``
         (filled), ``ring`` (open), or ``cross`` (an ✕, for a loss).
 
         ``ring`` is the marker for something that is there but not counted — a lineage alive at the
         present that sampling did not take — which is why it is the same shape as ``circle`` and
-        hollow rather than a shape of its own."""
+        hollow rather than a shape of its own.
+
+        ``opacity`` fades the whole glyph, for a mark weighted by how much it stands for. A fully
+        opaque glyph writes no opacity attribute at all, so an unweighted figure is unchanged."""
         r = size
+        fade = {} if opacity >= 1.0 else {"fill_opacity": opacity, "stroke_opacity": opacity}
+        ink = {} if opacity >= 1.0 else {"stroke_opacity": opacity}
         if shape == "square":
             self._d.append(draw.Rectangle(cx - r, cy - r, 2 * r, 2 * r, fill=color,
-                                          stroke=stroke, stroke_width=stroke_width))
+                                          stroke=stroke, stroke_width=stroke_width, **fade))
         elif shape == "cross":
             for a, b, c, d in ((-r, -r, r, r), (-r, r, r, -r)):
                 self._d.append(draw.Line(cx + a, cy + b, cx + c, cy + d, stroke=color,
-                                         stroke_width=max(1.6, r * 0.55), stroke_linecap="round"))
+                                         stroke_width=max(1.6, r * 0.55), stroke_linecap="round",
+                                         **ink))
         elif shape in ("triangle", "triangle_right", "diamond"):
             pts = {"triangle": [(cx, cy - r), (cx + r, cy + r * 0.85),
                                 (cx - r, cy + r * 0.85)],
@@ -220,34 +226,36 @@ class Canvas:
                 pts = [(cx + (x - cx) * ca - (y - cy) * sa,
                         cy + (x - cx) * sa + (y - cy) * ca) for x, y in pts]
             self._d.append(draw.Lines(*[c for p in pts for c in p], fill=color,
-                                      stroke=stroke, stroke_width=stroke_width, close=True))
+                                      stroke=stroke, stroke_width=stroke_width, close=True, **fade))
         elif shape == "ring":
             self._d.append(draw.Circle(cx, cy, r, fill="#ffffff", stroke=color,
-                                       stroke_width=max(1.4, r * 0.45)))
+                                       stroke_width=max(1.4, r * 0.45), **ink))
         else:
             self._d.append(draw.Circle(cx, cy, r, fill=color, stroke=stroke,
-                                       stroke_width=stroke_width))
+                                       stroke_width=stroke_width, **fade))
 
     def marker(self, x, y, shape: str, color: str, size: float, **kw) -> None:
         """A glyph placed at *data* coordinates (see :meth:`raw_marker`)."""
         self.raw_marker(self.px(x), self.py(y), shape, color, size, **kw)
 
     def arrow(self, x0, y0, x1, y1, color: str, width: float, *, curve: float = 20.0,
-              head: float = 8.0) -> None:
+              head: float = 8.0, opacity: float = 1.0) -> None:
         """A curved arrow from *data* ``(x0, y0)`` to ``(x1, y1)``, head at the end — e.g. a gene
-        transfer from a donor lineage to a recipient lineage."""
+        transfer from a donor lineage to a recipient lineage. ``opacity`` fades it, for an arrow
+        weighted by the count it stands for; a fully opaque arrow writes no opacity attribute."""
+        fade = {} if opacity >= 1.0 else {"stroke_opacity": opacity}
         ax, ay, bx, by = self.px(x0), self.py(y0), self.px(x1), self.py(y1)
         dx, dy = bx - ax, by - ay
         L = math.hypot(dx, dy) or 1.0
         cx, cy = (ax + bx) / 2 - dy / L * curve, (ay + by) / 2 + dx / L * curve   # bow sideways
-        p = draw.Path(fill="none", stroke=color, stroke_width=width)
+        p = draw.Path(fill="none", stroke=color, stroke_width=width, **fade)
         p.M(ax, ay).Q(cx, cy, bx, by)
         self._d.append(p)
         ang = math.atan2(by - cy, bx - cx)                                        # tangent at the tip
         for s in (0.5, -0.5):
             self._d.append(draw.Line(bx, by, bx - head * math.cos(ang - s),
                                      by - head * math.sin(ang - s), stroke=color,
-                                     stroke_width=width, stroke_linecap="round"))
+                                     stroke_width=width, stroke_linecap="round", **fade))
 
     def gradient_bar(self, cmap: str, x, y, w, h) -> None:
         """A horizontal rectangle filled with the multi-stop gradient of ``cmap``."""

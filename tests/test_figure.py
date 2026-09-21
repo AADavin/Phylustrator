@@ -379,3 +379,76 @@ def test_the_legend_sits_in_the_corner_it_is_given():
 def test_legend_refuses_a_loc_that_is_not_a_corner():
     with pytest.raises(ValueError, match="bottom-right"):
         legend("state", loc="middle", entries=_ENTRIES)
+
+
+# --- an event carrying its own style (issue #11) -----------------------------------------------
+
+_EV_TREE = "((A:1,B:1)C:1,D:2)R;"
+_EV_STYLE = Style(width=420, height=300, margin=30)
+
+
+def _events_svg(events, **kw):
+    return (plot(loads(_EV_TREE), style=_EV_STYLE) + branch_events(events, **kw)).as_svg()
+
+
+def _arcs(svg):
+    """Each transfer arc as (colour, width, opacity) — the curved body, not the two head strokes."""
+    out = []
+    for m in re.finditer(r'<path d="M[^"]*Q[^"]*" fill="none" stroke="([^"]+)" '
+                         r'stroke-width="([\d.]+)"([^>]*)>', svg):
+        faded = re.search(r'stroke-opacity="([\d.]+)"', m.group(3))
+        out.append((m.group(1), float(m.group(2)), float(faded.group(1)) if faded else 1.0))
+    return out
+
+
+def _transfer(**kw):
+    return {"kind": "transfer", "donor": "A", "recipient": "D", "x": 1.6, **kw}
+
+
+def test_an_event_without_a_weight_is_drawn_exactly_as_before():
+    """A weight of 1 is the full style, so an unweighted figure must not move at all."""
+    assert _events_svg([_transfer()]) == _events_svg([_transfer(weight=1.0)])
+
+
+def test_a_weighted_arc_is_thinner_and_fainter():
+    """Summed over gene families, every pair carries a count; drawn at one weight they all look
+    the same."""
+    (_, heavy_w, heavy_o), = _arcs(_events_svg([_transfer()]))
+    (colour, light_w, light_o), = _arcs(_events_svg([_transfer(weight=0.2)]))
+    assert light_w < heavy_w and light_o < heavy_o
+    assert light_w == pytest.approx(heavy_w * 0.4)      # floor 0.25 + 0.75 * 0.2
+    assert light_o == pytest.approx(0.4)
+    assert colour == "#2e8b57", "the weight must not change the kind's colour"
+
+
+def test_the_weight_floor_keeps_the_lightest_arc_on_the_page():
+    (_, full, _), = _arcs(_events_svg([_transfer()]))
+    (_, width, opacity), = _arcs(_events_svg([_transfer(weight=0.0)]))
+    assert width == pytest.approx(full * 0.25) and width > 0
+    assert opacity == pytest.approx(0.25)
+    (_, raised, _), = _arcs(_events_svg([_transfer(weight=0.0)], weight_floor=0.5))
+    assert raised == pytest.approx(full * 0.5)
+
+
+def test_a_weight_outside_zero_to_one_is_clamped():
+    assert _events_svg([_transfer(weight=5)]) == _events_svg([_transfer()])
+    assert _events_svg([_transfer(weight=-2)]) == _events_svg([_transfer(weight=0.0)])
+
+
+def test_an_event_can_carry_its_own_colour_and_size():
+    plain = _rect(_events_svg([{"kind": "duplication", "node": "A", "x": 1.5}], legend=False),
+                  "#3a7ca5")
+    bigger = _rect(_events_svg([{"kind": "duplication", "node": "A", "x": 1.5,
+                                 "size": 11.0, "color": "#ff0000"}], legend=False), "#ff0000")
+    assert bigger[2] == pytest.approx(plain[2] * 2), "size did not override the layer's size"
+
+
+def test_the_legend_shows_the_kind_colour_not_one_events_override():
+    svg = _events_svg([{"kind": "duplication", "node": "A", "x": 1.5, "color": "#ff0000"}])
+    assert "#ff0000" in svg                       # the mark took the override
+    assert "#3a7ca5" in svg, "the key names the kind, so it keeps the kind's colour"
+
+
+def test_a_tuple_event_still_works():
+    svg = _events_svg([("A", 1.5, "duplication")], legend=False)
+    assert "#3a7ca5" in svg and "fill-opacity" not in svg
