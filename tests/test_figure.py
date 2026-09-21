@@ -5,6 +5,7 @@ import re
 
 import pytest
 
+from phylustrator import Style
 from phylustrator.trees import (
     branch_events,
     color_branches,
@@ -17,6 +18,7 @@ from phylustrator.trees import (
     plot,
     rubberband,
     time_marker,
+    title,
 )
 
 
@@ -289,3 +291,91 @@ def test_time_marker_refuses_the_unrooted_layout():
 def test_time_marker_refuses_a_time_the_radial_layout_cannot_show():
     with pytest.raises(ValueError, match="stem"):
         (plot(loads("((A:1,B:1)F:1,C:2)R:1.5;"), layout="radial") + time_marker(0.5)).as_svg()
+
+
+# --- a centred title, and a legend in any corner (issues #9 and #10) ---------------------------
+
+_PLACED = Style(width=400, height=300, margin=20)
+_ENTRIES = {"a": "#111111", "b": "#222222"}
+_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+
+
+def _rect(svg, fill):
+    found = re.search(rf'<rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)" '
+                      rf'fill="{fill}"', svg)
+    assert found, f"no rect filled {fill}"
+    return tuple(float(v) for v in found.groups())
+
+
+def _swatches(svg):
+    return [_rect(svg, fill) for fill in _ENTRIES.values()]
+
+
+def _backdrop(svg):
+    """The white patch the legend paints behind itself — the block's own box."""
+    boxes = re.findall(r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)" '
+                       r'fill="#ffffff"', svg)
+    boxes = [tuple(float(v) for v in b) for b in boxes if (float(b[0]), float(b[1])) != (0.0, 0.0)]
+    assert len(boxes) == 1, f"expected one backdrop, found {len(boxes)}"
+    return boxes[0]
+
+
+def _legend_svg(loc):
+    return (plot(loads("((A:1,B:1)C:1,D:2)R;"), style=_PLACED)
+            + legend("state", loc=loc, entries=_ENTRIES)).as_svg()
+
+
+def test_title_sits_centred_over_the_panel():
+    """note pins text to a corner; a title belongs over the middle of the figure."""
+    svg = (plot(loads("((A:1,B:1)C:1,D:2)R;"), style=_PLACED) + title("Primates")).as_svg()
+    found = re.search(r'<text x="([-\d.]+)" y="([-\d.]+)"[^>]*text-anchor="(\w+)"[^>]*>Primates</text>', svg)
+    assert found
+    x, y, anchor = float(found.group(1)), float(found.group(2)), found.group(3)
+    assert x == pytest.approx(_PLACED.width / 2) and anchor == "middle"
+    assert y < _PLACED.margin, "the title should sit in the top margin, above the tree"
+
+
+def test_a_title_stays_on_the_page_when_the_top_margin_is_thin():
+    svg = (plot(loads("(A:1,B:1)R;"), style=Style(width=400, height=300, margin=4))
+           + title("Primates", size=20)).as_svg()
+    y = float(re.search(r'<text x="[-\d.]+" y="([-\d.]+)"[^>]*>Primates</text>', svg).group(1))
+    assert y >= 10.0, "half the title would be cut off by the top edge"
+
+
+def test_note_refuses_a_loc_that_is_not_a_corner():
+    """`loc="top-centre"` used to fall through and print right-aligned instead."""
+    with pytest.raises(ValueError, match="title"):
+        note("Primates", loc="top-centre")
+    with pytest.raises(ValueError, match="top-left"):
+        note("Primates", loc="top")
+
+
+def test_the_legend_default_corner_is_unchanged():
+    assert _legend_svg("top-left") == (plot(loads("((A:1,B:1)C:1,D:2)R;"), style=_PLACED)
+                                       + legend("state", entries=_ENTRIES)).as_svg()
+
+
+def test_the_legend_sits_in_the_corner_it_is_given():
+    """branch_events has always taken the four corners; legend was pinned to the top left."""
+    top_left = _swatches(_legend_svg("top-left"))
+    for loc in _CORNERS:
+        svg = _legend_svg(loc)
+        swatches = _swatches(svg)
+        bx, by, bw, bh = _backdrop(svg)
+        assert bx >= 0 and by >= 0, f"{loc}: the legend runs off the page"
+        assert bx + bw <= _PLACED.width and by + bh <= _PLACED.height, f"{loc}: off the page"
+        if "left" in loc:
+            assert swatches[0][0] == pytest.approx(_PLACED.margin), loc
+        else:
+            # the block is right-aligned on the right margin (the backdrop adds 6px of padding)
+            assert bx + bw - 6 == pytest.approx(_PLACED.width - _PLACED.margin), loc
+        if "top" in loc:
+            assert swatches[0][1] == pytest.approx(top_left[0][1]), loc
+        else:
+            lowest = max(y + h for _, y, _, h in swatches)
+            assert lowest == pytest.approx(_PLACED.height - _PLACED.margin, abs=1.0), loc
+
+
+def test_legend_refuses_a_loc_that_is_not_a_corner():
+    with pytest.raises(ValueError, match="bottom-right"):
+        legend("state", loc="middle", entries=_ENTRIES)

@@ -26,6 +26,7 @@ from .layers import (
                      time_marker,
                      tip_labels,
                      tip_track,
+                     title,
 )
 from .panels import NodePoints, node_points
 from .tree import Node, Tree
@@ -35,7 +36,7 @@ __all__ = [
     "plot", "Figure", "Geometry", "NodePos", "TipPos",
     "color_branches", "color_history", "color_lanes", "tip_labels", "node_labels", "tip_track", "ring",
     "rubberband",
-    "branch_events", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar",
+    "branch_events", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",
     "highlight_clade",
     "node_points", "NodePoints",
 ]

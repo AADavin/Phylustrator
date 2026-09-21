@@ -8,7 +8,7 @@ Each layer is a callable ``(canvas, tree, layout, style) -> None``. Import them 
 from .clades import highlight_clade
 from .coloring import color_branches, color_history, color_lanes
 from .events import branch_events
-from .guides import colorbar, legend, note, scale_bar, time_axis, time_marker
+from .guides import colorbar, legend, note, scale_bar, time_axis, time_marker, title
 from .labels import node_labels, tip_labels
 from .tracks import ring, rubberband, tip_track
 
@@ -28,5 +28,6 @@ __all__ = [
     "time_axis",
     "time_marker",
     "scale_bar",
+    "title",
     "highlight_clade",
 ]

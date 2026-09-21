@@ -18,6 +18,20 @@ def _clear_behind(canvas, x, y, w, h, pad: float = 6.0) -> None:
                     fill=_KEY_BACKDROP, stroke="none", stroke_width=0.0)
 
 
+#: The corners a pinned layer may sit in — the four ``branch_events`` has always taken.
+_CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+
+
+def _corner(loc: str, who: str) -> str:
+    """Check a corner name at the point it is written. ``"top-centre"`` used to fall through the
+    ``"left" in loc`` test and print as though it had been asked for on the right, which is worse
+    than an error."""
+    if loc not in _CORNERS:
+        centred = " (a centred title is `title()`)" if "cent" in loc.lower() else ""
+        raise ValueError(f"{who}: loc must be one of {', '.join(_CORNERS)}, not {loc!r}{centred}")
+    return loc
+
+
 def _text_width(text: str, size: float) -> float:
     """A serviceable width for a string at this font size — the canvas has no font metrics, and this
     only has to be close enough to clear the tree behind it."""
@@ -64,13 +78,20 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
     return layer
 
 
-def legend(title: str = "", *, swatch: float | None = None, size: float | None = None,
-           entries: dict | None = None, dy: float = 0.0, inset: float | None = None):
-    """A category swatch list, top-left. ``size`` sets the label font (default the style's) and the
-    swatch scales with it. Reads the recorded categorical scale, or ``entries``
-    (``{label: colour}``) to draw an explicit list — a figure whose scale slot is taken by a
-    continuous ring still gets its categorical legend that way. ``dy`` shifts the list down, so it
-    can sit below a ``colorbar`` on the same corner. No-op without a source of entries."""
+def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = None,
+           size: float | None = None, entries: dict | None = None, dy: float = 0.0,
+           inset: float | None = None):
+    """A category swatch list pinned to a corner — ``"top-left"`` by default, or any of the four
+    ``branch_events`` takes. A rectangular tree fills the upper left of its panel, so the top left
+    is often the one corner a legend cannot share; a right corner right-aligns the block on the
+    right margin, and a bottom corner ends it on the bottom margin.
+
+    ``size`` sets the label font (default the style's) and the swatch scales with it. Reads the
+    recorded categorical scale, or ``entries`` (``{label: colour}``) to draw an explicit list — a
+    figure whose scale slot is taken by a continuous ring still gets its categorical legend that
+    way. ``dy`` shifts the list down, so it can sit below a ``colorbar`` in the same corner. No-op
+    without a source of entries."""
+    _corner(loc, "legend")
 
     def layer(canvas, tree, layout, style):
         palette = entries
@@ -79,14 +100,22 @@ def legend(title: str = "", *, swatch: float | None = None, size: float | None =
             if not scale or scale.get("kind") != "categorical":
                 return
             palette = scale["palette"]
+        w, h = canvas.size
         fs = size if size is not None else style.font_size
         sw = swatch if swatch is not None else fs * 0.95
-        x = inset if inset is not None else style.margin_at("left")
-        y = (inset if inset is not None else style.margin_at("top")) + dy
         rows = len(palette) + (1 if title else 0)
         widest = max([_text_width(str(k), fs) for k in palette] +
                      [_text_width(title, fs) if title else 0.0])
-        _clear_behind(canvas, x, y - fs, sw + 8 + widest, rows * fs * 1.65)
+        box_w = sw + 8 + widest
+
+        def side(name):
+            return inset if inset is not None else style.margin_at(name)
+
+        # the drop from the first row's baseline to the last one's; a title row is the taller one
+        drop = (fs * 1.7 if title else 0.0) + max(len(palette) - 1, 0) * fs * 1.6
+        x = side("left") if "left" in loc else w - side("right") - box_w
+        y = (side("top") if "top" in loc else h - side("bottom") - drop - fs * 0.5) + dy
+        _clear_behind(canvas, x, y - fs, box_w, rows * fs * 1.65)
         if title:
             canvas.raw_text(x, y, title, anchor="start", weight="bold", size=fs)
             y += fs * 1.7
@@ -144,7 +173,8 @@ def note(text: str, *, loc: str = "top-left", size: float | None = None,
 
     ``dy`` nudges it in pixels, negative up. The corner is fixed to the margin, which is the right
     place for a note *about* the figure; a note read as a **title** wants a little more air between
-    it and the tree than a margin the tree also uses can give."""
+    it and the tree than a margin the tree also uses can give, so a centred title is :func:`title`."""
+    _corner(loc, "note")
 
     def layer(canvas, tree, layout, style):
         w, h = canvas.size
@@ -154,6 +184,26 @@ def note(text: str, *, loc: str = "top-left", size: float | None = None,
         y += dy
         anchor = "start" if "left" in loc else "end"
         canvas.raw_text(x, y, text, anchor=anchor, size=fs,
+                        color=color or style.label_color, weight=weight)
+
+    return layer
+
+
+def title(text: str, *, size: float | None = None, dy: float = 0.0, color: str | None = None,
+          weight: str = "bold"):
+    """A title centred over the panel, in the top margin above the tree.
+
+    ``note`` pins text to a corner, which is where something *about* a figure belongs; a title
+    belongs over the middle of it. ``size`` defaults to half again the style's font, ``dy`` nudges
+    it in pixels (negative up), and the title stays on the page even on a thin top margin. Give the
+    figure a larger ``margin_top`` when the title sits too close to the tree."""
+
+    def layer(canvas, tree, layout, style):
+        w, _ = canvas.size
+        fs = size if size is not None else style.font_size * 1.4
+        # halfway up the top margin, but never so high that the page edge cuts it
+        y = max(style.margin_at("top") * 0.5, fs * 0.75) + dy
+        canvas.raw_text(w / 2, y, text, anchor="middle", size=fs,
                         color=color or style.label_color, weight=weight)
 
     return layer
