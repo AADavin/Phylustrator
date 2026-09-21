@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-21
+
+### Fixed
+- `trees.branch_events` drew a transfer arrow wherever the time said, even when the donor or the
+  recipient no longer existed then. The arrow sat on a row whose branch had already ended, which
+  reads as a transfer that never happened. Such a transfer is now refused, and the message names the
+  window where the two lineages do exist — a figure of times measured from the present, or without
+  the root stem, misses it the same way, and the window is what says so. Two lineages that never
+  coexist say that instead. This is the `clamp` argument, which already kept point markers on their
+  branch; `clamp=False` places everything exactly as given. A transfer is refused rather than moved,
+  because moving it would redraw it at a time the caller never gave.
+
 ## [0.5.0] - 2026-09-21
 
 ### Added
