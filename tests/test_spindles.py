@@ -15,3 +15,9 @@ def test_spindle_radial_and_missing_node():
     tree = loads("((A:1,B:1)n1:1,(C:1.5,D:1.5)n2:0.5)r:0.2;")
     svg = (plot(tree, layout="radial") + branch_spindles([("n2", 1.0, None), ("nope", 1.0, None)])).as_svg()
     assert svg.count("<linearGradient") == 2           # one mark drawn, the missing node skipped
+
+
+def test_spindle_fades_into_the_given_colour():
+    tree = loads("((A:1,B:1)n1:1,(C:1.5,D:1.5)r:0.2;")
+    svg = (plot(tree) + branch_spindles([{"node": "n1", "color": "#e07b00", "into": "#123456"}])).as_svg()
+    assert "#123456" in svg

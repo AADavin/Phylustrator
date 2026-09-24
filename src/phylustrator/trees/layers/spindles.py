@@ -4,8 +4,10 @@ A spindle is a lens drawn along the branch at a time, in a colour. It sits on a 
 branch in the same colour, and that stretch fades into the branch's own colour at both ends, so the
 mark grows out of the line instead of floating on it.
 
-Each mark is a dict ``{"node": name, "x": time, "color": colour, "size": length}`` or a plain
-``(node, x, color)`` tuple. ``x`` is on the layout's distance axis, like ``branch_events``; without
+Each mark is a dict ``{"node": name, "x": time, "color": colour, "size": length, "into": colour}``
+or a plain ``(node, x, color)`` tuple. ``into`` is the colour the stretch fades into: give it when the
+branch under the mark is not in the style's branch colour, for example one painted by
+``color_branches``; the default is the style's branch colour. ``x`` is on the layout's distance axis, like ``branch_events``; without
 it the spindle sits at the middle of the branch. ``color`` falls back to the layer's ``color``,
 ``size`` to the layer's ``length``. A mark outside its branch is pulled back onto it.
 """
@@ -77,7 +79,7 @@ def branch_spindles(marks, *, length: float | None = None, height: float = 5.0,
             for sgn in (-1, 1):
                 x0, y0 = px + sgn * ux * half, py + sgn * uy * half
                 x1, y1 = px + sgn * ux * reach, py + sgn * uy * reach
-                canvas._d.append(_gradient(x0, y0, x1, y1, col, style.branch_color, w, opacity))
+                canvas._d.append(_gradient(x0, y0, x1, y1, col, m.get("into") or style.branch_color, w, opacity))
 
             # the lens, a polygon along the branch
             pts = []
