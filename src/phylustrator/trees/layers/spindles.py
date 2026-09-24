@@ -25,7 +25,7 @@ def _unpack(raw):
 def branch_spindles(marks, *, length: float | None = None, height: float = 5.0,
                     fuse: float = 0.8, color: str = "#e07b00", opacity: float = 1.0):
     """Mark ``marks`` on the tree as spindles. ``length`` is the lens length in pixels (default: the
-    shorter of 14 px and 80% of the branch); ``height`` its half-height in pixels; ``fuse`` how far
+    shorter of 22 px and 80% of the branch); ``height`` its half-height in pixels; ``fuse`` how far
     the colour fades into the branch on each side, as a multiple of the lens length. Returns a
     layer."""
 
