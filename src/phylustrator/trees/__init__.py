@@ -12,6 +12,7 @@ from .io import dumps, loads, read, write
 from .layers import (
                      branch_events,
                      branch_spindles,
+                     node_halves,
                      color_branches,
                      color_history,
                      color_lanes,
@@ -37,7 +38,7 @@ __all__ = [
     "plot", "Figure", "Geometry", "NodePos", "TipPos",
     "color_branches", "color_history", "color_lanes", "tip_labels", "node_labels", "tip_track", "ring",
     "rubberband",
-    "branch_events", "branch_spindles", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",
+    "branch_events", "branch_spindles", "node_halves", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",
     "highlight_clade",
     "node_points", "NodePoints",
 ]
