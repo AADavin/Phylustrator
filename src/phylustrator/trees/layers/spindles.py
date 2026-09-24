@@ -64,6 +64,9 @@ def branch_spindles(marks, *, length: float | None = None, height: float = 5.0,
             span_px = math.hypot(canvas.px(place(node, hi)[0]) - canvas.px(place(node, lo)[0]),
                                  canvas.py(place(node, hi)[1]) - canvas.py(place(node, lo)[1]))
             L = float(m.get("size") or length or min(22.0, 0.8 * span_px) or 6.0)
+            # the lens and its fades stay inside the branch: on a short branch the spindle shrinks
+            if span_px > 0:
+                L = min(L, span_px / (1 + 2 * fuse))
             half = L / 2
             reach = half + fuse * L                                    # where the colour has faded
 
