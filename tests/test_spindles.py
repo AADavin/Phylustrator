@@ -18,6 +18,6 @@ def test_spindle_radial_and_missing_node():
 
 
 def test_spindle_fades_into_the_given_colour():
-    tree = loads("((A:1,B:1)n1:1,(C:1.5,D:1.5)r:0.2;")
+    tree = loads("((A:1,B:1)n1:1,(C:1.5,D:1.5)n2:0.5)r:0.2;")
     svg = (plot(tree) + branch_spindles([{"node": "n1", "color": "#e07b00", "into": "#123456"}])).as_svg()
     assert "#123456" in svg
