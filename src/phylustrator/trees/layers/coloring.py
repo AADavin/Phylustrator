@@ -27,14 +27,21 @@ def _dashed_or_figure(dashed, canvas) -> set:
 
 
 def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None, width=None,
-                   dashed=None, limits: tuple[float, float] | None = None):
+                   dashed=None, limits: tuple[float, float] | None = None,
+                   gradient: bool | None = None):
     """Colour every branch by ``values`` (``{node name: value}``). Numeric → colormap gradient;
     categorical → palette. ``dashed`` is an optional set of node names to draw dashed (e.g. extinct
     lineages), since the colour overdraws the base skeleton. Returns a layer.
 
     ``limits`` fixes the numeric range rather than deriving it from ``values``, so several figures
     can share one colour scale — without it each normalises to its own min and max, and the same
-    colour means a different number in each. A ``colorbar`` on the same figure follows the range."""
+    colour means a different number in each. A ``colorbar`` on the same figure follows the range.
+
+    ``gradient`` overrides how a branch is painted. Left unset, numbers run from the parent's colour
+    to the node's and labels are flat. Set it to ``False`` for a number that belongs to the branch as
+    a whole — a count of events on it, a rate fitted for it, a support value — which a gradient
+    misreads twice over: it shades the branch by its *parent's* value, and it suggests a change along
+    a branch the data says nothing about. The colormap and the colorbar are unaffected."""
 
     def layer(canvas, tree, layout, style):
         by_name, scale = map_values(values, cmap=cmap, palette=palette, limits=limits)
@@ -46,9 +53,9 @@ def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None
         def color(node):
             return by_name.get(node.name, default)
 
+        fade = (scale["kind"] == "continuous") if gradient is None else gradient
         draw_branches(canvas, tree, layout, color=color, width=width or style.branch_width,
-                      gradient=(scale["kind"] == "continuous"),
-                      dashed=_dashed_or_figure(dashed, canvas))
+                      gradient=fade, dashed=_dashed_or_figure(dashed, canvas))
 
     return layer
 

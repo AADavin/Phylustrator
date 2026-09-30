@@ -505,3 +505,76 @@ def test_a_point_marker_outside_its_branch_is_still_pulled_onto_it():
     redraw it at a time the caller did not give."""
     svg = _events_svg([{"kind": "duplication", "node": "A", "x": 9.0}], legend=False)
     assert _rect(svg, "#3a7ca5")[0] < _EV_STYLE.width, "the marker was not brought back on the page"
+
+
+# --- flat numeric colouring, and who owns the bar under a node (issues #13 and #27) -------------
+
+_BUG_NWK = "(((a:1,b:1)n1:1,(c:1.5,d:1.5)n2:0.5)n3:1,((e:1,f:1)n4:1.2,g:2.2)n5:0.8)root:0.5;"
+
+
+def _segments(svg):
+    """Every straight segment as (x0, y0, x1, y1, stroke)."""
+    out = []
+    for x0, y0, x1, y1, stroke in re.findall(
+            r'<path d="M(-?[\d.]+),(-?[\d.]+) L(-?[\d.]+),(-?[\d.]+)" stroke="([^"]+)"', svg):
+        out.append((float(x0), float(y0), float(x1), float(y1), stroke))
+    return out
+
+
+def _verticals(svg, stroke=None):
+    return [s for s in _segments(svg)
+            if abs(s[0] - s[2]) < 1e-9 and abs(s[1] - s[3]) > 1e-9 and (stroke is None or s[4] == stroke)]
+
+
+def test_a_numeric_map_can_be_drawn_flat():
+    """A value that belongs to the branch as a whole is misread as a gradient: the branch is shaded
+    by its parent's value, and it looks like it changes along its length."""
+    tree = loads(_BUG_NWK)
+    values = {n.name: 0.9 for n in tree.walk() if n.parent is not None}
+    values["n1"] = 0.05
+    assert "<linearGradient" in (plot(tree) + color_branches(values)).as_svg()
+    flat = (plot(tree) + color_branches(values, gradient=False)).as_svg()
+    assert "<linearGradient" not in flat
+    assert len({s[4] for s in _segments(flat)}) > 1, "the colormap still has to colour the branches"
+
+
+def test_a_flat_numeric_map_keeps_its_colorbar():
+    """The workaround in the issue — recolour by hand and pass a palette — costs the colorbar."""
+    tree = loads(_BUG_NWK)
+    values = {n.name: 0.9 for n in tree.walk() if n.parent is not None}
+    svg = (plot(tree) + color_branches(values, gradient=False) + colorbar("rate")).as_svg()
+    assert "<linearGradient" in svg and "rate" in svg       # the bar itself is the only gradient
+
+
+def test_the_bar_under_a_node_belongs_to_the_child():
+    """A map of every branch leaves the root out, since the root has no branch. The root's bar went
+    unpainted and the two clades floated apart."""
+    tree = loads(_BUG_NWK)
+    branches = {n.name: "#4a6fa5" for n in tree.walk() if n.parent is not None}
+    svg = (plot(tree, style=Style(branch_color="none", branch_width=1.0))
+           + color_branches(branches, palette={"#4a6fa5": "#4a6fa5"}, width=1.0)).as_svg()
+    painted = _verticals(svg, "#4a6fa5")
+    assert len(painted) == 12, "every connector segment, the root's two included, must be painted"
+    leftmost = min(v[0] for v in _verticals(svg))          # the root's bar, nearest the origin
+    assert len([v for v in painted if v[0] == leftmost]) == 2, "the root's own bar is still missing"
+
+
+def test_a_gradient_still_starts_the_drop_in_the_parents_colour():
+    """Under a gradient the child's branch begins in the parent's colour, so the drop keeps it."""
+    tree = loads(_BUG_NWK)
+    values = {n.name: (0.1 if n.name == "n3" else 0.9) for n in tree.walk()}
+    svg = (plot(tree) + color_branches(values)).as_svg()
+    under_root = sorted(_verticals(svg), key=lambda v: v[0])[:2]
+    assert len({v[4] for v in under_root}) == 1, "the two halves of one bar must agree"
+
+
+def test_a_radial_ring_splits_only_when_the_children_differ():
+    """The ring at a node is one arc of 24 segments; it is cut per child only when it has to be."""
+    tree = loads(_BUG_NWK)
+    one = {n.name: "x" for n in tree.walk()}
+    mixed = dict(one, n1="y")
+    palette = {"x": "#4a6fa5", "y": "#c1443c"}
+    uniform_svg = (plot(tree, layout="radial") + color_branches(one, palette=palette)).as_svg()
+    mixed_svg = (plot(tree, layout="radial") + color_branches(mixed, palette=palette)).as_svg()
+    assert "#c1443c" in mixed_svg
+    assert len(_segments(mixed_svg)) > len(_segments(uniform_svg)), "the ring was not split"

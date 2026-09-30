@@ -22,6 +22,16 @@ def draw_branches(canvas, tree, layout, *, color, width, gradient: bool = False,
     draw(canvas, tree, layout, color, width, gradient, dashed)
 
 
+def _drop(color, node, child, node_color, gradient):
+    """The colour of the connector from ``node`` down into ``child``.
+
+    That segment is where the child's branch begins, so it is the child's — a map covering every
+    branch but not the root left the root's bar unpainted, and the two clades floated apart. Under a
+    gradient the child's branch *starts* in this node's colour, so there the node's colour is the
+    continuous one."""
+    return node_color if gradient else color(child)
+
+
 def _branch(canvas, x1, y1, x2, y2, c_from, c_to, width, gradient, dash=False) -> None:
     if dash:
         canvas.line(x1, y1, x2, y2, c_to, width, dash=True)
@@ -45,7 +55,8 @@ def _rectangular(canvas, tree, layout, color, width, gradient, dashed) -> None:
             # (dashed) clade is dashed too, instead of one solid bar drawn straight across an
             # extinction. Each segment runs from this node's y to the child's y (they meet at y).
             for c in node.children:
-                canvas.line(x, y, x, layout.y(c), cn, width, dash=(c.name in dashed))  # connector
+                canvas.line(x, y, x, layout.y(c), _drop(color, node, c, cn, gradient), width,
+                            dash=(c.name in dashed))                                   # connector
 
 
 def _radial(canvas, tree, layout, color, width, gradient, dashed) -> None:
@@ -69,7 +80,12 @@ def _radial(canvas, tree, layout, color, width, gradient, dashed) -> None:
             _branch(canvas, sx, sy, x, y, color(node.parent), cn, width, gradient, dash=d)
         if not node.is_leaf and r > 1e-9:                                             # (skip root at centre)
             child_angles = [ang[c] for c in node.children]
-            _arc(canvas, r, min(child_angles), max(child_angles), cn, width, dash=d)  # angular connector
+            drops = [_drop(color, node, c, cn, gradient) for c in node.children]
+            if set(drops) == {cn}:      # one colour: one arc, exactly as it has always been drawn
+                _arc(canvas, r, min(child_angles), max(child_angles), cn, width, dash=d)
+            else:                       # each child's stretch of the ring in that child's colour
+                for c, drop in zip(node.children, drops):
+                    _arc(canvas, r, ang[node], ang[c], drop, width, dash=d)
 
 
 def _arc(canvas, r, a0, a1, color, width, steps: int = 24, dash: bool = False) -> None:
