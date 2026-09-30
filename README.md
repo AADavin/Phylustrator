@@ -35,7 +35,7 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
 - **Layouts** — `rectangular` (default), `radial`, `unrooted`.
 - **Layers** — `color_branches`, `color_history`, `tip_labels`, `node_labels`, `tip_track`,
   `branch_events`, `branch_spindles`, `node_halves`, `colorbar`, `legend`, `time_axis`,
-  `time_marker`, `scale_bar`, `note`, `title`, `highlight_clade`. `legend` and `note` take a corner;
+  `time_marker`, `scale_bar`, `note`, `title`, `highlight_clade`, `highlight_lineage`. `legend` and `note` take a corner;
   `title` is centred over the panel. `branch_spindles` marks a branch with a lens that fades into
   the branch's own colour, and `node_halves` puts a two-colour disc on a node.
   An event given to `branch_events` can carry a `weight`, so arcs and marks scale with the count

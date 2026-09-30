@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-30
+
+### Added
+- `trees.color_branches(width={node: width})` — a width per branch, not one for the layer. A branch
+  with no width of its own takes the style's. The drop into a child follows the child's width, as it
+  already follows the child's colour, so a thick lineage no longer fattens the whole bar at every
+  node it passes through (#25, #28).
+- `trees.color_branches(others="keep")` — leave a branch with no value exactly as the base plot drew
+  it. Two layers, each mapping a few branches, need it: otherwise the second repaints the first's
+  work in the default colour, and the only way out was `branch_color="none"`, which silently hides
+  branches nobody mapped. The default, `"repaint"`, is unchanged (#25).
+- `trees.lineage(tree, name)` — the named nodes from the root down to that node, ready to feed a
+  width or a colour map. `trees.highlight_lineage(name, width=…)` draws that path thicker in one
+  line: after a colouring layer it paints over it, before one it reads as an outline (#28).
+
 ## [0.7.0] - 2026-09-30
 
 ### Added
