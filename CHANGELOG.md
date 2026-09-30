@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-30
+
+### Added
+- `trees.color_branches(values, gradient=...)` — `False` paints each branch flat in its own colour,
+  for a number that belongs to the branch as a whole: a count of events on it, a rate fitted for it,
+  a support value. A gradient misreads those twice, shading the branch by its *parent's* value and
+  suggesting a change along a branch the data says nothing about. The colormap and the colorbar are
+  unaffected, which the hand-rolled workaround could not manage. Left unset, nothing changes (#13).
+
+### Fixed
+- The connector from a node down into a child is where that child's branch begins, so it is now
+  painted in the child's colour. A map covering every branch leaves out the root, which has no
+  branch of its own, and the root's bar went unpainted: the two clades floated apart with nothing
+  joining them. Under a gradient the child's branch starts in the parent's colour, so there the drop
+  keeps it and no gradient figure moves. The radial ring is cut per child only when they differ (#27).
+
 ## [0.6.0] - 2026-09-30
 
 ### Added
