@@ -751,3 +751,55 @@ def test_a_time_axis_can_count_back_from_the_present():
     assert onward == ["0", "1000", "2000", "3000"]
     with pytest.raises(ValueError, match="step must be positive"):
         (plot(tree) + time_axis("t", step=0)).as_svg()
+
+
+# --- a state that fades along a branch (issue #23) ---------------------------------------------
+
+_FADE_NWK = "((A:1,B:1)X:1,(C:1,D:1)Y:1)R:0.1;"
+_FADE_PALETTE = {"a": "#2E6E8E", "b": "#C55A3B"}
+
+
+def _history(fade=True, **kw):
+    """X's branch: state a for its first half, then fading to b by its end."""
+    shift = ("a", "b") if fade else "b"
+    return {"X": [("a", 0.5), (shift, 0.5)], "A": [("b", 1)], "B": [("b", 1)],
+            "Y": [("a", 1)], "C": [("a", 1)], "D": [("a", 1)]}
+
+
+def test_a_segment_whose_state_is_a_pair_fades_between_the_two():
+    """A trait that shifts after an event, rather than switching at an instant."""
+    for layout in ("rectangular", "radial"):
+        svg = (plot(loads(_FADE_NWK), layout=layout)
+               + color_history(_history(), palette=_FADE_PALETTE)).as_svg()
+        assert svg.count("<linearGradient") == 1, f"no fade on the {layout} layout"
+        assert "#2E6E8E" in svg and "#C55A3B" in svg
+
+
+def test_a_plain_history_still_steps():
+    svg = (plot(loads(_FADE_NWK)) + color_history(_history(fade=False),
+                                                  palette=_FADE_PALETTE)).as_svg()
+    assert "<linearGradient" not in svg
+
+
+def test_a_faded_branch_ends_in_the_state_it_faded_into():
+    """The connector below X follows X's end state, which is the second half of the pair."""
+    svg = (plot(loads(_FADE_NWK)) + color_history(_history(), palette=_FADE_PALETTE)).as_svg()
+    drops = [seg for seg in _drawn(svg) if abs(seg[0] - seg[2]) < 1e-9 and abs(seg[1] - seg[3]) > 1e-9]
+    under_x = [seg for seg in drops if seg[4] in _FADE_PALETTE.values()]
+    assert under_x, "no connector was painted"
+    assert "#C55A3B" in {seg[4] for seg in under_x}, "the branch ended in a, not in b"
+
+
+def test_both_halves_of_a_pair_reach_the_key():
+    svg = (plot(loads(_FADE_NWK)) + color_history({"X": [(("a", "b"), 1.0)]},
+                                                  palette=_FADE_PALETTE) + legend("state")).as_svg()
+    written = re.findall(r"<text [^>]*>([^<]*)</text>", svg)
+    assert "a" in written and "b" in written
+
+
+def test_a_dashed_branch_that_fades_is_drawn_in_the_state_it_ends_in():
+    """A dashed line cannot carry a gradient, and a solid one would hide an extinct lineage."""
+    svg = (plot(loads(_FADE_NWK), dashed={"X"})
+           + color_history(_history(), palette=_FADE_PALETTE, dashed={"X"})).as_svg()
+    assert "<linearGradient" not in svg
+    assert "stroke-dasharray" in svg and "#C55A3B" in svg

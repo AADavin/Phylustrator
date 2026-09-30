@@ -77,6 +77,26 @@ def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None
     return layer
 
 
+def _ends(state):
+    """A segment's state as ``(from, to)``. A plain state begins and ends the same; a **pair**
+    ``(a, b)`` fades from one to the other along the segment, for a trait that shifts gradually
+    rather than switching at an instant."""
+    if isinstance(state, (tuple, list)) and len(state) == 2:
+        return state[0], state[1]
+    return state, state
+
+
+def _paint(canvas, x0, y0, x1, y1, state, colors, base, width, dash) -> None:
+    """One segment of a branch's history: flat, or a fade when its state is a pair."""
+    a, b = _ends(state)
+    c0, c1 = colors.get(a, base), colors.get(b, base)
+    if dash or c0 == c1:
+        # a dashed line cannot carry a gradient, so a dashed fade is drawn in the state it ends in
+        canvas.line(x0, y0, x1, y1, c1, width, dash=dash)
+    else:
+        canvas.gradient_line(x0, y0, x1, y1, c0, c1, width)
+
+
 def color_history(history, *, palette: dict | None = None, cmap: str = "viridis", width=None,
                   default: str | None = None, dashed=None,
                   limits: tuple[float, float] | None = None):
@@ -92,9 +112,15 @@ def color_history(history, *, palette: dict | None = None, cmap: str = "viridis"
     branch — how much of a gene module a lineage still holds, say — is numeric and changes
     mid-branch, so it needs both halves at once.
 
+    A segment's state may be a **pair** ``(from, to)``, drawn as a fade from one colour to the other
+    along that segment: a trait that shifts gradually after an event, rather than switching at an
+    instant. Both members take their colour from the same palette or colormap, and the branch ends
+    in the second, so the connector below it follows. A dashed branch is drawn in the state it ends
+    in, since a dashed line cannot carry a gradient.
+
     ``limits`` fixes the numeric range instead of taking it from the states, so panels drawn
     separately share one scale. Ignored for categorical data."""
-    states = {state for segments in history.values() for state, _ in segments}
+    states = {end for segments in history.values() for state, _ in segments for end in _ends(state)}
     colors, scale = map_values({s: s for s in states}, cmap=cmap, palette=palette, limits=limits)
 
     def layer(canvas, tree, layout, style):
@@ -122,9 +148,9 @@ def color_history(history, *, palette: dict | None = None, cmap: str = "viridis"
                 for state, dur in segs:
                     x1 = xx + span * dur / total
                     if x1 != xx:      # two changes at the same instant leave a zero-length segment
-                        canvas.line(xx, y, x1, y, colors.get(state, base), w, dash=d)
+                        _paint(canvas, xx, y, x1, y, state, colors, base, w, d)
                     xx = x1
-                end_state = segs[-1][0]
+                end_state = _ends(segs[-1][0])[1]
             else:
                 canvas.line(x_start, y, x_end, y, base, w, dash=d)
             if not node.is_leaf:                              # connectors in the node's end state
@@ -163,10 +189,9 @@ def _history_radial(canvas, tree, layout, history, colors, base, w, marks) -> No
             for state, dur in segs:
                 r1 = rr + span * dur / total
                 if r1 != rr:      # two changes at the same instant leave a zero-length segment
-                    canvas.line(rr * ca, rr * sa, r1 * ca, r1 * sa,
-                                colors.get(state, base), w, dash=d)
+                    _paint(canvas, rr * ca, rr * sa, r1 * ca, r1 * sa, state, colors, base, w, d)
                 rr = r1
-            end_state = segs[-1][0]
+            end_state = _ends(segs[-1][0])[1]
         else:
             canvas.line(r_start * ca, r_start * sa, r_end * ca, r_end * sa, base, w, dash=d)
         if not node.is_leaf and r_end > 1e-9:     # angular connectors in the node's end state
