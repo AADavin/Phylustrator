@@ -249,6 +249,17 @@ def _round_ticks(span: float, target: int) -> list[float]:
     return [round(i * step, 10) for i in range(n + 1)]
 
 
+def _stepped(span: float, step: float) -> list[float]:
+    """Ticks every ``step`` from 0, up to ``span``."""
+    if step <= 0:
+        raise ValueError(f"step must be positive, not {step!r}")
+    out, k = [], 0
+    while k * step <= span + step * 1e-9:
+        out.append(round(k * step, 10))
+        k += 1
+    return out
+
+
 def _round_step(span: float, target: int) -> float:
     """The round step (1, 2, 2.5 or 5 times a power of ten) that cuts ``span`` into at most
     ``target - 1`` intervals. ``span`` must be positive."""
@@ -261,13 +272,19 @@ def _round_step(span: float, target: int) -> float:
     return 10 * mag
 
 
-def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = None,
+def time_axis(label: str = "Time", *, ticks: int = 5, step: float | None = None,
+              before_present: bool = False, tick_size: float | None = None,
               label_size: float | None = None, bold: bool | None = None):
     """A horizontal scale along the bottom, in the layout's distance units (0 at the origin).
     Rectangular only (distance maps to x); use ``scale_bar`` for radial/unrooted. ``tick_size`` /
     ``label_size`` set the tick-number and axis-label font sizes (default: the style's font size);
     the vertical spacing follows the font, so give the figure enough bottom margin for big text.
-    ``bold`` sets the label weight (default: bold only when a ``label_size`` is given)."""
+    ``bold`` sets the label weight (default: bold only when a ``label_size`` is given).
+
+    ``before_present`` counts the other way, which is how a dated tree is read: 0 under the tips and
+    the root at its age. The ticks are then anchored at the tips, so they land on round ages rather
+    than on round distances from the root. ``step`` fixes the interval between ticks instead of
+    choosing about ``ticks`` round ones."""
 
     def layer(canvas, tree, layout, style):
         if layout.kind != "rectangular":
@@ -277,25 +294,30 @@ def time_axis(label: str = "Time", *, ticks: int = 5, tick_size: float | None = 
         ls = label_size if label_size is not None else style.font_size
         is_bold = (label_size is not None) if bold is None else bold
         y = height - style.margin_at("bottom") + 14  # just below the tree area, inside the bottom margin
-        draw_time_axis(canvas, canvas.px, layout.xlim[1], y, label, ticks=ticks, tick_size=ts,
-                       label_size=ls, weight="bold" if is_bold else "normal")
+        draw_time_axis(canvas, canvas.px, layout.xlim[1], y, label, ticks=ticks, step=step,
+                       before_present=before_present, tick_size=ts, label_size=ls,
+                       weight="bold" if is_bold else "normal")
 
     return layer
 
 
 def draw_time_axis(canvas, px, x_end: float, y: float, label: str | None, *, ticks: int = 5,
-                   tick_size: float, label_size: float, weight: str = "normal") -> None:
+                   step: float | None = None, before_present: bool = False, tick_size: float,
+                   label_size: float, weight: str = "normal") -> None:
     """Draw a time axis from 0 to ``x_end`` at pixel height ``y``, with ``px`` mapping a time to a
     pixel x. Shared by :func:`time_axis` and :func:`~phylustrator.compose.below`, so an axis under a
-    panel is the same axis a tree draws under itself."""
+    panel is the same axis a tree draws under itself. ``before_present`` counts back from ``x_end``,
+    and ``step`` fixes the tick interval."""
     canvas.raw_line(px(0.0), y, px(x_end), y, "#333333", 1.2)
     # ticks at round numbers (a 1 / 2 / 2.5 / 5 step), not at even fractions of the
     # height: dividing a height of 3.96 into quarters gave "0, 0.99, 2, 3, 4",
     # where the "2" was really 1.98 — ugly and, worse, slightly wrong
-    for t in _round_ticks(x_end, ticks):
-        tx = px(t)
+    values = _round_ticks(x_end, ticks) if step is None else _stepped(x_end, step)
+    for value in values:
+        # the number written, and where it goes: counting back, a round age sits where that age is
+        tx = px(x_end - value if before_present else value)
         canvas.raw_line(tx, y, tx, y + 5, "#333333", 1.2)
-        canvas.raw_text(tx, y + tick_size + 3, f"{t:g}", anchor="middle", size=tick_size)
+        canvas.raw_text(tx, y + tick_size + 3, f"{value:g}", anchor="middle", size=tick_size)
     if label:
         mid = (px(0.0) + px(x_end)) / 2
         canvas.raw_text(mid, y + tick_size + label_size + 4, label, anchor="middle", size=label_size,

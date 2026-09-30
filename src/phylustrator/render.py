@@ -243,8 +243,15 @@ class Canvas:
         """A curved arrow from *data* ``(x0, y0)`` to ``(x1, y1)``, head at the end — e.g. a gene
         transfer from a donor lineage to a recipient lineage. ``opacity`` fades it, for an arrow
         weighted by the count it stands for; a fully opaque arrow writes no opacity attribute."""
+        self.raw_arrow(self.px(x0), self.py(y0), self.px(x1), self.py(y1), color, width,
+                       curve=curve, head=head, opacity=opacity)
+
+    def raw_arrow(self, ax, ay, bx, by, color: str, width: float, *, curve: float = 20.0,
+                  head: float = 8.0, opacity: float = 1.0) -> None:
+        """:meth:`arrow` in **pixel** space — for an arrow whose length is set in pixels rather than
+        by two nodes, such as a transfer arriving from a donor that is not in the drawn tree.
+        ``curve=0`` draws it straight."""
         fade = {} if opacity >= 1.0 else {"stroke_opacity": opacity}
-        ax, ay, bx, by = self.px(x0), self.py(y0), self.px(x1), self.py(y1)
         dx, dy = bx - ax, by - ay
         L = math.hypot(dx, dy) or 1.0
         cx, cy = (ax + bx) / 2 - dy / L * curve, (ay + by) / 2 + dx / L * curve   # bow sideways

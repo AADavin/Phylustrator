@@ -16,10 +16,14 @@ from phylustrator.trees import (
     legend,
     lineage,
     loads,
+    node_labels,
     note,
     plot,
     rubberband,
+    time_axis,
     time_marker,
+    tip_labels,
+    tip_track,
     title,
 )
 
@@ -662,3 +666,88 @@ def test_highlight_lineage_leaves_every_other_branch_where_it_was():
     assert len(with_it) == len(plain) + 4
     with pytest.raises(ValueError, match="no node named"):
         (plot(tree) + highlight_lineage("zz")).as_svg()
+
+
+# --- four small gaps: labels, chips, unsampled donors, ages (issues #14, #15, #16, #21) ---------
+
+_SMALL = "((A:1,B:1)x:1,(C:1,D:1)y:1)r;"
+
+
+def _written(svg):
+    return re.findall(r"<text [^>]*>([^<]*)</text>", svg)
+
+
+def test_node_labels_can_write_a_value_worked_out_for_each_node():
+    """The library could colour by a dict and not label by one."""
+    tree = loads(_SMALL)
+    names = _written((plot(tree) + node_labels()).as_svg())
+    assert "x" in names and "y" in names                     # the default is still the name
+    support = _written((plot(tree) + node_labels(values={"x": 81, "y": 99.0})).as_svg())
+    assert "81" in support and "99" in support, "99.0 should be written plainly as 99"
+    assert "x" not in support, "the name was written as well as the value"
+    computed = _written((plot(tree) + node_labels(text=lambda n: f"[{n.name}]")).as_svg())
+    assert "[x]" in computed
+
+
+def test_labels_skip_a_node_with_no_value_of_its_own():
+    tree = loads(_SMALL)
+    written = _written((plot(tree) + node_labels(values={"x": 7})
+                        + tip_labels(values={"A": "first"})).as_svg())
+    assert "7" in written and "first" in written
+    assert "y" not in written and "B" not in written
+
+
+def test_node_labels_can_cover_the_tips_too():
+    tree = loads(_SMALL)
+    written = _written((plot(tree) + node_labels(values={"A": 1, "x": 2}, leaves=True)).as_svg())
+    assert "1" in written and "2" in written
+
+
+def test_a_tip_chip_can_be_drawn_open():
+    """White on white: absence vanished, so a black-and-white presence column was impossible."""
+    tree = loads(_SMALL)
+    presence = {"A": "present", "B": "absent"}
+    palette = {"present": "#000000", "absent": "#ffffff"}
+    assert 'stroke="white"' in (plot(tree) + tip_track(presence, palette=palette)).as_svg()
+    inked = (plot(tree) + tip_track(presence, palette=palette, stroke="#1a1a1a",
+                                    stroke_width=0.8)).as_svg()
+    assert 'stroke="#1a1a1a"' in inked and 'fill="#ffffff"' in inked
+
+
+def test_a_transfer_can_arrive_from_a_donor_outside_the_tree():
+    """A transfer from an unsampled lineage was skipped, silently, for want of a donor node."""
+    tree = loads(_SMALL)
+
+    def shaft(**kw):
+        ev = [{"kind": "transfer", "recipient": "x", "x": 0.5, **kw}]
+        svg = (plot(tree) + branch_events(ev, legend=False)).as_svg()
+        found = re.search(r'<path d="M([\d.]+),([\d.]+) Q[^"]*" fill="none"', svg)
+        assert found, "no arrow was drawn"
+        return float(found.group(1)), float(found.group(2))
+
+    x_above, y_above = shaft(donor=None)
+    x_below, y_below = shaft(donor=None, side="below")
+    assert y_above < y_below, "side= did not flip the arrow"
+    assert x_above == pytest.approx(x_below), "an incoming arrow lands at its own time"
+    assert shaft(donor="not_in_this_tree") == (x_above, y_above), "an unknown donor is unsampled"
+
+
+def test_an_incoming_transfer_still_has_to_land_on_the_branch():
+    tree = loads(_SMALL)
+    with pytest.raises(ValueError, match="into x"):
+        (plot(tree) + branch_events([{"kind": "transfer", "donor": None, "recipient": "x",
+                                      "x": 9.0}])).as_svg()
+
+
+def test_a_time_axis_can_count_back_from_the_present():
+    """A dated tree reads the other way: 0 under the tips, the root at its age."""
+    tree = loads("((A:1000,B:1000)n1:2000,(C:1500,D:1500)n2:1500)r:100;")
+    svg = (plot(tree) + time_axis("million years ago", before_present=True, step=1000)).as_svg()
+    ticks = [(float(x), t) for x, t in re.findall(r'<text x="([\d.]+)" y="[\d.]+"[^>]*>(\d+)</text>', svg)]
+    assert [t for _, t in sorted(ticks)] == ["3000", "2000", "1000", "0"]
+    forward = (plot(tree) + time_axis("time", step=1000)).as_svg()
+    onward = [t for _, t in sorted((float(x), t) for x, t in
+                                   re.findall(r'<text x="([\d.]+)" y="[\d.]+"[^>]*>(\d+)</text>', forward))]
+    assert onward == ["0", "1000", "2000", "3000"]
+    with pytest.raises(ValueError, match="step must be positive"):
+        (plot(tree) + time_axis("t", step=0)).as_svg()

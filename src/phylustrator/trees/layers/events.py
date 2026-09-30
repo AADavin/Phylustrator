@@ -38,7 +38,7 @@ DEFAULT_EVENT_STYLES = {
 
 
 #: What one event may say about its own drawing, on top of what its kind says.
-_OVERRIDES = ("weight", "color", "size")
+_OVERRIDES = ("weight", "color", "size", "side")
 
 
 def _unpack(ev):
@@ -72,7 +72,8 @@ def _impossible(ev, lo: float, hi: float) -> str:
     """Why this transfer cannot be drawn. It names the window rather than the offending time alone:
     a whole figure of times measured from the present, or without the root stem, misses it the same
     way, and the window is what says so."""
-    pair = f"{ev.get('donor')} -> {ev.get('recipient')}"
+    donor = ev.get("donor")
+    pair = f"{donor} -> {ev['recipient']}" if donor else f"into {ev['recipient']}"
     if lo > hi:
         return (f"branch_events: the transfer {pair} at {ev['x']:g} cannot be drawn — those two "
                 f"lineages never exist at the same time")
@@ -84,7 +85,8 @@ def _impossible(ev, lo: float, hi: float) -> str:
 def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                   legend: bool = True, legend_title: str = "events",
                   legend_loc: str = "top-right", legend_size: float | None = None,
-                  clamp: bool = True, weight_floor: float = 0.25):
+                  clamp: bool = True, weight_floor: float = 0.25,
+                  outside_length: float = 22.0, outside_side: str = "above"):
     """Mark ``events`` on the tree. ``styles`` maps a kind to ``(glyph, colour)`` (merged over the
     D/T/L/O default). ``legend_loc`` is a corner; ``legend_size`` sets the legend font size (glyphs
     scale with it). ``clamp`` keeps a point marker within its branch's span.
@@ -93,10 +95,16 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
     ``weight_floor`` is how much of the kind's style a weight of 0 keeps, so the lightest mark is
     still visible.
 
+    A transfer with no ``donor``, or one the tree does not hold, arrives from an unsampled lineage:
+    it is drawn as a short straight arrow onto the recipient's branch, ``outside_length`` pixels long
+    and coming from ``outside_side`` (``"above"`` or ``"below"``; one event may say its own ``side``).
+
     ``clamp`` also refuses a transfer whose time falls outside the window where the donor and the
     recipient both exist, naming that window. Drawing it would put the arrow on a row whose branch
     has already ended, and the usual cause is a time measured on another scale — from the present
     rather than the root, or without the root stem."""
+    if outside_side not in ("above", "below"):
+        raise ValueError(f"outside_side must be 'above' or 'below', not {outside_side!r}")
     styles = {**DEFAULT_EVENT_STYLES, **(styles or {})}
 
     def layer(canvas, tree, layout, style):
@@ -138,23 +146,33 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
             weight = _weight_scale(ev.get("weight"), weight_floor)
             marked = float(ev.get("size", size)) * weight
             if glyph == "arrow":                                    # transfer: donor -> recipient
-                donor, recip = by_name.get(ev.get("donor")), by_name.get(ev.get("recipient"))
-                if donor is None or recip is None:
+                recip = by_name.get(ev.get("recipient"))
+                if recip is None:
                     continue
+                donor = by_name.get(ev.get("donor"))                # absent: an unsampled donor
                 x = ev["x"] - stem_off       # onto the layout's own distance scale
-                if clamp:
-                    lo = max(span(donor)[0], span(recip)[0])
-                    hi = min(span(donor)[1], span(recip)[1])
-                    if not lo - tol <= x <= hi + tol:
-                        raise ValueError(_impossible(ev, lo + stem_off, hi + stem_off))
+                lo, hi = span(recip)
+                if donor is not None:
+                    lo, hi = max(lo, span(donor)[0]), min(hi, span(donor)[1])
+                if clamp and not lo - tol <= x <= hi + tol:
+                    raise ValueError(_impossible(ev, lo + stem_off, hi + stem_off))
                 # scale the arrow with `size` (as the point glyphs do) so the head reads as an arrow,
                 # not a tick, on a large figure
-                dx, dy = place(donor, x)
+                shaft = max(1.8, float(ev.get("size", size)) * 0.42) * weight
+                tip = max(9.0, float(ev.get("size", size)) * 2.4) * weight
                 rx, ry = place(recip, x)
-                canvas.arrow(dx, dy, rx, ry, color,
-                             width=max(1.8, float(ev.get("size", size)) * 0.42) * weight,
-                             head=max(9.0, float(ev.get("size", size)) * 2.4) * weight,
-                             opacity=weight)
+                if donor is None:
+                    # nothing to draw from, so the arrow comes in from beside the branch instead
+                    tx, ty = canvas.px(rx), canvas.py(ry)
+                    bx, by = place(recip, max(x - 1e-6 * max(hi - lo, 1e-9), lo))
+                    along = math.atan2(ty - canvas.py(by), tx - canvas.px(bx))
+                    turn = -math.pi / 2 if ev.get("side", outside_side) == "above" else math.pi / 2
+                    canvas.raw_arrow(tx + outside_length * math.cos(along + turn),
+                                     ty + outside_length * math.sin(along + turn), tx, ty,
+                                     color, width=shaft, head=tip, curve=0.0, opacity=weight)
+                else:
+                    dx, dy = place(donor, x)
+                    canvas.arrow(dx, dy, rx, ry, color, width=shaft, head=tip, opacity=weight)
             else:
                 node = by_name.get(ev.get("node"))
                 if node is None:

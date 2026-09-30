@@ -8,12 +8,16 @@ from ...color import map_values
 
 
 def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
-              size: float = 11.0, offset: float = 8.0, shape: str = "square"):
+              size: float = 11.0, offset: float = 8.0, shape: str = "square",
+              stroke: str = "white", stroke_width: float = 0.5):
     """A coloured chip at each tip, coloured by ``values`` the same way ``color_branches`` colours
     branches (so the two share a scale). Also records the scale, so a ``colorbar``/``legend`` can
     follow even without ``color_branches``. ``shape`` is any glyph
     :meth:`~phylustrator.render.Canvas.raw_marker` draws (``"square"``, ``"circle"``, …).
-    Returns a layer."""
+
+    ``stroke`` outlines every chip. The default white keeps neighbouring chips apart on a colour
+    figure; an ink outline (``stroke="#1a1a1a"``) is what a black-and-white presence/absence column
+    needs, where the absent chip is white and would otherwise vanish into the page. Returns a layer."""
 
     def layer(canvas, tree, layout, style):
         colors, scale = map_values(values, cmap=cmap, palette=palette)
@@ -32,7 +36,7 @@ def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
                 d = math.hypot(dx, dy) or 1.0
                 cx += offset * dx / d
                 cy += offset * dy / d
-            canvas.raw_marker(cx, cy, shape, color, size / 2, stroke="white", stroke_width=0.5)
+            canvas.raw_marker(cx, cy, shape, color, size / 2, stroke=stroke, stroke_width=stroke_width)
 
     return layer
 
