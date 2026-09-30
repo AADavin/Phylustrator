@@ -39,6 +39,23 @@ class Node:
         return f"Node({self.name!r}, length={self.length:g}, {shape})"
 
 
+def lineage(tree: "Tree", name: str) -> list[str]:
+    """The named nodes from the root down to ``name``, that node included.
+
+    The path a reader follows through a tree — feed it to ``color_branches(width=…)`` to draw that
+    lineage thicker, or to a colour map to paint it. An unnamed node on the way is left out: it
+    cannot be addressed in a map keyed by name anyway."""
+    node = tree.find(name)
+    if node is None:
+        raise ValueError(f"no node named {name!r} in this tree")
+    names = []
+    while node is not None:
+        if node.name:
+            names.append(node.name)
+        node = node.parent
+    return list(reversed(names))
+
+
 class Tree:
     """A rooted tree, reached through its ``root`` node."""
 

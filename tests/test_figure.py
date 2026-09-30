@@ -12,7 +12,9 @@ from phylustrator.trees import (
     color_history,
     color_lanes,
     colorbar,
+    highlight_lineage,
     legend,
+    lineage,
     loads,
     note,
     plot,
@@ -578,3 +580,85 @@ def test_a_radial_ring_splits_only_when_the_children_differ():
     mixed_svg = (plot(tree, layout="radial") + color_branches(mixed, palette=palette)).as_svg()
     assert "#c1443c" in mixed_svg
     assert len(_segments(mixed_svg)) > len(_segments(uniform_svg)), "the ring was not split"
+
+
+# --- one lineage thicker, and layers that leave the rest alone (issues #25 and #28) -------------
+
+_W_NWK = "((a:1,b:1)x:1,(c:1,d:1)y:1)r;"
+
+
+def _drawn(svg):
+    """Every straight segment as (x0, y0, x1, y1, stroke, stroke-width)."""
+    out = []
+    for x0, y0, x1, y1, stroke, w in re.findall(
+            r'<path d="M(-?[\d.]+),(-?[\d.]+) L(-?[\d.]+),(-?[\d.]+)" stroke="([^"]+)" '
+            r'stroke-width="([\d.]+)"', svg):
+        out.append((float(x0), float(y0), float(x1), float(y1), stroke, float(w)))
+    return out
+
+
+def test_lineage_is_the_path_from_the_root_down():
+    tree = loads(_W_NWK)
+    assert lineage(tree, "a") == ["r", "x", "a"]
+    assert lineage(tree, "r") == ["r"]
+    with pytest.raises(ValueError, match="no node named"):
+        lineage(tree, "zz")
+
+
+def _topmost(svg):
+    """The stroke finally showing on each piece of geometry: what a reader sees, not what the file
+    still holds underneath."""
+    out = {}
+    for x0, y0, x1, y1, stroke, _w in _drawn(svg):
+        out[(round(x0, 3), round(y0, 3), round(x1, 3), round(y1, 3))] = stroke
+    return out
+
+
+def test_a_second_layer_can_leave_the_branches_it_does_not_map_alone():
+    """A layer meant for a few branches repainted every other one in the default colour."""
+    tree = loads(_W_NWK)
+    first = color_branches({"a": "x", "b": "x"}, palette={"x": "#c9a227"}, width=1.0)
+    kept = _topmost((plot(tree) + first
+                     + color_branches({"c": "y"}, palette={"y": "#8a8a8a"}, width=3.0,
+                                      others="keep")).as_svg())
+    repainted = _topmost((plot(tree) + first
+                          + color_branches({"c": "y"}, palette={"y": "#8a8a8a"},
+                                           width=3.0)).as_svg())
+    gold = [g for g, stroke in _topmost((plot(tree) + first).as_svg()).items()
+            if stroke == "#c9a227"]
+    assert gold, "the first layer drew nothing to protect"
+    assert all(kept[g] == "#c9a227" for g in gold), "the second layer painted over the first"
+    assert "#8a8a8a" in kept.values() and "#333333" in kept.values()
+    assert any(repainted[g] != "#c9a227" for g in gold), "the default must still repaint everything"
+
+
+def test_color_branches_takes_a_width_per_branch():
+    tree = loads(_W_NWK)
+    values = {n.name: "s" for n in tree.walk()}
+    svg = (plot(tree) + color_branches(values, palette={"s": "#4a6fa5"},
+                                       width={"x": 5.0, "a": 5.0})).as_svg()
+    widths = {w for *_, stroke, w in _drawn(svg) if stroke == "#4a6fa5"}
+    assert 5.0 in widths and len(widths) > 1, "every branch came out at one width"
+
+
+def test_a_thick_lineage_does_not_fatten_the_whole_bar():
+    """The drop belongs to the child, so the bar at a node is thick only towards the child the
+    lineage carries on into."""
+    tree = loads(_W_NWK)
+    svg = (plot(tree) + highlight_lineage("a", width=4.0)).as_svg()
+    thick = [seg for seg in _drawn(svg) if seg[5] == 4.0]
+    assert len(thick) == 4, "the lineage is two branches and their two drops"
+    verticals = [seg for seg in thick if abs(seg[0] - seg[2]) < 1e-9]
+    assert len(verticals) == 2, "both drops of the lineage, and no other"
+    ys = {round(seg[1], 3) for seg in verticals} | {round(seg[3], 3) for seg in verticals}
+    assert len(ys) == 3, "each drop runs from its node to the next one down the lineage"
+
+
+def test_highlight_lineage_leaves_every_other_branch_where_it_was():
+    tree = loads(_W_NWK)
+    plain = _drawn((plot(tree)).as_svg())
+    with_it = _drawn((plot(tree) + highlight_lineage("a", width=4.0)).as_svg())
+    assert all(seg in with_it for seg in plain), "the base tree was redrawn or moved"
+    assert len(with_it) == len(plain) + 4
+    with pytest.raises(ValueError, match="no node named"):
+        (plot(tree) + highlight_lineage("zz")).as_svg()

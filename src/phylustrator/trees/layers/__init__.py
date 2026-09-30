@@ -11,6 +11,7 @@ from .events import branch_events
 from .guides import colorbar, legend, note, scale_bar, time_axis, time_marker, title
 from .halves import node_halves
 from .labels import node_labels, tip_labels
+from .lineage import highlight_lineage
 from .spindles import branch_spindles
 from .tracks import ring, rubberband, tip_track
 
@@ -34,4 +35,5 @@ __all__ = [
     "scale_bar",
     "title",
     "highlight_clade",
+    "highlight_lineage",
 ]

@@ -17,6 +17,7 @@ from .layers import (
                      color_lanes,
                      colorbar,
                      highlight_clade,
+                     highlight_lineage,
                      legend,
                      node_halves,
                      node_labels,
@@ -31,7 +32,7 @@ from .layers import (
                      title,
 )
 from .panels import NodePoints, node_points
-from .tree import Node, Tree
+from .tree import Node, Tree, lineage
 
 __all__ = [
     "Node", "Tree", "read", "loads", "write", "dumps",
@@ -39,6 +40,6 @@ __all__ = [
     "color_branches", "color_history", "color_lanes", "tip_labels", "node_labels", "tip_track", "ring",
     "rubberband",
     "branch_events", "branch_spindles", "node_halves", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",
-    "highlight_clade",
+    "highlight_clade", "highlight_lineage", "lineage",
     "node_points", "NodePoints",
 ]
