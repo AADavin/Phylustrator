@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-30
+
+### Added
+- `trees.color_history` accepts a segment whose state is a **pair**, `("marine", "freshwater")`,
+  drawn as a fade from the first colour to the second along that segment — a trait that shifts
+  gradually after an event, rather than switching at an instant. Both members take their colour from
+  the same palette or colormap and both reach the key, and the branch ends in the second, so the
+  connector below it follows. A dashed branch is drawn in the state it ends in, since a dashed line
+  cannot carry a gradient. Rectangular and radial alike (#23).
+
 ## [0.10.0] - 2026-09-30
 
 ### Added
