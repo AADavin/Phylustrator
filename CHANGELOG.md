@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-30
+
+### Added
+- `trees.highlight_clade(..., stroke=…, stroke_width=…)` — outline a clade instead of, or as well as,
+  filling it. `color="none"` with a stroke leaves the outline alone, the usual mark for "this clade
+  is drawn enlarged in the next panel" (#24).
+- `Figure.clade_box(name)` — the clade box's pixel corners, computed from the layout before anything
+  is drawn, so the zoom lines into another panel can be laid out first. `highlight_clade` draws that
+  same box, from the same helper (#24).
+- `highlight_clade` now marks a clade in every layout, each in the shape that layout has: a box where
+  y is tip order, a wedge between the clade's first and last tip angles in the radial layout, and a
+  hull around the clade's own branches in the unrooted one. It used to draw on the rectangular layout
+  and return silently on the other two. `pad_px` is the room left in the direction with no tip
+  spacing to measure against (#26).
+
+### Changed
+- `highlight_clade` raises on a clade name the tree does not have, instead of drawing nothing:
+  silence there reads as a clade not worth marking rather than as a typo.
+
 ## [0.8.0] - 2026-09-30
 
 ### Added
