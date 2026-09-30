@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-30
+
+### Added
+- `trees.node_labels(values=…)` and `trees.tip_labels(values=…)` — write a value worked out for each
+  node instead of its name, keyed by node name as `color_branches` is, or `text=` for a callable.
+  The library could colour by a dict and not label by one, so an ancestral estimate, a support value
+  or a node age could be painted onto a tree but not written on it. A node with no value of its own
+  is left unlabelled, and `node_labels(leaves=True)` covers the tips as well (#14).
+- `trees.tip_track(stroke=…, stroke_width=…)` — outline the chips. The outline was fixed white, so
+  in a black-and-white presence column the absent chip was white on white and vanished; an ink
+  outline draws it as an open square (#15).
+- `trees.branch_events` draws a transfer whose donor is not in the tree — an unsampled lineage — as a
+  short straight arrow onto the recipient's branch, `outside_length` long and arriving from
+  `outside_side`; one event may name its own `side`. It used to be skipped without a word. `Canvas`
+  gains `raw_arrow`, the pixel-space twin of `arrow` (#16).
+- `trees.time_axis(before_present=True, step=…)` — count back from the tips, which is how a dated
+  tree reads: 0 under the tips and the root at its age. The ticks anchor at the present, so they
+  land on round ages rather than round distances from the root. A `step` of 0 or less raises (#21).
+
 ## [0.9.0] - 2026-09-30
 
 ### Added
