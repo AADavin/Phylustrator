@@ -8,10 +8,10 @@ Each layer is a callable ``(canvas, tree, layout, style) -> None``. Import them 
 from .clades import highlight_clade
 from .coloring import color_branches, color_history, color_lanes
 from .events import branch_events
-from .spindles import branch_spindles
-from .halves import node_halves
 from .guides import colorbar, legend, note, scale_bar, time_axis, time_marker, title
+from .halves import node_halves
 from .labels import node_labels, tip_labels
+from .spindles import branch_spindles
 from .tracks import ring, rubberband, tip_track
 
 __all__ = [

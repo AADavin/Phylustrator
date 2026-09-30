@@ -29,7 +29,10 @@ def branch_spindles(marks, *, length: float | None = None, height: float = 5.0,
     """Mark ``marks`` on the tree as spindles. ``length`` is the lens length in pixels (default: the
     shorter of 22 px and 80% of the branch); ``height`` its half-height in pixels; ``fuse`` how far
     the colour fades into the branch on each side, as a multiple of the lens length. Returns a
-    layer."""
+    layer.
+
+    A branch too short for the lens and its fades shrinks the spindle, height and all, so every
+    spindle in a figure keeps the same shape."""
 
     def layer(canvas, tree, layout, style):
         by_name = {n.name: n for n in tree.walk() if n.name}
@@ -65,10 +68,12 @@ def branch_spindles(marks, *, length: float | None = None, height: float = 5.0,
             ux, uy = math.cos(ang), math.sin(ang)                      # along the branch
             span_px = math.hypot(canvas.px(place(node, hi)[0]) - canvas.px(place(node, lo)[0]),
                                  canvas.py(place(node, hi)[1]) - canvas.py(place(node, lo)[1]))
-            L = float(m.get("size") or length or min(22.0, 0.8 * span_px) or 6.0)
+            asked = float(m.get("size") or length or min(22.0, 0.8 * span_px) or 6.0)
             # the lens and its fades stay inside the branch: on a short branch the spindle shrinks
-            if span_px > 0:
-                L = min(L, span_px / (1 + 2 * fuse))
+            L = min(asked, span_px / (1 + 2 * fuse)) if span_px > 0 else asked
+            # and it keeps its shape while it does. Shortening the lens alone left the height where
+            # it was, so on a short branch the spindle stood up as a sliver taller than it was long
+            tall = height * (L / asked) if asked > 0 else height
             half = L / 2
             reach = half + fuse * L                                    # where the colour has faded
 
@@ -85,11 +90,11 @@ def branch_spindles(marks, *, length: float | None = None, height: float = 5.0,
             pts = []
             for i in range(41):
                 t = -1 + 2 * i / 40
-                d = height * (1 - t * t)
+                d = tall * (1 - t * t)
                 pts.append((px + ux * t * half - uy * d, py + uy * t * half + ux * d))
             for i in range(40, -1, -1):
                 t = -1 + 2 * i / 40
-                d = height * (1 - t * t)
+                d = tall * (1 - t * t)
                 pts.append((px + ux * t * half + uy * d, py + uy * t * half - ux * d))
             canvas.raw_polygon(pts, fill=col, opacity=opacity)
 
