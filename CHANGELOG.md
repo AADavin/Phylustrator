@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-30
+
+### Added
+- `trees.branch_spindles(marks)` — a lens drawn along a branch at a time, sitting on a stretch of
+  branch in the mark's colour that fades into the branch's own colour at both ends, so the mark
+  grows out of the line instead of floating on it. `into` names the colour it fades into, for a
+  branch painted by `color_branches`. Rectangular and radial layouts (#19).
+- `trees.node_halves({node: (left, right)})` — a disc at a node split in two, each half a colour or
+  open, for two states at once at every ancestor (#20).
+
+### Fixed
+- `branch_spindles` on a branch too short for the lens shortened the lens but kept its height, so
+  the spindle stood up as a sliver taller than it was long. The height now shrinks by the same
+  factor, and every spindle in a figure keeps one shape (#22).
+
 ## [0.5.1] - 2026-09-21
 
 ### Fixed
