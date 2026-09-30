@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from .figure import Figure, Geometry, NodePos, TipPos, plot
+from .figure import CladeBox, Figure, Geometry, NodePos, TipPos, plot
 from .io import dumps, loads, read, write
 from .layers import (
                      branch_events,
@@ -36,7 +36,7 @@ from .tree import Node, Tree, lineage
 
 __all__ = [
     "Node", "Tree", "read", "loads", "write", "dumps",
-    "plot", "Figure", "Geometry", "NodePos", "TipPos",
+    "plot", "Figure", "Geometry", "NodePos", "TipPos", "CladeBox",
     "color_branches", "color_history", "color_lanes", "tip_labels", "node_labels", "tip_track", "ring",
     "rubberband",
     "branch_events", "branch_spindles", "node_halves", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",

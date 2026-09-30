@@ -17,6 +17,7 @@ from typing import Callable
 
 from ..render import Canvas
 from ..style import Style
+from .layers.clades import clade_extent
 from .layout import Layout, radial, rectangular, unrooted
 from .skeleton import draw_branches
 from .tree import Tree
@@ -70,6 +71,23 @@ class Geometry:
         return p0 + (x - x0) / ((x1 - x0) or 1.0) * (p1 - p0)
 
 
+@dataclass
+class CladeBox:
+    """Where a clade's box lands on the rendered page, in pixels — the anchor a zoom line into
+    another panel is drawn to. The same box :func:`~phylustrator.trees.highlight_clade` outlines."""
+
+    clade: str
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+    @property
+    def corners(self) -> tuple:
+        """The four corners, clockwise from the top left."""
+        return ((self.x0, self.y0), (self.x1, self.y0), (self.x1, self.y1), (self.x0, self.y1))
+
+
 class Figure:
     """A tree plus a layout, a style, and an ordered list of layers. Immutable-ish: ``+`` returns a
     new figure with one more layer, so a base figure can be reused."""
@@ -117,6 +135,18 @@ class Figure:
                  for node in self.tree.walk()]
         x_pixels = (canvas.px(layout.xlim[0]), canvas.px(layout.xlim[1]))
         return Geometry(canvas.size, tips, tip_x, nodes, layout.xlim, x_pixels)
+
+    def clade_box(self, clade: str, *, pad: float = 0.4) -> CladeBox:
+        """The pixel box around the clade rooted at ``clade``, for this figure's current style.
+
+        Computed from the layout, so it is there before anything is drawn: lay out the zoom lines
+        from it, then draw. ``highlight_clade`` with the same ``pad`` outlines exactly this box.
+        Rectangular layouts only, where a clade is a box; it raises on the others."""
+        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
+        canvas = Canvas(self.style, layout.xlim, layout.ylim,
+                        equal_aspect=(self.layout != "rectangular"))
+        x0, y0, x1, y1 = clade_extent(self.tree, layout, clade, pad)
+        return CladeBox(clade, canvas.px(x0), canvas.py(y0), canvas.px(x1), canvas.py(y1))
 
     def _build(self) -> Canvas:
         layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
