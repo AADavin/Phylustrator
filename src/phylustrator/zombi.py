@@ -111,12 +111,12 @@ def read_profiles(run, *, transpose: bool = True) -> Matrix:
 def read_alignment(run, family, *, kind: str = "nt") -> Alignment:
     """One gene ``family``'s alignment, **keyed by genome**, so rows line up with a species tree. A
     FASTA header is mapped back to its genome via ``gene_order.tsv`` — accepting both the bare copy id
-    (``g1200``) and the genome-qualified form ZOMBI2 now writes (``n12_g1200``)."""
+    (``g1200``) and the genome-qualified form ZOMBI2 now writes (``n12_g1200``).
+
+    Both layouts ZOMBI2 writes are read: one file per family, ``alignments/fam<N>.fasta``, or every
+    family in one ``alignments.fasta`` (``--bundle``), where a header is ``>n12_g1200 fam<N>``."""
     run = Path(run)
     gdir = _genomes_dir(run)
-    adir = run / "sequences" / "alignments"
-    if not adir.is_dir():
-        adir = run / "alignments"
     with open(gdir / "gene_order.tsv") as handle:
         copy2genome = {r["copy"]: r["lineage"] for r in csv.DictReader(handle, delimiter="\t")}
 
@@ -128,17 +128,48 @@ def read_alignment(run, family, *, kind: str = "nt") -> Alignment:
             return copy2genome[copy]
         return header.rsplit("_g", 1)[0] if "_g" in header else header   # last resort: the "n12" prefix
 
-    seqs, name = {}, None
-    raw: dict[str, list] = {}
-    for line in open(adir / f"fam{family}.fasta"):
-        line = line.rstrip("\n")
-        if line.startswith(">"):
-            name = line[1:].strip()
-            raw[name] = []
-        elif name is not None:
-            raw[name].append(line.strip())
+    raw = _alignment_records(run, family)
     seqs = {genome_of(header): "".join(v) for header, v in raw.items()}
     return Alignment(rows=list(seqs), seqs=seqs, kind=kind)
+
+
+def _alignment_records(run: Path, family) -> dict:
+    """``{header: [sequence lines]}`` for one family, from whichever layout the run was written in."""
+    for adir in (run / "sequences" / "alignments", run / "alignments"):
+        path = adir / f"fam{family}.fasta"
+        if path.is_file():
+            return _read_fasta(path)
+    tag = f"fam{family}"
+    for path in (run / "sequences" / "alignments.fasta", run / "alignments.fasta"):
+        if path.is_file():
+            records = _read_fasta(path, tag)
+            if not records:
+                raise KeyError(f"family {family} has no records in {path}")
+            return records
+    raise FileNotFoundError(f"no alignment for family {family} in {run}: looked for "
+                            f"alignments/fam{family}.fasta and alignments.fasta")
+
+
+def _read_fasta(path: Path, tag: "str | None" = None) -> dict:
+    """``{header: [sequence lines]}``. With ``tag``, only the records whose header ends ``" <tag>"``,
+    with that ending removed — one family's records in a bundled FASTA."""
+    raw: dict = {}
+    name = None
+    with open(path) as handle:
+        for line in handle:
+            line = line.rstrip("\n")
+            if line.startswith(">"):
+                header = line[1:].strip()
+                if tag is not None:
+                    header, _, found = header.rpartition(" ")
+                    if found != tag:
+                        name = None
+                        continue
+                name = header
+                raw[name] = []
+            elif name is not None:
+                raw[name].append(line.strip())
+    return raw
 
 
 def read_events(run) -> list:

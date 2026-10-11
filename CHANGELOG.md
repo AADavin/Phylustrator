@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `zombi.read_alignment` also reads a run written with ZOMBI2's `--bundle`, where every family's
+  alignment is in one `alignments.fasta` and each header ends with ` fam<N>`.
+
 ## [0.11.0] - 2026-09-30
 
 ### Added
