@@ -10,6 +10,7 @@ from .coloring import color_branches, color_history, color_lanes
 from .events import branch_events
 from .guides import colorbar, legend, note, scale_bar, time_axis, time_marker, title
 from .halves import node_halves
+from .intervals import node_intervals
 from .labels import node_labels, tip_labels
 from .lineage import highlight_lineage
 from .spindles import branch_spindles
@@ -36,4 +37,5 @@ __all__ = [
     "title",
     "highlight_clade",
     "highlight_lineage",
+    "node_intervals",
 ]

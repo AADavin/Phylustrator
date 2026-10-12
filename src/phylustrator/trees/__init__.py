@@ -20,6 +20,7 @@ from .layers import (
                      highlight_lineage,
                      legend,
                      node_halves,
+                     node_intervals,
                      node_labels,
                      note,
                      ring,
@@ -40,6 +41,6 @@ __all__ = [
     "color_branches", "color_history", "color_lanes", "tip_labels", "node_labels", "tip_track", "ring",
     "rubberband",
     "branch_events", "branch_spindles", "node_halves", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",
-    "highlight_clade", "highlight_lineage", "lineage",
+    "highlight_clade", "highlight_lineage", "lineage", "node_intervals",
     "node_points", "NodePoints",
 ]

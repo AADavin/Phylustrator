@@ -66,11 +66,17 @@ class Canvas:
         span = (self._y1 - self._y0) or 1.0
         return self._top + (y - self._y0) / span * (self.style.height - self._bottom - self._top)
 
-    def line(self, x1, y1, x2, y2, color: str, width: float, *, dash: bool = False) -> None:
-        extra = {"stroke_dasharray": "5,4"} if dash else {}
+    def line(self, x1, y1, x2, y2, color: str, width: float, *, dash: bool = False,
+             opacity: float = 1.0, cap: str | None = None) -> None:
+        """A line in *data* coordinates. ``cap`` overrides the line ending (``"butt"`` squares off a
+        wide bar that would otherwise read as longer than it is), and ``opacity`` fades it, so a
+        broad mark drawn over the tree does not hide it."""
+        extra: dict = {"stroke_dasharray": "5,4"} if dash else {}
+        if opacity < 1.0:
+            extra["stroke_opacity"] = opacity
         self._d.append(draw.Line(self.px(x1), self.py(y1), self.px(x2), self.py(y2),
                                  stroke=color, stroke_width=width,
-                                 stroke_linecap="butt" if dash else "round", **extra))
+                                 stroke_linecap=cap or ("butt" if dash else "round"), **extra))
 
     def gradient_line(self, x1, y1, x2, y2, color1: str, color2: str, width: float) -> None:
         """A branch coloured with a gradient from ``color1`` (start) to ``color2`` (end)."""

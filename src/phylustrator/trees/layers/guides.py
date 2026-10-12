@@ -273,7 +273,7 @@ def _round_step(span: float, target: int) -> float:
 
 
 def time_axis(label: str = "Time", *, ticks: int = 5, step: float | None = None,
-              before_present: bool = False, tick_size: float | None = None,
+              at=None, labels=None, before_present: bool = False, tick_size: float | None = None,
               label_size: float | None = None, bold: bool | None = None):
     """A horizontal scale along the bottom, in the layout's distance units (0 at the origin).
     Rectangular only (distance maps to x); use ``scale_bar`` for radial/unrooted. ``tick_size`` /
@@ -284,7 +284,16 @@ def time_axis(label: str = "Time", *, ticks: int = 5, step: float | None = None,
     ``before_present`` counts the other way, which is how a dated tree is read: 0 under the tips and
     the root at its age. The ticks are then anchored at the tips, so they land on round ages rather
     than on round distances from the root. ``step`` fixes the interval between ticks instead of
-    choosing about ``ticks`` round ones."""
+    choosing about ``ticks`` round ones.
+
+    ``at`` places the ticks itself: a list of distances, or ``"nodes"`` for one under every internal
+    node. ``labels`` is what each one says, one per tick — with ``at="nodes"`` they are numbered from
+    the oldest node by default, so the axis reads as the order of the nodes rather than as a
+    distance. ``at`` and ``step`` are two ways to place the same ticks, so giving both raises."""
+    if at is not None and step is not None:
+        raise ValueError("give at= or step=, not both: they are two ways to place the same ticks")
+    if labels is not None and at is None:
+        raise ValueError("labels= needs at=, so that each label has a tick of its own")
 
     def layer(canvas, tree, layout, style):
         if layout.kind != "rectangular":
@@ -294,30 +303,44 @@ def time_axis(label: str = "Time", *, ticks: int = 5, step: float | None = None,
         ls = label_size if label_size is not None else style.font_size
         is_bold = (label_size is not None) if bold is None else bold
         y = height - style.margin_at("bottom") + 14  # just below the tree area, inside the bottom margin
+        places, texts = at, labels
+        if at == "nodes":
+            places = sorted({round(layout.x(n), 10) for n in tree.walk() if not n.is_leaf})
+            texts = labels if labels is not None else [str(i + 1) for i in range(len(places))]
         draw_time_axis(canvas, canvas.px, layout.xlim[1], y, label, ticks=ticks, step=step,
-                       before_present=before_present, tick_size=ts, label_size=ls,
-                       weight="bold" if is_bold else "normal")
+                       at=places, labels=texts, before_present=before_present, tick_size=ts,
+                       label_size=ls, weight="bold" if is_bold else "normal")
 
     return layer
 
 
 def draw_time_axis(canvas, px, x_end: float, y: float, label: str | None, *, ticks: int = 5,
-                   step: float | None = None, before_present: bool = False, tick_size: float,
-                   label_size: float, weight: str = "normal") -> None:
+                   step: float | None = None, at=None, labels=None, before_present: bool = False,
+                   tick_size: float, label_size: float, weight: str = "normal") -> None:
     """Draw a time axis from 0 to ``x_end`` at pixel height ``y``, with ``px`` mapping a time to a
     pixel x. Shared by :func:`time_axis` and :func:`~phylustrator.compose.below`, so an axis under a
     panel is the same axis a tree draws under itself. ``before_present`` counts back from ``x_end``,
-    and ``step`` fixes the tick interval."""
+    ``step`` fixes the tick interval, and ``at`` (with optional ``labels``) places the ticks
+    outright."""
     canvas.raw_line(px(0.0), y, px(x_end), y, "#333333", 1.2)
-    # ticks at round numbers (a 1 / 2 / 2.5 / 5 step), not at even fractions of the
-    # height: dividing a height of 3.96 into quarters gave "0, 0.99, 2, 3, 4",
-    # where the "2" was really 1.98 — ugly and, worse, slightly wrong
-    values = _round_ticks(x_end, ticks) if step is None else _stepped(x_end, step)
-    for value in values:
+    if at is None:
+        # ticks at round numbers (a 1 / 2 / 2.5 / 5 step), not at even fractions of the
+        # height: dividing a height of 3.96 into quarters gave "0, 0.99, 2, 3, 4",
+        # where the "2" was really 1.98 — ugly and, worse, slightly wrong
+        values = _round_ticks(x_end, ticks) if step is None else _stepped(x_end, step)
         # the number written, and where it goes: counting back, a round age sits where that age is
-        tx = px(x_end - value if before_present else value)
+        places = [x_end - v if before_present else v for v in values]
+        texts = [f"{v:g}" for v in values]
+    else:
+        places = [float(p) for p in at]
+        texts = ([str(t) for t in labels] if labels is not None
+                 else [f"{(x_end - p) if before_present else p:g}" for p in places])
+        if len(texts) != len(places):
+            raise ValueError(f"at= has {len(places)} ticks but labels= has {len(texts)}")
+    for place, text in zip(places, texts):
+        tx = px(place)
         canvas.raw_line(tx, y, tx, y + 5, "#333333", 1.2)
-        canvas.raw_text(tx, y + tick_size + 3, f"{value:g}", anchor="middle", size=tick_size)
+        canvas.raw_text(tx, y + tick_size + 3, text, anchor="middle", size=tick_size)
     if label:
         mid = (px(0.0) + px(x_end)) / 2
         canvas.raw_text(mid, y + tick_size + label_size + 4, label, anchor="middle", size=label_size,

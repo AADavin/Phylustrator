@@ -833,3 +833,39 @@ def test_a_reversed_colormap_colours_a_figure():
     one_way = (plot(tree) + tip_track(values, cmap="viridis")).as_svg()
     other = (plot(tree) + tip_track(values, cmap="viridis_r")).as_svg()
     assert one_way != other
+
+
+# --- ticks placed by hand, and under the nodes (issue #29) --------------------------------------
+
+def test_the_axis_takes_the_places_of_its_ticks_and_what_they_say():
+    """An axis that reads as the order of the nodes, not as a distance."""
+    tree = loads("((A:2,B:2)x:1,(C:1,D:1)y:2)r:1;")
+    fig = plot(tree) + time_axis("order", at=[1, 2, 3], labels=["one", "two", "three"])
+    svg = fig.as_svg()
+    geom = fig.geometry()
+    placed = [(float(x), t) for x, t in
+              re.findall(r'<text x="([\d.]+)" y="[\d.]+"[^>]*>(one|two|three)</text>', svg)]
+    assert [t for _, t in sorted(placed)] == ["one", "two", "three"]
+    assert [x for x, _ in sorted(placed)] == pytest.approx([geom.px(1), geom.px(2), geom.px(3)])
+
+
+def test_a_tick_under_every_internal_node_numbered_from_the_oldest():
+    tree = loads("((A:2,B:2)x:1,(C:1,D:1)y:2)r:1;")
+    fig = plot(tree) + time_axis("order of the nodes", at="nodes")
+    svg = fig.as_svg()
+    geom = fig.geometry()
+    placed = sorted((float(x), t) for x, t in
+                    re.findall(r'<text x="([\d.]+)" y="[\d.]+"[^>]*>([123])</text>', svg))
+    inner = sorted(n.x for n in geom.nodes if not n.is_leaf)
+    assert [t for _, t in placed] == ["1", "2", "3"], "numbered from the oldest node"
+    assert [x for x, _ in placed] == pytest.approx(inner)
+
+
+def test_the_axis_refuses_two_ways_of_placing_one_tick():
+    with pytest.raises(ValueError, match="not both"):
+        time_axis("t", at=[1, 2], step=1)
+    with pytest.raises(ValueError, match="labels= needs at="):
+        time_axis("t", labels=["one"])
+    with pytest.raises(ValueError, match="labels="):
+        (plot(loads("((A:2,B:2)x:1,(C:1,D:1)y:2)r:1;"))
+         + time_axis("t", at=[1, 2], labels=["only one"])).as_svg()
