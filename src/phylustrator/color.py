@@ -90,10 +90,16 @@ def colormap_hex(name: str = "viridis") -> list[str]:
 
 
 def _colormap_anchors(name: str) -> list[tuple[int, int, int]]:
-    anchors = _COLORMAPS.get(name.lower())
+    """The named colormap's anchors. A trailing ``_r`` reverses any of them, as it does in
+    matplotlib — the convention everyone arrives with, and the one a scale wants whenever the low
+    values are the interesting ones. The error still lists the base names, not a doubled set."""
+    wanted = name.lower()
+    reverse = wanted.endswith("_r")
+    anchors = _COLORMAPS.get(wanted[:-2] if reverse else wanted)
     if anchors is None:
-        raise ValueError(f"unknown colormap {name!r}; available: {sorted(_COLORMAPS)}")
-    return anchors
+        raise ValueError(f"unknown colormap {name!r}; available: {sorted(_COLORMAPS)} "
+                         f"(any of them with '_r' appended runs the other way)")
+    return list(reversed(anchors)) if reverse else anchors
 
 
 def palette(labels: Iterable) -> dict:

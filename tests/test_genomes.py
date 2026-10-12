@@ -348,3 +348,26 @@ def test_bar_axis_ticks_say_where_they_are():
     """`round()` wrote the middle tick of a 0–3 axis as '1'. It is at 1.5."""
     svg = beside(tree_plot(loads("(a:1,b:1)R;")), bars({"a": 3.0, "b": 1.0}), width=600).as_svg()
     assert ">1.5<" in svg.replace("</text>", "<"), "the halfway tick is not labelled 1.5"
+
+
+# --- what the heatmap's colour bar says it measures (issue #33) ---------------------------------
+
+def _heatmap_svg(**kw):
+    m = Matrix(rows=["a", "b"], cols=["x", "y"], values=[[99.8, 88.1], [88.2, 99.9]])
+    return beside(tree_plot(loads("(a:1,b:1)r;")), heatmap(m, **kw)).as_svg()
+
+
+def test_the_heatmap_bar_names_the_quantity_it_was_given():
+    """The label was hardcoded, so every heatmap of anything but copy number was mislabelled, and a
+    reader who trusts the bar misreads the figure."""
+    assert "% identity" in _heatmap_svg(label="% identity")
+    assert "copies" not in _heatmap_svg(label="% identity")
+
+
+def test_the_heatmap_bar_still_says_copies_by_default():
+    assert "copies" in _heatmap_svg()
+
+
+def test_the_heatmap_bar_can_say_nothing():
+    svg = _heatmap_svg(label="")
+    assert "copies" not in svg and "<rect" in svg

@@ -803,3 +803,33 @@ def test_a_dashed_branch_that_fades_is_drawn_in_the_state_it_ends_in():
            + color_history(_history(), palette=_FADE_PALETTE, dashed={"X"})).as_svg()
     assert "<linearGradient" not in svg
     assert "stroke-dasharray" in svg and "#C55A3B" in svg
+
+
+# --- a colormap that runs the other way (issue #32) ---------------------------------------------
+
+def test_a_colormap_reverses_with_an_r_suffix():
+    """Reversing a scale is routine when the low values are the interesting ones, and _r is the
+    convention everyone arrives with."""
+    from phylustrator.color import _COLORMAPS, colormap_hex
+
+    for name in _COLORMAPS:
+        assert colormap_hex(f"{name}_r") == list(reversed(colormap_hex(name))), name
+    assert colormap_hex("VIRIDIS_R") == colormap_hex("viridis_r"), "the name is case-insensitive"
+
+
+def test_an_unknown_colormap_still_lists_the_base_names():
+    from phylustrator.color import colormap_hex
+
+    with pytest.raises(ValueError) as raised:
+        colormap_hex("nope")
+    said = str(raised.value)
+    assert "viridis" in said and "viridis_r" not in said, "the list should not be doubled"
+    assert "_r" in said, "the suffix is worth naming once"
+
+
+def test_a_reversed_colormap_colours_a_figure():
+    tree = loads("((a:1,b:1)n1:2,(c:2,d:2)n2:1)root;")
+    values = {"a": 0, "b": 8, "c": 120, "d": 160}
+    one_way = (plot(tree) + tip_track(values, cmap="viridis")).as_svg()
+    other = (plot(tree) + tip_track(values, cmap="viridis_r")).as_svg()
+    assert one_way != other

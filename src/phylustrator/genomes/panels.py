@@ -78,8 +78,14 @@ def _row_height(rows) -> float:
 
 
 class Heatmap:
+    """A :class:`~genustrator.matrix.Matrix` as coloured cells beside a tree.
+
+    ``label`` names what the colour bar measures. It defaults to ``"copies"``, the gene-family count
+    this panel was written for; give it the quantity when the matrix holds anything else, or pass
+    ``""`` for no label at all. A bar that names the wrong quantity is read and believed."""
+
     def __init__(self, matrix, *, cmap="viridis", vmin=None, vmax=None,
-                 col_labels=None, grid="#ffffff", title=None):
+                 col_labels=None, grid="#ffffff", title=None, label: str = "copies"):
         self.matrix = matrix
         self.cmap = cmap
         vals = [v for r in matrix.values for v in r]
@@ -89,6 +95,7 @@ class Heatmap:
         self.col_labels = (len(matrix.cols) <= 26) if col_labels is None else col_labels
         self.grid = grid
         self.title = title
+        self.label = label
 
     @property
     def rows(self):
@@ -133,7 +140,8 @@ class Heatmap:
             tx = x0 + (v - self.vmin) / span * w
             canvas.raw_line(tx, y + h, tx, y + h + 4, "#555555", 1.0)
             canvas.raw_text(tx, y + h + 6 + small * 0.7, str(v), anchor="middle", size=small)
-        canvas.raw_text(x0 + w + 12, y + h / 2, "copies", anchor="start", size=small)
+        if self.label:
+            canvas.raw_text(x0 + w + 12, y + h / 2, self.label, anchor="start", size=small)
 
 
 class Alignment:
@@ -306,7 +314,8 @@ class Bars:
 
 
 def heatmap(matrix, **kw) -> Heatmap:
-    """A heatmap panel for a :class:`~genustrator.matrix.Matrix` (genomes × families)."""
+    """A heatmap panel for a :class:`~genustrator.matrix.Matrix` (genomes × families). ``label``
+    names what its colour bar measures (default ``"copies"``); see :class:`Heatmap`."""
     return Heatmap(matrix, **kw)
 
 
