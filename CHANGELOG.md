@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-12
+
+### Added
+- `trees.time_axis(at=…, labels=…)` — place the ticks and say what each one reads, instead of taking
+  the round values the axis chooses. `at="nodes"` puts a tick under every internal node, numbered
+  from the oldest, so the axis reads as the order of the nodes rather than as a distance; two nodes
+  at the same distance share a tick. `at` and `step` are two ways to place the same ticks, so giving
+  both raises, as does `labels` without `at` (#29).
+- `trees.node_intervals({node: (low, high)})` — the uncertainty on a node's age, drawn as a bar at
+  the node's row: an HPD from a clock, or bounds from any other method. `colors` tints one node's
+  own bar, and the bar is translucent and squared off, since one wider than the branch is the normal
+  case and must not hide the tree. `before_present=True` reads the pair as **ages** counted back
+  from the furthest tip, which is how a clock quotes an HPD; given as distances by mistake, every
+  bar lands elsewhere on the tree and still looks plausible. On a radial tree the bar runs along the
+  node's own angle, since there the radius is the time axis; the unrooted layout raises (#31).
+- `Canvas.line` gains `opacity` and `cap`.
+
 ## [0.12.0] - 2026-10-12
 
 ### Added
