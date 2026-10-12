@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-12
+
 ### Added
 - `zombi.read_alignment` also reads a run written with ZOMBI2's `--bundle`, where every family's
   alignment is in one `alignments.fasta` and each header ends with ` fam<N>`.
+- Any colormap name takes an `_r` suffix and runs the other way, as it does in matplotlib —
+  `cmap="viridis_r"`. Reversing a scale is routine when the low values are the interesting ones: a
+  track of differences from a reference wants zero to be the strongest colour. The error for an
+  unknown name still lists the base names rather than a doubled set (#32).
+- `genomes.heatmap(label=…)` names what the colour bar measures, and `""` leaves it unlabelled (#33).
+
+### Fixed
+- The heatmap's colour bar was labelled `copies` whatever the matrix held, so a scale running 88 to
+  100 still said `copies` beside it and a reader who trusted the bar misread the figure. The default
+  is unchanged for the gene-family case it was written for (#33).
 
 ## [0.11.0] - 2026-09-30
 
