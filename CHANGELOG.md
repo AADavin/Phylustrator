@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-12
+
+### Added
+- `trees.legend(loc="auto")` — measure all four corners and take the one covering the least of the
+  tree. The key paints the page colour behind itself, so that a branch under the letters does not
+  make both unreadable, and nothing checked what that patch covered: on a tree whose lowest clade
+  joins near the root, a bottom-left key with long labels hid the branch leading to a tip, and that
+  tip looked detached from the tree (#35).
+
+### Changed
+- A `legend` in any corner that still covers a branch warns, naming the corner and the branches. A
+  branch counts as covered only when two sampled points fall inside the block, so a corner clipping
+  a line is not worth a warning. Every explicit corner draws exactly where it did (#35).
+
 ## [0.13.0] - 2026-10-12
 
 ### Added
