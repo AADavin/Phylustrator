@@ -2,6 +2,7 @@
 
 import math
 import re
+import warnings
 
 import pytest
 
@@ -361,6 +362,7 @@ def test_the_legend_default_corner_is_unchanged():
                                        + legend("state", entries=_ENTRIES)).as_svg()
 
 
+@pytest.mark.filterwarnings("ignore::UserWarning")      # it is put in every corner on purpose
 def test_the_legend_sits_in_the_corner_it_is_given():
     """branch_events has always taken the four corners; legend was pinned to the top left."""
     top_left = _swatches(_legend_svg("top-left"))
@@ -869,3 +871,58 @@ def test_the_axis_refuses_two_ways_of_placing_one_tick():
     with pytest.raises(ValueError, match="labels="):
         (plot(loads("((A:2,B:2)x:1,(C:1,D:1)y:2)r:1;"))
          + time_axis("t", at=[1, 2], labels=["only one"])).as_svg()
+
+
+# --- a key that hides a branch says so (issue #35) ----------------------------------------------
+
+_HIDE_NWK = "((((A:1,B:1):1,C:2):1,D:3):1,(E:3.5,F:3.5):0.5);"
+_HIDE_VALUES = {"A": "First category with a long descriptive label",
+                "E": "Second category with a long descriptive label",
+                "F": "Second category with a long descriptive label"}
+_HIDE_PALETTE = {"First category with a long descriptive label": "#0072B2",
+                 "Second category with a long descriptive label": "#D55E00"}
+
+
+def _with_legend(**kw):
+    base = (plot(loads(_HIDE_NWK)) + color_branches(_HIDE_VALUES, palette=_HIDE_PALETTE)
+            + tip_labels())
+    return base + legend("", size=14, **kw)
+
+
+def test_a_key_that_covers_a_branch_names_it():
+    """The lowest clade joined at the root, the key covered the branch leading to F, and F looked
+    detached from the tree with nothing said."""
+    with pytest.warns(UserWarning, match="bottom-left") as caught:
+        _with_legend(loc="bottom-left").as_svg()
+    assert "F" in str(caught[0].message)
+
+
+def test_auto_takes_the_corner_that_covers_the_least():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")                 # auto must find a free corner here
+        _with_legend(loc="auto").as_svg()
+
+
+def test_auto_picks_a_corner_that_says_nothing_when_one_exists():
+    """Not every corner is free on this tree — the point is that auto lands on one that is."""
+    quiet = []
+    for corner in ("top-left", "top-right", "bottom-left", "bottom-right"):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _with_legend(loc=corner).as_svg()
+        if not caught:
+            quiet.append(corner)
+    assert quiet, "no corner is free, so this tree cannot test the choice"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _with_legend(loc="auto").as_svg()
+
+
+def test_auto_is_a_corner_the_legend_accepts_and_note_does_not():
+    assert callable(legend("x", loc="auto", entries={"a": "#111111"}))
+    with pytest.raises(ValueError, match="auto"):
+        legend("x", loc="middle", entries={"a": "#111111"})
+    with pytest.raises(ValueError) as raised:
+        note("x", loc="auto")
+    allowed = str(raised.value).split(", not ")[0]
+    assert "auto" not in allowed, "a note has no tree to measure against, so it has no auto"

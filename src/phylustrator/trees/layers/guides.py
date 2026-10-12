@@ -7,6 +7,9 @@ All three draw in pixel space at a fixed spot on the page.
 
 from __future__ import annotations
 
+import math
+import warnings
+
 #: A key drawn inside the plotting area sits on top of the tree, and a branch running under the
 #: letters makes both unreadable. Every key here paints this behind itself first: the page colour,
 #: no border, so it reads as a gap in the tree rather than as a box someone added.
@@ -22,13 +25,55 @@ def _clear_behind(canvas, x, y, w, h, pad: float = 6.0) -> None:
 _CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
 
 
+def _branch_points(canvas, tree, layout, steps: int = 12) -> list:
+    """Points along every branch, in pixels, as each layout draws it — enough to tell whether a
+    block of chrome would sit on top of one."""
+    pts: list = []
+
+    def walk(x0, y0, x1, y1, name):
+        for i in range(steps + 1):
+            t = i / steps
+            pts.append((name, canvas.px(x0 + (x1 - x0) * t), canvas.py(y0 + (y1 - y0) * t)))
+
+    for node in tree.walk():
+        if node.parent is None:
+            continue
+        name = node.name or "?"
+        if layout.kind == "rectangular":
+            y, yp = layout.y(node), layout.y(node.parent)
+            walk(layout.x(node.parent), y, layout.x(node), y, name)            # the branch itself
+            walk(layout.x(node.parent), yp, layout.x(node.parent), y, name)    # and its drop
+        elif layout.kind == "radial" and layout.angle is not None:
+            a, ap = layout.angle[node], layout.angle[node.parent]
+            r = math.hypot(layout.x(node.parent), layout.y(node.parent))
+            walk(r * math.cos(a), r * math.sin(a), layout.x(node), layout.y(node), name)
+            for i in range(steps + 1):                                         # the arc it steps off
+                ang = ap + (a - ap) * i / steps
+                pts.append((name, canvas.px(r * math.cos(ang)), canvas.py(r * math.sin(ang))))
+        else:
+            walk(layout.x(node.parent), layout.y(node.parent), layout.x(node), layout.y(node), name)
+    return pts
+
+
+def _covered(points, box) -> list:
+    """The branches a block would hide: those with more than one sampled point inside it. One point
+    is a corner clipping a line; two is a stretch of branch nobody can see."""
+    x, y, w, h = box
+    seen: dict = {}
+    for name, px_, py_ in points:
+        if x <= px_ <= x + w and y <= py_ <= y + h:
+            seen[name] = seen.get(name, 0) + 1
+    return sorted(name for name, n in seen.items() if n > 1)
+
+
 def _corner(loc: str, who: str) -> str:
     """Check a corner name at the point it is written. ``"top-centre"`` used to fall through the
     ``"left" in loc`` test and print as though it had been asked for on the right, which is worse
     than an error."""
-    if loc not in _CORNERS:
+    allowed = _CORNERS + ("auto",) if who == "legend" else _CORNERS
+    if loc not in allowed:
         centred = " (a centred title is `title()`)" if "cent" in loc.lower() else ""
-        raise ValueError(f"{who}: loc must be one of {', '.join(_CORNERS)}, not {loc!r}{centred}")
+        raise ValueError(f"{who}: loc must be one of {', '.join(allowed)}, not {loc!r}{centred}")
     return loc
 
 
@@ -86,6 +131,12 @@ def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = Non
     is often the one corner a legend cannot share; a right corner right-aligns the block on the
     right margin, and a bottom corner ends it on the bottom margin.
 
+    The key paints the page colour behind itself, so that a branch running under the letters does not
+    make both unreadable — which means it can hide a branch instead. ``loc="auto"`` measures all four
+    corners and takes the one covering the least of the tree, and any corner that still hides a
+    branch warns, naming it and the branches. A clade whose branch is covered looks detached from the
+    tree, and nothing said so.
+
     ``size`` sets the label font (default the style's) and the swatch scales with it. Reads the
     recorded categorical scale, or ``entries`` (``{label: colour}``) to draw an explicit list — a
     figure whose scale slot is taken by a continuous ring still gets its categorical legend that
@@ -113,9 +164,29 @@ def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = Non
 
         # the drop from the first row's baseline to the last one's; a title row is the taller one
         drop = (fs * 1.7 if title else 0.0) + max(len(palette) - 1, 0) * fs * 1.6
-        x = side("left") if "left" in loc else w - side("right") - box_w
-        y = (side("top") if "top" in loc else h - side("bottom") - drop - fs * 0.5) + dy
-        _clear_behind(canvas, x, y - fs, box_w, rows * fs * 1.65)
+        tall = rows * fs * 1.65
+
+        def place(where):
+            px_ = side("left") if "left" in where else w - side("right") - box_w
+            py_ = (side("top") if "top" in where else h - side("bottom") - drop - fs * 0.5) + dy
+            return px_, py_
+
+        def patch(where):          # what the backdrop will cover, padding included
+            px_, py_ = place(where)
+            return (px_ - 6, py_ - fs - 6, box_w + 12, tall + 12)
+
+        ink = _branch_points(canvas, tree, layout)
+        corner = (min(_CORNERS, key=lambda c: (len(_covered(ink, patch(c))), _CORNERS.index(c)))
+                  if loc == "auto" else loc)
+        hidden = _covered(ink, patch(corner))
+        if hidden:
+            named = ", ".join(hidden[:4]) + (", …" if len(hidden) > 4 else "")
+            warnings.warn(f"legend: the {corner} key covers {len(hidden)} branch(es) ({named}), which "
+                          f"will look detached from the tree. Move it, or pass loc='auto'"
+                          f"{' (every corner covers some)' if loc == 'auto' else ''}.",
+                          stacklevel=2)
+        x, y = place(corner)
+        _clear_behind(canvas, x, y - fs, box_w, tall)
         if title:
             canvas.raw_text(x, y, title, anchor="start", weight="bold", size=fs)
             y += fs * 1.7
