@@ -8,7 +8,7 @@ import pytest
 
 from phylustrator import Style, below
 from phylustrator.genomes import bars
-from phylustrator.trees import loads, node_points, plot, tip_labels
+from phylustrator.trees import band, loads, node_points, plot, tip_labels
 
 # R's stem is 0.5, so under the default stem-aware layout: R 0.5, E 1.5, H 2.0, C 2.5, A 3.5
 NEWICK = "(((A:1,B:1)C:1,D:2)E:1,(F:1.5,G:1.5)H:1.5)R:0.5;"
@@ -209,3 +209,72 @@ def test_no_intervals_draws_what_it_always_drew():
     before = _panel_svg()
     assert len(_circles(before)) == len(_EST)
     assert not [1 for x1, y1, x2, y2 in _lines(before) if abs(x1 - x2) < 0.01]
+
+
+# --- a band: a low and a high series, shaded between (issue #54) ---------------------------------
+
+_BAND = {0.0: (0.1, 0.9), 1.0: (0.2, 1.1), 2.0: (0.4, 1.6), 3.0: (0.3, 1.2)}
+_MID = {0.0: 0.5, 1.0: 0.65, 2.0: 1.0, 3.0: 0.75}
+
+
+def _band_svg(**kw):
+    fig = plot(loads(NEWICK), style=Style(width=620, height=300, margin_left=75))
+    return below(fig, band(_BAND, **kw), panel_height=190).as_svg()
+
+
+def _polygons(svg):
+    return [m for m in re.findall(r'<path d="M ?([^"]+)" fill="#3a6ea5"', svg)]
+
+
+def test_a_band_is_one_filled_shape_between_the_two_series():
+    """Out along the top and back along the bottom: two lines with a guess between them would not
+    be a band."""
+    shapes = _polygons(_band_svg())
+    assert len(shapes) == 1
+    corners = re.findall(r"[-\d.]+,[-\d.]+", shapes[0])
+    assert len(corners) == 2 * len(_BAND)
+
+
+def test_the_estimate_is_drawn_only_when_it_is_given():
+    """The middle of an interval is not usually the estimate, so drawing one would put a line
+    where no number is."""
+    assert not _lines(_band_svg())
+    assert _lines(_band_svg(middle=_MID))
+
+
+def test_the_range_holds_both_series_and_the_middle():
+    from phylustrator.trees import Band
+    lo, hi, _ = Band(_BAND, middle={0.0: -3.0, 1.0: 0.5}).r_range()
+    assert lo <= -3.0 and hi >= 1.6
+
+
+def test_a_band_and_a_set_of_points_agree_about_the_axis():
+    """They share it, so one under the other can be read against it."""
+    from phylustrator.trees import Band, NodePoints
+    values = {"R": 0.1, "E": 1.6}
+    assert Band({0.0: (0.1, 1.6), 1.0: (0.1, 1.6)}).r_range() == NodePoints(values).r_range()
+
+
+def test_a_pair_that_runs_backwards_is_refused():
+    with pytest.raises(ValueError, match="runs backwards"):
+        band({0.0: (1.0, 0.0), 1.0: (0.0, 1.0)})
+
+
+def test_one_time_is_a_bar_and_not_a_band():
+    with pytest.raises(ValueError, match="at least two times"):
+        band({0.0: (0.1, 0.9)})
+
+
+def _highs(svg):
+    """The y of each point on the band's upper edge, which is drawn first."""
+    ys = [float(y) for y in re.findall(r"[-\d.]+,([-\d.]+)", _polygons(svg)[0])]
+    return ys[:len(_BAND)]
+
+
+def test_a_series_running_past_a_fixed_range_is_clamped_to_it():
+    """Three of the four highs are above 1.0, so with the range fixed there they share the top of
+    the panel instead of being drawn off it."""
+    free = _highs(_band_svg())
+    fixed = _highs(_band_svg(vmin=0.0, vmax=1.0))
+    assert len({round(y, 3) for y in free}) == len(_BAND)
+    assert fixed.count(min(fixed)) == 3
