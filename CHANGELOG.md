@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-25
+
 ### Added
 - `trees.plot(cladogram=True)` — space the nodes by topological depth and ignore the branch lengths.
   The three layouts had always taken it and the figure could not pass it, so a large tree whose deep
