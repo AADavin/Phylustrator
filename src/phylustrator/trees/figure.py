@@ -94,12 +94,17 @@ class Figure:
 
     def __init__(self, tree: Tree, *, layout: str = "rectangular", stem: bool = True,
                  style: Style | None = None, dashed=None, skeleton: bool = True,
-                 layers: tuple[Layer, ...] = ()) -> None:
+                 cladogram: bool = False, layers: tuple[Layer, ...] = ()) -> None:
         if layout not in _LAYOUTS:
             raise ValueError(f"unknown layout {layout!r}; choose from {sorted(_LAYOUTS)}")
         self.tree = tree
         self.layout = layout
         self.stem = stem
+        # ignore the branch lengths and space the nodes by topological depth. The layouts have
+        # always taken it; the figure could not pass it, so a tree whose deep branches are short
+        # (the usual shape of a large tree) could only be drawn with its deep nodes on top of each
+        # other, or by rewriting every length to 1 first (#43).
+        self.cladogram = cladogram
         self.style = style or Style()
         self.dashed = dashed  # node names whose branch is drawn dashed (e.g. extinct lineages)
         # whether to draw the default-colour base skeleton first. Turn OFF when a colouring layer
@@ -110,7 +115,8 @@ class Figure:
 
     def __add__(self, layer: Layer) -> "Figure":
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=self.style,
-                      dashed=self.dashed, skeleton=self.skeleton, layers=self.layers + (layer,))
+                      dashed=self.dashed, skeleton=self.skeleton, cladogram=self.cladogram,
+                      layers=self.layers + (layer,))
 
     def with_size(self, width: float, height: float) -> "Figure":
         """A copy of this figure rendered at a given pixel size (same tree, layers, style otherwise).
@@ -120,12 +126,13 @@ class Figure:
     def with_style(self, style: Style) -> "Figure":
         """A copy of this figure drawn with ``style`` (same tree, layers and options otherwise)."""
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=style,
-                      dashed=self.dashed, skeleton=self.skeleton, layers=self.layers)
+                      dashed=self.dashed, skeleton=self.skeleton, cladogram=self.cladogram,
+                      layers=self.layers)
 
     def geometry(self) -> Geometry:
         """The pixel positions of the tips and of every node for this figure's current style, and
         the x-to-pixel mapping — so a companion panel can line up with the tree without redrawing it."""
-        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
+        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram)
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(self.layout != "rectangular"))
         tips = [TipPos(leaf.name or "", canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf)))
@@ -142,14 +149,14 @@ class Figure:
         Computed from the layout, so it is there before anything is drawn: lay out the zoom lines
         from it, then draw. ``highlight_clade`` with the same ``pad`` outlines exactly this box.
         Rectangular layouts only, where a clade is a box; it raises on the others."""
-        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
+        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram)
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(self.layout != "rectangular"))
         x0, y0, x1, y1 = clade_extent(self.tree, layout, clade, pad)
         return CladeBox(clade, canvas.px(x0), canvas.py(y0), canvas.px(x1), canvas.py(y1))
 
     def _build(self) -> Canvas:
-        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem)
+        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram)
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(layout.kind != "rectangular"))
         # A colouring layer overdraws the skeleton, so it has to know which branches were dashed or
@@ -172,12 +179,18 @@ class Figure:
 
 
 def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
-         style: Style | None = None, dashed=None, skeleton: bool = True) -> Figure:
+         style: Style | None = None, dashed=None, skeleton: bool = True,
+         cladogram: bool = False) -> Figure:
     """Start a figure for ``tree``. Add layers with ``+``, then :meth:`Figure.save`. ``dashed`` is an
     optional set of node names whose branches are drawn dashed (e.g. extinct lineages). Set
     ``skeleton=False`` when a colouring layer paints every branch itself (so dashed branches are not
-    underlaid by a solid line)."""
-    return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed, skeleton=skeleton)
+    underlaid by a solid line).
+
+    ``cladogram=True`` spaces the nodes by topological depth and ignores the branch lengths, which is
+    what a large tree needs: drawn to scale, a deep clade's short branches collapse onto the centre
+    of a radial tree and cannot be read."""
+    return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed, skeleton=skeleton,
+                  cladogram=cladogram)
 
 
 def _draw_skeleton(canvas: Canvas, tree: Tree, layout: Layout, style: Style, dashed=None) -> None:

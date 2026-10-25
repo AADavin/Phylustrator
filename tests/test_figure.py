@@ -926,3 +926,46 @@ def test_auto_is_a_corner_the_legend_accepts_and_note_does_not():
         note("x", loc="auto")
     allowed = str(raised.value).split(", not ")[0]
     assert "auto" not in allowed, "a note has no tree to measure against, so it has no auto"
+
+
+# --- plot() can ask for a cladogram (issue #43) --------------------------------------------------
+
+_SHORT_DEEP = "((((a:1,b:1):0.01,(c:1,d:1):0.01):0.01,(e:1,f:1):0.01):0.01,g:1);"
+
+
+def _radii(fig, tree):
+    """Each tip's distance from the root, in the layout's own units."""
+    from phylustrator.trees.figure import _LAYOUTS
+    layout = _LAYOUTS[fig.layout](tree, stem=fig.stem, cladogram=fig.cladogram)
+    return {leaf.name: math.hypot(layout.x(leaf), layout.y(leaf)) for leaf in tree.leaves}
+
+
+def test_plot_passes_cladogram_to_the_layout():
+    """To scale, this tree's deep branches are 0.01 long and every tip sits at radius ~1, so the
+    whole topology collapses onto the centre. By depth the tips spread over 1 to 4."""
+    tree = loads(_SHORT_DEEP)
+    to_scale = _radii(plot(tree, layout="radial"), tree)
+    by_depth = _radii(plot(tree, layout="radial", cladogram=True), tree)
+    assert max(to_scale.values()) - min(to_scale.values()) < 0.05
+    assert by_depth["a"] == pytest.approx(4.0)
+    assert by_depth["e"] == pytest.approx(3.0)
+    assert by_depth["g"] == pytest.approx(1.0)
+
+
+def test_cladogram_survives_adding_layers_and_restyling():
+    """`+` and `with_style` rebuild the figure, and a dropped flag would silently redraw to scale."""
+    tree = loads(_SHORT_DEEP)
+    fig = plot(tree, layout="radial", cladogram=True) + tip_labels()
+    assert fig.cladogram is True
+    assert fig.with_style(Style(width=400, height=400)).cladogram is True
+    assert len(fig.as_svg()) > 100
+
+
+def test_cladogram_is_off_by_default_everywhere_it_is_read():
+    """geometry() and clade_box() lay the tree out again, so they have to read the same flag."""
+    tree = loads("((A:3,B:3)x:1,C:4)r;")
+    assert plot(tree).cladogram is False
+    flat = plot(tree, cladogram=True)
+    assert flat.geometry().xlim != plot(tree).geometry().xlim
+    # x1 is where the tips end, the same in both; x0 is the clade's own root, which moves
+    assert flat.clade_box("x").x0 != plot(tree).clade_box("x").x0
