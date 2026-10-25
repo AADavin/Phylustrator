@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-25
+
 ### Added
 - `trees.band({time: (low, high)}, middle=…)` — a shaded region between a low and a high series,
   on the tree's time axis. `node_points` is keyed by node and says nothing between the nodes, so a
