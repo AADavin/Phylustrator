@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `trees.plot(cladogram=True)` — space the nodes by topological depth and ignore the branch lengths.
+  The three layouts had always taken it and the figure could not pass it, so a large tree whose deep
+  branches are short had to be drawn with every length rewritten to 1 first. On a radial tree to
+  scale, those deep branches collapse onto the centre and the topology cannot be read (#43).
+
 ## [0.14.0] - 2026-10-12
 
 ### Added
