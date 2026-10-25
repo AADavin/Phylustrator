@@ -1242,3 +1242,70 @@ def test_a_margin_claim_is_the_furthest_one():
     assert canvas.claimed("right", 42.0) == 100.0
     with pytest.raises(ValueError, match="'right' or 'bottom'"):
         canvas.claim("left", 10.0)
+
+
+# --- an arbitrary path, for the shapes nothing here names (issue #42) ---------------------------
+
+
+def _canvas(**style):
+    from phylustrator.render import Canvas
+    return Canvas(Style(width=200, height=120, **style), (0.0, 1.0), (0.0, 1.0))
+
+
+def _path_line(svg):
+    return [line for line in svg.splitlines() if "<path" in line][-1]
+
+
+def test_a_path_reaches_the_page_as_it_was_written():
+    """The one place in the library where the caller owns the geometry: a rounded bend or a tube's
+    outline has no named shape to ask for, and the alternative was splicing SVG into as_svg()."""
+    canvas = _canvas()
+    d = "M 10,10 L 60,10 Q 70,10 70,20 L 70,70"
+    canvas.raw_path(d, stroke="#111111", stroke_width=3.0)
+    assert f'd="{d}"' in _path_line(canvas.as_svg())
+
+
+def test_a_path_is_stroked_and_unfilled_unless_it_is_told_otherwise():
+    canvas = _canvas()
+    canvas.raw_path("M 0,0 L 10,10", stroke="#111111", stroke_width=2.0)
+    line = _path_line(canvas.as_svg())
+    assert 'fill="none"' in line and 'stroke="#111111"' in line
+
+
+def test_a_path_ends_the_way_the_style_says():
+    """A tube in a LaTeX figure wants square ends and angular corners; the default is round."""
+    rounded = _canvas()
+    rounded.raw_path("M 0,0 L 10,10", stroke="#111111", stroke_width=2.0)
+    assert 'stroke-linecap="round"' in _path_line(rounded.as_svg())
+    flat = _canvas(line_cap="butt")
+    flat.raw_path("M 0,0 L 10,10", stroke="#111111", stroke_width=2.0)
+    assert 'stroke-linecap="butt"' in _path_line(flat.as_svg())
+    corner = _canvas()
+    corner.raw_path("M 0,0 L 10,10", stroke="#111111", stroke_width=2.0, join="miter", cap="square")
+    line = _path_line(corner.as_svg())
+    assert 'stroke-linejoin="miter"' in line and 'stroke-linecap="square"' in line
+
+
+def test_a_path_can_be_dashed_and_faded():
+    canvas = _canvas()
+    canvas.raw_path("M 0,0 L 10,10", stroke="#111111", stroke_width=2.0, dash="5,4", opacity=0.4)
+    line = _path_line(canvas.as_svg())
+    assert 'stroke-dasharray="5,4"' in line
+    assert 'stroke-opacity="0.4"' in line and 'fill-opacity="0.4"' in line
+
+
+def test_an_opaque_path_writes_no_opacity_at_all():
+    canvas = _canvas()
+    canvas.raw_path("M 0,0 L 10,10", stroke="#111111", stroke_width=2.0)
+    assert "opacity" not in _path_line(canvas.as_svg())
+
+
+def test_a_tube_can_be_drawn_with_two_passes_of_one_path():
+    """The shape issue #42 wrote by hand: each branch drawn wide in the outline colour and again
+    narrower in the fill, so neighbouring branches merge into one tube."""
+    canvas = _canvas()
+    bend = "M 20,20 L 80,20 Q 90,20 90,30 L 90,90"
+    canvas.raw_path(bend, stroke="#1a1a1a", stroke_width=14.0)
+    canvas.raw_path(bend, stroke="#ffffff", stroke_width=11.0)
+    svg = canvas.as_svg()
+    assert svg.count(f'd="{bend}"') == 2
