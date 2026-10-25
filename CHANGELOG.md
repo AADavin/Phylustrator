@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the key kept the donor-to-recipient glyph, so the reader had only the colour to match the mark to
   its name. The key now draws the form that was used — down for `outside_side="above"`, up for
   `"below"` — and a kind drawn both ways shows both glyphs on its row (#37).
+- `trees.colorbar` painted its box over whatever branches ran through its corner and said nothing,
+  while `legend` had warned since 0.14.0. On a ladderized tree whose first two tips are long, the
+  branch to their ancestor runs exactly under the bar, and that pair then looks detached from the
+  tree. The bar now warns the same way, naming the corner and the branches, and names the other
+  left corner to move to — `loc="auto"` is the legend's answer and the bar has none (#39).
+- `trees.colorbar(loc=…)` raises on a right-hand corner instead of accepting it and drawing on the
+  left. The bar is anchored on the left margin, so `loc="top-right"` silently gave a figure that
+  was not what it asked for (#39).
 
 ## [0.14.0] - 2026-10-12
 

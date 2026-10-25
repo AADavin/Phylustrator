@@ -1093,3 +1093,50 @@ def test_the_other_kinds_are_untouched_by_the_arrow_forms():
                        {"kind": "duplication", "node": "y", "x": 1.0}])
     assert ">duplication<" in svg and ">transfer<" in svg
     assert len(_key_arrows(svg)) == 1, "the duplication row is a marker, not an arrow"
+
+
+# --- a colorbar that covers a branch says so (issue #39) -----------------------------------------
+
+_BAR_NWK = "((A:0.9,B:0.95)x:0.3,((C:0.3,D:0.35)y:0.4,(E:0.1,F:0.1)z:0.6)w:0.1)r;"
+_BAR_VALUES = {"A": 0.2, "B": 0.2, "x": 0.2, "C": 0.9, "D": 0.9, "y": 0.9,
+               "E": 0.9, "F": 0.9, "z": 0.9, "w": 0.6, "r": 0.3}
+
+
+def _with_colorbar(**kw):
+    return (plot(loads(_BAR_NWK), style=Style(width=700, height=400))
+            + color_branches(_BAR_VALUES, cmap="viridis", limits=(0, 1), gradient=False)
+            + tip_labels() + colorbar("value", **kw))
+
+
+def test_a_colorbar_that_covers_a_branch_names_it():
+    """On a ladderized tree whose first tips are long, the bar sits on the branch to their
+    ancestor and the pair looks detached. `legend` warned here; the bar said nothing."""
+    with pytest.warns(UserWarning, match="top-left") as caught:
+        _with_colorbar(loc="top-left").as_svg()
+    assert "(x)" in str(caught[0].message)
+
+
+def test_a_colorbar_in_a_free_corner_stays_quiet():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _with_colorbar(loc="bottom-left").as_svg()
+
+
+def test_the_colorbar_warning_names_the_corner_to_move_to():
+    """`loc='auto'` is the legend's answer and the bar has none, so the advice has to differ."""
+    with pytest.warns(UserWarning) as caught:
+        _with_colorbar(loc="top-left").as_svg()
+    message = str(caught[0].message)
+    assert "Move it to bottom-left." in message and "auto" not in message
+
+
+def test_a_colorbar_only_takes_the_two_left_corners():
+    """A right-hand corner was accepted and then drawn on the left, which is worse than an error."""
+    with pytest.raises(ValueError, match="top-left, bottom-left"):
+        colorbar("value", loc="top-right")
+    assert callable(colorbar("value", loc="bottom-left"))
+
+
+def test_the_legend_keeps_its_own_advice():
+    with pytest.warns(UserWarning, match="loc='auto'"):
+        _with_legend(loc="bottom-left").as_svg()

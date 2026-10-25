@@ -24,6 +24,10 @@ def _clear_behind(canvas, x, y, w, h, pad: float = 6.0) -> None:
 #: The corners a pinned layer may sit in — the four ``branch_events`` has always taken.
 _CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
 
+#: A colorbar is a wide block with its labels running left to right from its start, so it is
+#: anchored on the left margin. A right-hand corner was accepted and then drawn on the left.
+_BAR_CORNERS = ("top-left", "bottom-left")
+
 
 def _branch_points(canvas, tree, layout, steps: int = 12) -> list:
     """Points along every branch, in pixels, as each layout draws it — enough to tell whether a
@@ -66,11 +70,25 @@ def _covered(points, box) -> list:
     return sorted(name for name, n in seen.items() if n > 1)
 
 
+def _warn_covered(canvas, tree, layout, who: str, corner: str, box, *, advice: str) -> list:
+    """Warn if this block of chrome hides a branch, naming the corner and the branches.
+
+    A key paints the page colour behind itself so the letters stay readable, which means it can
+    hide a branch instead, and a clade whose branch is covered looks detached from the tree."""
+    hidden = _covered(_branch_points(canvas, tree, layout), box)
+    if hidden:
+        named = ", ".join(hidden[:4]) + (", …" if len(hidden) > 4 else "")
+        warnings.warn(f"{who}: the {corner} key covers {len(hidden)} branch(es) ({named}), which "
+                      f"will look detached from the tree. {advice}", stacklevel=2)
+    return hidden
+
+
 def _corner(loc: str, who: str) -> str:
     """Check a corner name at the point it is written. ``"top-centre"`` used to fall through the
     ``"left" in loc`` test and print as though it had been asked for on the right, which is worse
     than an error."""
-    allowed = _CORNERS + ("auto",) if who == "legend" else _CORNERS
+    allowed = (_CORNERS + ("auto",) if who == "legend" else
+               _BAR_CORNERS if who == "colorbar" else _CORNERS)
     if loc not in allowed:
         centred = " (a centred title is `title()`)" if "cent" in loc.lower() else ""
         raise ValueError(f"{who}: loc must be one of {', '.join(allowed)}, not {loc!r}{centred}")
@@ -93,7 +111,13 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
     ``labels`` replaces the two end labels. The bar otherwise prints the values it was coloured by,
     which is wrong whenever those are a transform of the quantity the reader cares about: colour a
     tree by ``log10(rate)`` and the ends read ``-1.31`` and ``-0.33`` rather than the rates
-    themselves. Pass the strings you want instead."""
+    themselves. Pass the strings you want instead.
+
+    Like ``legend``, the bar paints the page colour behind itself, so a branch running through its
+    corner is hidden rather than scribbled over: it warns and names the branches when that happens.
+    Only the two left corners are accepted, since the bar is anchored on the left margin whatever it
+    is given."""
+    _corner(loc, "colorbar")
 
     def layer(canvas, tree, layout, style):
         scale = canvas.scale
@@ -113,6 +137,11 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
         top = min(title_y - fs, y) if title else y
         bottom = y + height + fs * 1.1
         wide = max(width, _text_width(title, fs) if title else 0.0)
+        pad = 6.0
+        other = "bottom-left" if "top" in loc else "top-left"
+        _warn_covered(canvas, tree, layout, "colorbar", loc,
+                      (x - pad, top - pad, wide + 2 * pad, (bottom - top) + 2 * pad),
+                      advice=f"Move it to {other}.")
         _clear_behind(canvas, x, top, wide, bottom - top)
         if title:
             canvas.raw_text(x, title_y, title, anchor="start", weight="bold", size=fs)
@@ -178,13 +207,9 @@ def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = Non
         ink = _branch_points(canvas, tree, layout)
         corner = (min(_CORNERS, key=lambda c: (len(_covered(ink, patch(c))), _CORNERS.index(c)))
                   if loc == "auto" else loc)
-        hidden = _covered(ink, patch(corner))
-        if hidden:
-            named = ", ".join(hidden[:4]) + (", …" if len(hidden) > 4 else "")
-            warnings.warn(f"legend: the {corner} key covers {len(hidden)} branch(es) ({named}), which "
-                          f"will look detached from the tree. Move it, or pass loc='auto'"
-                          f"{' (every corner covers some)' if loc == 'auto' else ''}.",
-                          stacklevel=2)
+        _warn_covered(canvas, tree, layout, "legend", corner, patch(corner),
+                      advice=("Move it, or pass loc='auto'"
+                              f"{' (every corner covers some)' if loc == 'auto' else ''}."))
         x, y = place(corner)
         _clear_behind(canvas, x, y - fs, box_w, tall)
         if title:
