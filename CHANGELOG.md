@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The three layouts had always taken it and the figure could not pass it, so a large tree whose deep
   branches are short had to be drawn with every length rewritten to 1 first. On a radial tree to
   scale, those deep branches collapse onto the centre and the topology cannot be read (#43).
+- `trees.tip_track(label=…)` — name the column, written above its top chip. Three tracks at three
+  `offset` values are three columns, and nothing wrote which was which, so a figure comparing a
+  truth column with two tools needed a hand-written layer for the headers alone. The header is
+  turned upright by default (`label_angle=-90`), because a column is one chip wide and a horizontal
+  header runs over its neighbour at once; `label_angle=0` writes it flat and centred. Above a
+  ragged column — a tree that is not ultrametric — it goes over the rightmost chip, so a column
+  gets one header rather than a staircase. A radial layout has no column to head: the header is
+  dropped with a warning and the chips are drawn as usual (#38).
 
 ## [0.14.0] - 2026-10-12
 

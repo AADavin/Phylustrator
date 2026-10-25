@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import math
+import warnings
 
 from ...color import map_values
 
 
 def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
               size: float = 11.0, offset: float = 8.0, shape: str = "square",
-              stroke: str = "white", stroke_width: float = 0.5):
+              stroke: str = "white", stroke_width: float = 0.5,
+              label: str = "", label_angle: float = -90.0, label_size: float | None = None):
     """A coloured chip at each tip, coloured by ``values`` the same way ``color_branches`` colours
     branches (so the two share a scale). Also records the scale, so a ``colorbar``/``legend`` can
     follow even without ``color_branches``. ``shape`` is any glyph
@@ -17,13 +19,23 @@ def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
 
     ``stroke`` outlines every chip. The default white keeps neighbouring chips apart on a colour
     figure; an ink outline (``stroke="#1a1a1a"``) is what a black-and-white presence/absence column
-    needs, where the absent chip is white and would otherwise vanish into the page. Returns a layer."""
+    needs, where the absent chip is white and would otherwise vanish into the page.
+
+    ``label`` names the column, written above its top chip: three tracks at three ``offset`` values
+    are three columns a reader cannot otherwise tell apart. It is turned upright by default
+    (``label_angle=-90``), because a column is about one chip wide and a horizontal header runs over
+    its neighbour at once; ``label_angle=0`` writes it flat and centred, for a column standing alone.
+    ``label_size`` sets its font (default the style's). Above a **ragged** set of chips — a tree
+    that is not ultrametric — the header goes over the rightmost one, so a column gets one header
+    rather than a staircase. Rectangular layouts only: a radial tree has no "above the column", so
+    the header is dropped with a warning and the chips are drawn as usual. Returns a layer."""
 
     def layer(canvas, tree, layout, style):
         colors, scale = map_values(values, cmap=cmap, palette=palette)
         if scale is not None:
             canvas.scale = scale
         cx0, cy0 = canvas.px(0.0), canvas.py(0.0)  # the origin/centre, for pushing chips outward
+        chips = []
         for leaf in tree.leaves:
             color = colors.get(leaf.name)
             if color is None:
@@ -37,8 +49,27 @@ def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
                 cx += offset * dx / d
                 cy += offset * dy / d
             canvas.raw_marker(cx, cy, shape, color, size / 2, stroke=stroke, stroke_width=stroke_width)
+            chips.append((cx, cy))
+        if label and chips:
+            _header(canvas, style, chips, label, label_angle, label_size, size, layout.kind)
 
     return layer
+
+
+def _header(canvas, style, chips, label, angle, fsize, chip, kind) -> None:
+    """The column's name, above its top chip."""
+    if kind != "rectangular":
+        warnings.warn(f"tip_track: the label {label!r} was dropped — a {kind} layout fans the chips "
+                      f"around the tree, so there is no column to head. The chips are drawn.",
+                      stacklevel=2)
+        return
+    fs = fsize if fsize is not None else style.font_size
+    x = max(cx for cx, _ in chips)       # the rightmost chip: a ragged column still gets one header
+    y = min(cy for _, cy in chips) - chip / 2 - 4
+    # turned upright, the text has to run away from the chips, so it is anchored at its start and
+    # grows upward; flat, it reads best centred over the column
+    anchor = "middle" if angle == 0 else "start"
+    canvas.raw_text(x, y, label, anchor=anchor, size=fs, rotate=angle)
 
 
 def ring(values, *, cmap: str = "viridis", palette: dict | None = None,
