@@ -75,16 +75,35 @@ def _covered(points, box) -> list:
     return sorted(name for name, n in seen.items() if n > 1)
 
 
+def _covered_labels(canvas, box) -> int:
+    """How many of the boxes another layer has drawn this block would sit on.
+
+    The tip names, chiefly. A key measures the branches itself, from the tree, but it cannot know
+    what text another layer wrote or how wide it came out — so the layer that wrote it says so, and
+    this counts what overlaps. A key added before ``tip_labels`` sees nothing, because nothing has
+    been written yet."""
+    x, y, w, h = box
+    return sum(1 for (a, b, c, d) in canvas.obstacles()
+               if not (c < x or a > x + w or d < y or b > y + h))
+
+
 def _warn_covered(canvas, tree, layout, who: str, corner: str, box, *, advice: str) -> list:
-    """Warn if this block of chrome hides a branch, naming the corner and the branches.
+    """Warn if this block of chrome hides a branch or a tip name, naming the corner.
 
     A key paints the page colour behind itself so the letters stay readable, which means it can
-    hide a branch instead, and a clade whose branch is covered looks detached from the tree."""
+    hide something instead: a clade whose branch is covered looks detached from the tree, and a
+    covered name is simply gone."""
     hidden = _covered(_branch_points(canvas, tree, layout), box)
-    if hidden:
-        named = ", ".join(hidden[:4]) + (", …" if len(hidden) > 4 else "")
-        warnings.warn(f"{who}: the {corner} key covers {len(hidden)} branch(es) ({named}), which "
-                      f"will look detached from the tree. {advice}", stacklevel=2)
+    labels = _covered_labels(canvas, box)
+    if hidden or labels:
+        parts = []
+        if hidden:
+            named = ", ".join(hidden[:4]) + (", …" if len(hidden) > 4 else "")
+            parts.append(f"{len(hidden)} branch(es) ({named})")
+        if labels:
+            parts.append(f"{labels} tip label(s)")
+        warnings.warn(f"{who}: the {corner} key covers {' and '.join(parts)}. {advice}",
+                      stacklevel=2)
     return hidden
 
 
@@ -204,10 +223,11 @@ def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = Non
     right margin, and a bottom corner ends it on the bottom margin.
 
     The key paints the page colour behind itself, so that a branch running under the letters does not
-    make both unreadable — which means it can hide a branch instead. ``loc="auto"`` measures all four
-    corners and takes the one covering the least of the tree, and any corner that still hides a
-    branch warns, naming it and the branches. A clade whose branch is covered looks detached from the
-    tree, and nothing said so.
+    make both unreadable — which means it can hide a branch or a tip name instead. ``loc="auto"``
+    measures all four corners and takes the one covering the least — branches **and** the names
+    written beside the tips, which a layer added before it has recorded — and any corner that still
+    covers something warns and says what. A clade whose branch is covered looks detached from the
+    tree; a covered name is simply gone.
 
     ``loc="right"`` or ``loc="below"`` puts the key **outside** the panel instead — a column in
     the right margin, past the tip labels, or a row under the tree, below the time axis. Which
@@ -259,12 +279,19 @@ def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = Non
             y += fs + dy
         else:
             ink = _branch_points(canvas, tree, layout)
-            corner = (min(_CORNERS, key=lambda c: (len(_covered(ink, patch(c))), _CORNERS.index(c)))
+
+            def cost(where):
+                """What a corner would cover: branches and tip names alike. Measuring the branches
+                alone put the key on the names of the long tips, with nothing said (#36)."""
+                box = patch(where)
+                return len(_covered(ink, box)) + _covered_labels(canvas, box)
+
+            corner = (min(_CORNERS, key=lambda c: (cost(c), _CORNERS.index(c)))
                       if loc == "auto" else loc)
             _warn_covered(canvas, tree, layout, "legend", corner, patch(corner),
                           advice=("Move it, pass loc='auto', or put it outside the panel with "
                                   "loc='right' or loc='below'"
-                                  f"{' (every corner covers some)' if loc == 'auto' else ''}."))
+                                  f"{' (every corner covers something)' if loc == 'auto' else ''}."))
             x, y = place(corner)
             _clear_behind(canvas, x, y - fs, box_w, tall)
         if title:

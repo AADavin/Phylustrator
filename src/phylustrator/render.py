@@ -91,6 +91,10 @@ class Canvas:
         # Keyed by side; a side nothing has claimed is absent.
         self._claimed: dict[str, float] = {}
         self._units: str | None = None       # a physical page size, set by physical_size()
+        # Boxes a later layer must not cover: the tip names, the chips past them. A key measures
+        # the branches itself — it has the tree — but it cannot know what text another layer wrote
+        # or how wide it came out, so the layer that wrote it says so.
+        self._obstacles: list[tuple[float, float, float, float]] = []
         # node names whose branch is dashed; set by the tree figure, read by a colouring layer
         self.dashed: Collection[str] | None = None
         self._d = draw.Drawing(style.width, style.height, origin=(0, 0))
@@ -114,6 +118,14 @@ class Canvas:
             cy = (style.margin_at("top") + style.height - self._bottom) / 2
             self._equal = (s, cx - s * (self._x0 + self._x1) / 2,
                            cy - s * (self._y0 + self._y1) / 2)
+
+    def obstruct(self, x0: float, y0: float, x1: float, y1: float) -> None:
+        """Record a pixel box that a key placed later must not cover."""
+        self._obstacles.append((min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)))
+
+    def obstacles(self) -> list:
+        """Every box recorded so far, in the order it was drawn."""
+        return list(self._obstacles)
 
     def claim(self, side: str, edge: float) -> None:
         """Record that something has been drawn out to pixel ``edge`` in the ``"right"`` (or

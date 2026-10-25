@@ -67,10 +67,15 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
                 # a key placed beside the figure has to clear these, and only this layer knows how
                 # long they are
                 fs = size or style.font_size
+                wide, tall = len(written) * fs * 0.58, fs
+                tx, ty = canvas.px(layout.x(leaf)) + ox * gap, canvas.py(layout.y(leaf)) + oy * gap
                 if ox > 0:
-                    canvas.claim("right", canvas.px(layout.x(leaf)) + gap + len(written) * fs * 0.58)
+                    canvas.claim("right", tx + wide)
                 elif oy > 0:
-                    canvas.claim("bottom", canvas.py(layout.y(leaf)) + gap + fs * 0.5)
+                    canvas.claim("bottom", ty + fs * 0.5)
+                # a key dropped in a corner has to clear these as well as the branches
+                x0 = tx if anchor == "start" else (tx - wide if anchor == "end" else tx - wide / 2)
+                canvas.obstruct(x0, ty - tall / 2, x0 + wide, ty + tall / 2)
                 continue
             # radial/unrooted: point outward — from the centre (radial) or the parent (unrooted).
             lx, ly = canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf))

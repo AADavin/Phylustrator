@@ -1309,3 +1309,59 @@ def test_a_tube_can_be_drawn_with_two_passes_of_one_path():
     canvas.raw_path(bend, stroke="#ffffff", stroke_width=11.0)
     svg = canvas.as_svg()
     assert svg.count(f'd="{bend}"') == 2
+
+
+# --- auto measures the tip names too, not only the branches (issue #36) --------------------------
+
+_LONG_NWK = "((((A:0.9,B:0.95)x:0.1,(C:0.8,D:0.85)y:0.1):0.1,(E:0.3,F:0.35):0.6):0.1,(G:0.1,H:0.1):0.9);"
+_LONG_NAMES = {n: f"Some long species name {n}" for n in "ABCDEFGH"}
+
+
+def _long_figure(loc, labels_first=True, **kw):
+    figure = (plot(loads(_LONG_NWK), style=Style(width=700, height=400, margin_right=120))
+              + color_branches({n: "k1" if n in "ABCD" else "k2" for n in "ABCDEFGH"},
+                               palette={"k1": "#D55E00", "k2": "#0072B2"}))
+    names = tip_labels(values=_LONG_NAMES)
+    key = legend("kind", loc=loc, **kw)
+    return (figure + names + key) if labels_first else (figure + key + names)
+
+
+def test_a_key_on_the_tip_names_says_so():
+    """The corner was free of branches and covered several names, and nothing said a word."""
+    with pytest.warns(UserWarning, match="tip label") as caught:
+        _long_figure("bottom-right").as_svg()
+    assert "bottom-right" in str(caught[0].message)
+
+
+def test_auto_now_counts_the_names_as_well_as_the_branches():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _long_figure("auto").as_svg()
+
+
+def test_the_warning_names_both_when_it_covers_both():
+    figure = (plot(loads(_HIDE_NWK), style=Style(width=420, height=260))
+              + color_branches(_HIDE_VALUES, palette=_HIDE_PALETTE)
+              + tip_labels(values={n: f"long name {n}" for n in "ABCDEF"})
+              + legend("", loc="bottom-right", size=14))
+    with pytest.warns(UserWarning) as caught:
+        figure.as_svg()
+    message = str(caught[0].message)
+    assert "branch(es)" in message and "tip label(s)" in message
+
+
+def test_a_key_added_before_the_names_cannot_know_about_them():
+    """The names are measured by the layer that writes them, so one added later is not seen. The
+    order is the natural one; this pins the behaviour rather than endorsing it."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _long_figure("bottom-right", labels_first=False).as_svg()
+    assert not any("tip label" in str(w.message) for w in caught)
+
+
+def test_the_canvas_keeps_the_boxes_it_is_given():
+    from phylustrator.render import Canvas
+    canvas = Canvas(Style(), (0.0, 1.0), (0.0, 1.0))
+    assert canvas.obstacles() == []
+    canvas.obstruct(30, 10, 10, 20)                 # given corner-first, kept as a box
+    assert canvas.obstacles() == [(10.0, 10.0, 30.0, 20.0)]
