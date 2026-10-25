@@ -138,6 +138,10 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
             return t * math.cos(a), t * math.sin(a)
 
         used: dict[str, tuple] = {}
+        # how each kind's arrows were actually drawn: "in" is donor -> recipient, "down"/"up" is
+        # the short arrow onto a branch from an unsampled donor. The key has to show what is on the
+        # tree, or the reader matches a vertical mark to a horizontal glyph by colour alone (#37).
+        forms: dict[str, set] = {}
         for raw in events:
             ev = _unpack(raw)
             glyph, kind_color = styles.get(ev["kind"], ("circle", "#8a8f94"))
@@ -163,14 +167,17 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                 rx, ry = place(recip, x)
                 if donor is None:
                     # nothing to draw from, so the arrow comes in from beside the branch instead
+                    side = ev.get("side", outside_side)
+                    forms.setdefault(ev["kind"], set()).add("down" if side == "above" else "up")
                     tx, ty = canvas.px(rx), canvas.py(ry)
                     bx, by = place(recip, max(x - 1e-6 * max(hi - lo, 1e-9), lo))
                     along = math.atan2(ty - canvas.py(by), tx - canvas.px(bx))
-                    turn = -math.pi / 2 if ev.get("side", outside_side) == "above" else math.pi / 2
+                    turn = -math.pi / 2 if side == "above" else math.pi / 2
                     canvas.raw_arrow(tx + outside_length * math.cos(along + turn),
                                      ty + outside_length * math.sin(along + turn), tx, ty,
                                      color, width=shaft, head=tip, curve=0.0, opacity=weight)
                 else:
+                    forms.setdefault(ev["kind"], set()).add("in")
                     dx, dy = place(donor, x)
                     canvas.arrow(dx, dy, rx, ry, color, width=shaft, head=tip, opacity=weight)
             else:
@@ -206,18 +213,48 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
             # the key names the kind, so it shows the kind's colour — never one event's override
             used[ev["kind"]] = (glyph, kind_color)
         if legend and used:
-            _draw_legend(canvas, style, used, legend_title, size, legend_loc, legend_size)
+            _draw_legend(canvas, style, used, legend_title, size, legend_loc, legend_size, forms)
 
     return layer
 
 
-def _draw_legend(canvas, style, used, title, marker, loc, fsize) -> None:
+#: The order two forms of one kind are shown in, so a figure's key is the same from run to run.
+_FORM_ORDER = ("in", "down", "up")
+
+
+def _arrow_glyph(canvas, form, x, y, ms, color) -> None:
+    """One arrow in the key, pointing the way the mark on the tree points: along the branch for a
+    transfer between two lineages, onto it for one from a donor the tree does not hold."""
+    if form == "in":
+        ex, ey, bx, by = x + ms, y, -1.0, 0.0            # head at the right, barbs trailing left
+    elif form == "down":
+        ex, ey, bx, by = x, y + ms, 0.0, -1.0            # arrives from above, so it points down
+    else:
+        ex, ey, bx, by = x, y - ms, 0.0, 1.0
+    canvas.raw_line(x - (ex - x), y - (ey - y), ex, ey, color, 2.0)
+    for across in (-0.6, 0.6):
+        canvas.raw_line(ex, ey, ex + ms * 0.7 * bx - ms * across * by,
+                        ey + ms * 0.7 * by + ms * across * bx, color, 2.0)
+
+
+def _draw_legend(canvas, style, used, title, marker, loc, fsize, forms=None) -> None:
     width, height = canvas.size
+    forms = forms or {}
     fs = fsize if fsize is not None else style.font_size
     ms = marker * (fs / style.font_size)                            # glyphs scale with the legend text
     row_h = fs * 1.7
+
+    def shown(kind, glyph):
+        """The glyphs one row draws: a kind whose transfers came both ways shows both."""
+        if glyph != "arrow":
+            return [None]
+        seen = forms.get(kind) or {"in"}
+        return [f for f in _FORM_ORDER if f in seen]
+
+    step = ms * 2.6                                                 # from one glyph to the next
+    widest_row = max((len(shown(k, g)) for k, (g, _) in used.items()), default=1)
     labels = ([title] if title else []) + list(used)
-    box_w = ms * 2 + 14 + max(len(s) for s in labels) * fs * 0.62
+    box_w = ms * 2 + 14 + (widest_row - 1) * step + max(len(s) for s in labels) * fs * 0.62
     n_rows = len(used) + (1 if title else 0)
     x = (style.margin_at("left") + ms + 6) if "left" in loc else (width - style.margin_at("right") - box_w)
     y = (style.margin_at("top") * 0.6 + fs) if "top" in loc else (height - style.margin_at("bottom") - row_h * n_rows)
@@ -225,11 +262,12 @@ def _draw_legend(canvas, style, used, title, marker, loc, fsize) -> None:
         canvas.raw_text(x, y, title, anchor="start", weight="bold", size=fs)
         y += fs * 1.8
     for kind, (glyph, color) in used.items():
-        if glyph == "arrow":
-            canvas.raw_line(x - ms, y, x + ms, y, color, 2.0)
-            canvas.raw_line(x + ms, y, x + ms - ms * 0.7, y - ms * 0.6, color, 2.0)
-            canvas.raw_line(x + ms, y, x + ms - ms * 0.7, y + ms * 0.6, color, 2.0)
-        else:
-            canvas.raw_marker(x, y, glyph, color, ms, stroke="#ffffff", stroke_width=0.8)
-        canvas.raw_text(x + ms + 12, y, kind, anchor="start", size=fs)
+        gx = x
+        for form in shown(kind, glyph):
+            if form is None:
+                canvas.raw_marker(gx, y, glyph, color, ms, stroke="#ffffff", stroke_width=0.8)
+            else:
+                _arrow_glyph(canvas, form, gx, y, ms, color)
+            gx += step
+        canvas.raw_text(gx - step + ms + 12, y, kind, anchor="start", size=fs)
         y += row_h

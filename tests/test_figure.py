@@ -1028,3 +1028,68 @@ def test_a_radial_track_says_the_header_was_dropped():
         svg = fig.as_svg()
     assert "truth" not in svg
     assert svg.count("<rect") >= 4, "the chips are still drawn"
+
+
+# --- the events key shows the arrow that was drawn (issue #37) -----------------------------------
+
+_EVENT_NWK = "((A:1,B:1)x:1,(C:1.5,D:1.5)y:0.5)r;"
+_TRANSFER_INK = "#2e8b57"
+
+
+def _key_arrows(svg):
+    """The shaft of each arrow in the key, as (x1, y1, x2, y2) with the head at the second point.
+
+    The key draws every glyph at stroke-width 2.0 — shaft first, then its two barbs — while the
+    marks on the tree scale their width with the event size."""
+    paths = re.findall(r'<path d="M([\d.]+),([\d.]+) L([\d.]+),([\d.]+)" stroke="'
+                       + _TRANSFER_INK + r'" stroke-width="2.0"', svg)
+    return [tuple(float(v) for v in p) for p in paths[0::3]]
+
+
+def _key_svg(events, **kw):
+    return (plot(loads(_EVENT_NWK))
+            + branch_events(events, legend_loc="bottom-left", **kw)).as_svg()
+
+
+def test_a_transfer_from_outside_the_tree_gets_a_vertical_key():
+    """It is drawn as a short arrow onto the branch, coming down from above; the key said ->."""
+    (x1, y1, x2, y2), = _key_arrows(_key_svg([{"kind": "transfer", "recipient": "x", "x": 0.6}]))
+    assert x1 == x2, "the mark points onto the branch, so the key has to as well"
+    assert y2 > y1, "arriving from above, it points down"
+
+
+def test_an_outside_transfer_from_below_points_up():
+    svg = _key_svg([{"kind": "transfer", "recipient": "x", "x": 0.6, "side": "below"}])
+    (x1, y1, x2, y2), = _key_arrows(svg)
+    assert x1 == x2 and y2 < y1
+
+
+def test_a_transfer_between_two_lineages_keeps_its_horizontal_key():
+    svg = _key_svg([{"kind": "transfer", "donor": "A", "recipient": "C", "x": 1.8}])
+    (x1, y1, x2, y2), = _key_arrows(svg)
+    assert y1 == y2 and x2 > x1
+
+
+def test_a_kind_drawn_both_ways_shows_both_glyphs():
+    svg = _key_svg([{"kind": "transfer", "recipient": "x", "x": 0.6},
+                       {"kind": "transfer", "donor": "A", "recipient": "C", "x": 1.8}])
+    arrows = _key_arrows(svg)
+    assert len(arrows) == 2
+    flat, upright = arrows
+    assert flat[1] == flat[3], "the donor -> recipient form first"
+    assert upright[0] == upright[2], "then the one from outside the tree"
+    assert upright[0] > flat[2], "side by side on the row, not on top of each other"
+
+
+def test_both_glyphs_do_not_run_into_the_label():
+    svg = _key_svg([{"kind": "transfer", "recipient": "x", "x": 0.6},
+                       {"kind": "transfer", "donor": "A", "recipient": "C", "x": 1.8}])
+    label_x = float(re.search(r'<text x="([\d.]+)"[^>]*>transfer<', svg).group(1))
+    assert label_x > max(a[2] for a in _key_arrows(svg))
+
+
+def test_the_other_kinds_are_untouched_by_the_arrow_forms():
+    svg = _key_svg([{"kind": "transfer", "recipient": "x", "x": 0.6},
+                       {"kind": "duplication", "node": "y", "x": 1.0}])
+    assert ">duplication<" in svg and ">transfer<" in svg
+    assert len(_key_arrows(svg)) == 1, "the duplication row is a marker, not an arrow"

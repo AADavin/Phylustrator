@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gets one header rather than a staircase. A radial layout has no column to head: the header is
   dropped with a warning and the chips are drawn as usual (#38).
 
+### Fixed
+- `trees.branch_events` showed a horizontal arrow in the key for a transfer it had drawn as a
+  vertical one. A transfer from an unsampled donor arrives onto the branch from above or below, and
+  the key kept the donor-to-recipient glyph, so the reader had only the colour to match the mark to
+  its name. The key now draws the form that was used — down for `outside_side="above"`, up for
+  `"below"` — and a kind drawn both ways shows both glyphs on its row (#37).
+
 ## [0.14.0] - 2026-10-12
 
 ### Added
