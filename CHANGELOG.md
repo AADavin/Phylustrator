@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.node_points(intervals={node: (low, high)})` — the uncertainty on a value, drawn as a
+  whisker through its point. A value measured on a tree usually comes with one, and the panel could
+  draw the estimate and not the interval: the expected number of events per branch went on the tree
+  happily and its 95% interval had nowhere to go. The y range grows to hold the whiskers, since a
+  range taken from the estimates alone cuts the bars off at the edge of the panel, which reads as
+  an interval that stops there. An end the axis does not reach loses its cap, for the same reason.
+  An interval given backwards, or one for a node with no value, is refused rather than drawn (#12).
 - `trees.tube()` — the species tree drawn as a **tube**: a wide branch with an outline and rounded
   bends, with room inside it for a gene's history. The usual picture of a reconciliation, and the
   one shape the library could not draw: the workaround wrote the paths by hand and spliced them

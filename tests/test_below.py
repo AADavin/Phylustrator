@@ -135,3 +135,77 @@ def test_node_points_line_joins_the_points_left_to_right():
     values = {"R": 0.0, "E": 1.0, "H": 3.0, "C": 2.0}
     svg = below(plot(loads(NEWICK)), node_points(values, line=True, line_color="#123456")).as_svg()
     assert svg.count('stroke="#123456"') == 3
+
+
+# --- the interval on a value, drawn through its point (issue #12) --------------------------------
+
+_EST = {"R": 0.2, "E": 0.947, "C": 0.776, "H": 1.195}
+_SPREAD = {"R": (0.0, 0.6), "E": (0.0, 1.0), "C": (0.0, 2.0), "H": (0.7, 2.4)}
+
+
+def _lines(svg, color="#3a6ea5"):
+    return [tuple(float(v) for v in m) for m in
+            re.findall(r'<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"'
+                       r'[^>]*stroke="' + color + r'"', svg)] or \
+           [tuple(float(v) for v in m) for m in
+            re.findall(r'<path d="M ?([-\d.]+),([-\d.]+) L ?([-\d.]+),([-\d.]+)"'
+                       r'[^>]*stroke="' + color + r'"', svg)]
+
+
+def _panel_svg(**kw):
+    fig = plot(loads(NEWICK), style=Style(width=620, height=300, margin_left=70))
+    return below(fig, node_points(_EST, **kw), panel_height=190).as_svg()
+
+
+def test_a_whisker_is_drawn_through_each_point():
+    """A value measured on a tree usually comes with an uncertainty, and the panel could draw the
+    estimate and not the interval."""
+    svg = _panel_svg(intervals=_SPREAD)
+    uprights = [(x1, y1, y2) for x1, y1, x2, y2 in _lines(svg) if abs(x1 - x2) < 0.01]
+    assert len(uprights) == len(_SPREAD)
+    points = {round(x, 1) for x, _ in _circles(svg)}
+    assert {round(x, 1) for x, _, _ in uprights} <= points, "each on its own node's column"
+
+
+def test_an_interval_has_a_cap_at_each_end():
+    svg = _panel_svg(intervals={"C": (0.0, 2.0)})
+    flats = [(y1, x1, x2) for x1, y1, x2, y2 in _lines(svg) if abs(y1 - y2) < 0.01]
+    assert len(flats) == 2
+
+
+def test_the_axis_grows_to_hold_the_whiskers():
+    """A range taken from the estimates alone cuts the bars off at the edge of the panel, which
+    reads as an interval that stops there."""
+    plain_lo, plain_hi, _ = node_points(_EST)._range()
+    lo, hi, _ = node_points(_EST, intervals=_SPREAD)._range()
+    assert hi >= 2.4 > plain_hi, "the top of the highest whisker is on the axis"
+    assert lo <= 0.0 and lo <= plain_lo
+
+
+def test_a_fixed_range_cuts_the_bar_and_drops_the_cap_it_cuts():
+    """A cap on an end the axis does not reach would say the interval stops there."""
+    svg = _panel_svg(intervals={"C": (0.0, 9.0)}, vmin=0.0, vmax=2.0)
+    flats = [(y1, x1, x2) for x1, y1, x2, y2 in _lines(svg) if abs(y1 - y2) < 0.01]
+    assert len(flats) == 1, "only the end that is on the axis gets a cap"
+
+
+def test_an_interval_that_runs_backwards_is_refused():
+    with pytest.raises(ValueError, match="runs backwards"):
+        node_points(_EST, intervals={"C": (2.0, 0.0)})
+
+
+def test_an_interval_without_a_value_is_refused():
+    """It is drawn through its point, so the point has to be there."""
+    with pytest.raises(ValueError, match="interval but no value"):
+        node_points(_EST, intervals={"nowhere": (0.0, 1.0)})
+
+
+def test_a_whisker_takes_its_node_s_own_colour():
+    svg = _panel_svg(intervals={"C": (0.0, 2.0)}, colors={"C": "#D55E00"})
+    assert _lines(svg, color="#D55E00")
+
+
+def test_no_intervals_draws_what_it_always_drew():
+    before = _panel_svg()
+    assert len(_circles(before)) == len(_EST)
+    assert not [1 for x1, y1, x2, y2 in _lines(before) if abs(x1 - x2) < 0.01]
