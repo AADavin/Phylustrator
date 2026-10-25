@@ -43,7 +43,7 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
   plus `tip_labels(values={n: ph.styles.maths(n) for n in names})` matches a LaTeX document
   exactly: the title in cmr, the taxon names in cmmi, the face `$a$` is set in.
 - **Layers** — `color_branches`, `color_history`, `tip_labels`, `node_labels`, `tip_track`,
-  `branch_events`, `branch_spindles`, `node_halves`, `colorbar`, `legend`, `time_axis`,
+  `branch_events`, `branch_markers`, `branch_spindles`, `node_halves`, `colorbar`, `legend`, `time_axis`,
   `time_marker`, `scale_bar`, `note`, `title`, `highlight_clade`, `highlight_lineage`,
   `node_intervals`, `node_dots`. `legend` and `note` take a corner, or `loc="right"` /
   `loc="below"` to sit outside the panel where no tree shape can cover them;

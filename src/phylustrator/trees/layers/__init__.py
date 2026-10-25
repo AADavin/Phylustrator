@@ -14,6 +14,7 @@ from .halves import node_halves
 from .intervals import node_intervals
 from .labels import node_labels, tip_labels
 from .lineage import highlight_lineage
+from .markers import branch_markers
 from .spindles import branch_spindles
 from .tracks import ring, rubberband, tip_track
 
@@ -27,6 +28,7 @@ __all__ = [
     "ring",
     "rubberband",
     "branch_events",
+    "branch_markers",
     "branch_spindles",
     "node_halves",
     "node_dots",
