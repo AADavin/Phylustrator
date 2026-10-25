@@ -24,6 +24,11 @@ def _clear_behind(canvas, x, y, w, h, pad: float = 6.0) -> None:
 #: The corners a pinned layer may sit in — the four ``branch_events`` has always taken.
 _CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
 
+#: The places **outside** the panel: a column in the right margin, or a row under the tree. A
+#: corner is inside the plotting area, so on a tree whose tips reach the right edge at every row
+#: and whose root sits low there is no free corner at all, whatever the measuring says.
+_OUTSIDE = ("right", "below")
+
 #: A colorbar is a wide block with its labels running left to right from its start, so it is
 #: anchored on the left margin. A right-hand corner was accepted and then drawn on the left.
 _BAR_CORNERS = ("top-left", "bottom-left")
@@ -83,12 +88,50 @@ def _warn_covered(canvas, tree, layout, who: str, corner: str, box, *, advice: s
     return hidden
 
 
+def _outside_box(canvas, style, loc: str, box_w: float, box_h: float, who: str) -> tuple:
+    """The top-left pixel of a block placed outside the panel, past whatever the layers before it
+    have written into that margin.
+
+    The block claims the room it takes, so a note and a key both placed below stack instead of
+    landing on each other, in the order the layers were added.
+
+    It warns rather than silently running off the page: the canvas size is fixed before any layer
+    runs, so a margin too thin to hold the key cannot be widened from here — only the caller can,
+    and the warning says by how much."""
+    w, h = canvas.size
+    gap = 10.0
+    if loc == "right":
+        panel_edge = w - style.margin_at("right")
+        x = canvas.claimed("right", panel_edge) + gap
+        # centred on the plotting area, which is how a key beside a figure reads
+        top, bottom = style.margin_at("top"), h - style.margin_at("bottom")
+        y = (top + bottom) / 2 - box_h / 2
+        if x + box_w > w:
+            need = round(w - x + box_w - (w - panel_edge) + gap)
+            warnings.warn(f"{who}: loc='right' needs about margin_right={need} to hold it; this "
+                          f"figure has {round(style.margin_at('right'))}, so the block runs off the "
+                          f"page. Widen the margin, or put it below.", stacklevel=3)
+        canvas.claim("right", x + box_w)      # so a second block beside the figure clears this one
+        return x, y
+    panel_bottom = h - style.margin_at("bottom")
+    y = canvas.claimed("bottom", panel_bottom) + gap
+    x = (style.margin_at("left") + (w - style.margin_at("right"))) / 2 - box_w / 2
+    if y + box_h > h:
+        need = round(y + box_h - panel_bottom + gap)
+        warnings.warn(f"{who}: loc='below' needs about margin_bottom={need} to hold it; this figure "
+                      f"has {round(style.margin_at('bottom'))}, so the block runs off the page. "
+                      f"Widen the margin, or put it to the right.", stacklevel=3)
+    canvas.claim("bottom", y + box_h)         # a second block below stacks under this one
+    return x, y
+
+
 def _corner(loc: str, who: str) -> str:
     """Check a corner name at the point it is written. ``"top-centre"`` used to fall through the
     ``"left" in loc`` test and print as though it had been asked for on the right, which is worse
     than an error."""
-    allowed = (_CORNERS + ("auto",) if who == "legend" else
-               _BAR_CORNERS if who == "colorbar" else _CORNERS)
+    allowed = (_CORNERS + ("auto",) + _OUTSIDE if who == "legend" else
+               _BAR_CORNERS if who == "colorbar" else
+               _CORNERS + _OUTSIDE if who == "note" else _CORNERS)
     if loc not in allowed:
         centred = " (a centred title is `title()`)" if "cent" in loc.lower() else ""
         raise ValueError(f"{who}: loc must be one of {', '.join(allowed)}, not {loc!r}{centred}")
@@ -166,6 +209,12 @@ def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = Non
     branch warns, naming it and the branches. A clade whose branch is covered looks detached from the
     tree, and nothing said so.
 
+    ``loc="right"`` or ``loc="below"`` puts the key **outside** the panel instead — a column in
+    the right margin, past the tip labels, or a row under the tree, below the time axis. Which
+    corner is free depends on the tree, and on one whose tips reach the right edge at every row and
+    whose root sits low there is no free corner at all; outside, nothing is covered whatever the
+    tree's shape. The margin has to be wide enough, and the warning says by how much when it is not.
+
     ``size`` sets the label font (default the style's) and the swatch scales with it. Reads the
     recorded categorical scale, or ``entries`` (``{label: colour}``) to draw an explicit list — a
     figure whose scale slot is taken by a continuous ring still gets its categorical legend that
@@ -204,14 +253,20 @@ def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = Non
             px_, py_ = place(where)
             return (px_ - 6, py_ - fs - 6, box_w + 12, tall + 12)
 
-        ink = _branch_points(canvas, tree, layout)
-        corner = (min(_CORNERS, key=lambda c: (len(_covered(ink, patch(c))), _CORNERS.index(c)))
-                  if loc == "auto" else loc)
-        _warn_covered(canvas, tree, layout, "legend", corner, patch(corner),
-                      advice=("Move it, or pass loc='auto'"
-                              f"{' (every corner covers some)' if loc == 'auto' else ''}."))
-        x, y = place(corner)
-        _clear_behind(canvas, x, y - fs, box_w, tall)
+        if loc in _OUTSIDE:
+            # outside the panel there is nothing to cover, so there is nothing to measure either
+            x, y = _outside_box(canvas, style, loc, box_w, tall, "legend")
+            y += fs + dy
+        else:
+            ink = _branch_points(canvas, tree, layout)
+            corner = (min(_CORNERS, key=lambda c: (len(_covered(ink, patch(c))), _CORNERS.index(c)))
+                      if loc == "auto" else loc)
+            _warn_covered(canvas, tree, layout, "legend", corner, patch(corner),
+                          advice=("Move it, pass loc='auto', or put it outside the panel with "
+                                  "loc='right' or loc='below'"
+                                  f"{' (every corner covers some)' if loc == 'auto' else ''}."))
+            x, y = place(corner)
+            _clear_behind(canvas, x, y - fs, box_w, tall)
         if title:
             canvas.raw_text(x, y, title, anchor="start", weight="bold", size=fs)
             y += fs * 1.7
@@ -265,7 +320,8 @@ def time_marker(*times, color: str = "#444444", width: float = 1.5, dash: bool =
 def note(text: str, *, loc: str = "top-left", size: float | None = None,
          color: str | None = None, weight: str = "bold", dy: float = 0.0):
     """A short text note pinned to a corner (``"top-left"`` / ``"top-right"`` / ``"bottom-left"`` /
-    ``"bottom-right"``) — e.g. to name the model or clock a figure was drawn under.
+    ``"bottom-right"``), or outside the panel with ``"right"`` / ``"below"`` — e.g. to name the
+    model or clock a figure was drawn under.
 
     ``dy`` nudges it in pixels, negative up. The corner is fixed to the margin, which is the right
     place for a note *about* the figure; a note read as a **title** wants a little more air between
@@ -275,6 +331,11 @@ def note(text: str, *, loc: str = "top-left", size: float | None = None,
     def layer(canvas, tree, layout, style):
         w, h = canvas.size
         fs = size if size is not None else style.font_size
+        if loc in _OUTSIDE:
+            x, y = _outside_box(canvas, style, loc, _text_width(text, fs), fs, "note")
+            canvas.raw_text(x, y + fs * 0.5 + dy, text, anchor="start", size=fs,
+                            color=color or style.label_color, weight=weight)
+            return
         x = style.margin_at("left") if "left" in loc else w - style.margin_at("right")
         y = (style.margin_at("top") * 0.6 + fs) if "top" in loc else (h - style.margin_at("bottom") * 0.5)
         y += dy
@@ -408,6 +469,8 @@ def time_axis(label: str = "Time", *, ticks: int = 5, step: float | None = None,
         if at == "nodes":
             places = sorted({round(layout.x(n), 10) for n in tree.walk() if not n.is_leaf})
             texts = labels if labels is not None else [str(i + 1) for i in range(len(places))]
+        # the axis, its numbers and its own label all sit in the bottom margin
+        canvas.claim("bottom", y + ls * (2.4 if label else 1.4))
         draw_time_axis(canvas, canvas.px, layout.xlim[1], y, label, ticks=ticks, step=step,
                        at=places, labels=texts, before_present=before_present, tick_size=ts,
                        label_size=ls, weight="bold" if is_bold else "normal")

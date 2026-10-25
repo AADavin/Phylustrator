@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `trees.legend(loc="right")` and `loc="below"` — put the key **outside** the panel, a column in
+  the right margin past the tip labels or a row under the time axis, instead of in a corner over
+  the tree. Which corner is free depends on the tree, and on one whose tips reach the right edge at
+  every row and whose root sits low there is no free corner at all: `loc="auto"` still has to pick
+  one. Outside, nothing is covered whatever the tree's shape, and a script drawing many trees needs
+  no corner chosen by eye (#40).
+- `trees.note` takes the same two places, and `branch_events(legend_loc=…)` with them.
+- `Canvas.claim(side, edge)` / `Canvas.claimed(side, default)` — how far into a margin the layers
+  drawn so far have written. `tip_labels`, `tip_track` and `time_axis` claim what they use, and a
+  key placed outside starts past it, so it lands beside the figure rather than on its own tip
+  labels. Two blocks placed outside stack, in the order they were added.
+- A margin too thin to hold the block warns and says what `margin_right` or `margin_bottom` it
+  would need. The canvas size is fixed before any layer runs, so the key cannot widen it itself.
+
+### Fixed
+- The missing-font check added in 0.16.0 reported **Helvetica** as missing. A family the renderer
+  cannot find is drawn in the fallback face, and on most machines that face *is* Helvetica, so the
+  two renderings matched and the check called the fallback missing — on nearly every default
+  figure. The faces a renderer falls back to are now answered as installed: asking for Helvetica
+  and getting Helvetica is the figure that was asked for. The cost is that a machine genuinely
+  missing one of those names is not warned, which is written down beside the list.
+
 ## [0.16.0] - 2026-10-25
 
 ### Added

@@ -53,6 +53,7 @@ def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
                 cx += offset * dx / d
                 cy += offset * dy / d
             canvas.raw_marker(cx, cy, shape, color, size / 2, stroke=stroke, stroke_width=stroke_width)
+            canvas.claim("right", cx + size / 2)
             chips.append((cx, cy))
         if label and chips:
             _header(canvas, style, chips, label, label_angle, label_size, size, layout)

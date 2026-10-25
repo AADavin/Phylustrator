@@ -1140,3 +1140,105 @@ def test_a_colorbar_only_takes_the_two_left_corners():
 def test_the_legend_keeps_its_own_advice():
     with pytest.warns(UserWarning, match="loc='auto'"):
         _with_legend(loc="bottom-left").as_svg()
+
+
+# --- a key outside the panel, where no tree shape can cover it (issue #40) ----------------------
+
+_OUT_NWK = "(((A:3,B:3):1,(C:2,D:2):2):1,((E:3,F:3):2,(G:4,H:4):1):0);"
+_OUT_KINDS = {n: "clade one" if n in "ABCD" else "clade two" for n in "ABCDEFGH"}
+_OUT_PALETTE = {"clade one": "#D55E00", "clade two": "#0072B2"}
+
+
+def _outside_figure(style, *layers):
+    figure = (plot(loads(_OUT_NWK), style=style)
+              + color_branches(_OUT_KINDS, palette=_OUT_PALETTE) + tip_labels())
+    for layer in layers:
+        figure = figure + layer
+    return figure
+
+
+def _texts(svg):
+    return [(float(m.group(1)), float(m.group(2)), m.group(3)) for m in
+            re.finditer(r'<text x="([-\d.]+)" y="([-\d.]+)"[^>]*>([^<]*)</text>', svg)]
+
+
+def test_a_key_on_the_right_clears_the_tip_labels():
+    """Which corner is free depends on the tree; outside the panel nothing is covered at all."""
+    style = Style(width=640, height=360, margin=40, margin_right=170)
+    svg = _outside_figure(style, legend("clade", loc="right")).as_svg()
+    entries = [x for x, _, text in _texts(svg) if text == "clade one"]
+    names = [x for x, _, text in _texts(svg) if text in set("ABCDEFGH")]
+    assert entries and max(names) < min(entries), "the key starts past the longest tip label"
+
+
+def test_a_key_below_clears_the_time_axis():
+    style = Style(width=560, height=440, margin=40, margin_bottom=140)
+    svg = _outside_figure(style, time_axis("time"), legend("clade", loc="below")).as_svg()
+    axis = max(y for _, y, text in _texts(svg) if text == "time")
+    key = min(y for _, y, text in _texts(svg) if text == "clade one")
+    assert key > axis, "the key goes under the axis, not on it"
+
+
+def test_two_blocks_below_stack_instead_of_landing_on_each_other():
+    style = Style(width=560, height=460, margin=40, margin_bottom=150)
+    svg = _outside_figure(style, time_axis("time"), legend("clade", loc="below"),
+                          note("ALE, relaxed clock", loc="below")).as_svg()
+    key = max(y for _, y, text in _texts(svg) if text == "clade two")
+    said = min(y for _, y, text in _texts(svg) if text == "ALE, relaxed clock")
+    assert said > key, "the note stacks under the key, in the order they were added"
+
+
+def test_an_outside_key_never_warns_about_covering_a_branch():
+    """On this tree every corner holds a branch or a label; outside the panel there is nothing to
+    measure, so there is nothing to say."""
+    style = Style(width=400, height=260, margin=30, margin_right=190)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _outside_figure(style, legend("clade", loc="right", size=13)).as_svg()
+
+
+def test_a_margin_too_thin_says_how_wide_it_has_to_be():
+    """The canvas size is fixed before any layer runs, so the key cannot widen the margin itself."""
+    style = Style(width=560, height=360, margin=40)
+    with pytest.warns(UserWarning, match=r"margin_right=\d+") as caught:
+        _outside_figure(style, legend("clade", loc="right")).as_svg()
+    assert "runs off the page" in str(caught[0].message)
+
+
+def test_a_bottom_margin_too_thin_says_so_too():
+    style = Style(width=560, height=360, margin=30)
+    with pytest.warns(UserWarning, match=r"margin_bottom=\d+"):
+        _outside_figure(style, time_axis(), legend("clade", loc="below")).as_svg()
+
+
+def test_a_note_takes_the_two_outside_places_and_a_colorbar_does_not():
+    assert callable(note("x", loc="right"))
+    assert callable(note("x", loc="below"))
+    with pytest.raises(ValueError, match="top-left, bottom-left"):
+        colorbar("v", loc="below")
+
+
+def test_branch_events_can_put_its_key_outside_too():
+    events = [{"kind": "transfer", "donor": "A", "recipient": "H", "x": 4.5},
+              {"kind": "duplication", "node": "C", "x": 3.0}]
+    style = Style(width=640, height=380, margin=40, margin_right=150)
+    figure = (plot(loads(_OUT_NWK), style=style) + tip_labels()
+              + branch_events(events, legend_loc="right"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        svg = figure.as_svg()
+    key = [x for x, _, text in _texts(svg) if text == "transfer"]
+    names = [x for x, _, text in _texts(svg) if text in set("ABCDEFGH")]
+    assert key and max(names) < min(key)
+
+
+def test_a_margin_claim_is_the_furthest_one():
+    """So the order the layers were added in does not move the key."""
+    from phylustrator.render import Canvas
+    canvas = Canvas(Style(), (0.0, 1.0), (0.0, 1.0))
+    assert canvas.claimed("right", 42.0) == 42.0
+    canvas.claim("right", 100.0)
+    canvas.claim("right", 60.0)
+    assert canvas.claimed("right", 42.0) == 100.0
+    with pytest.raises(ValueError, match="'right' or 'bottom'"):
+        canvas.claim("left", 10.0)
