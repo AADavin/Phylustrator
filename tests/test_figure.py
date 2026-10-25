@@ -969,3 +969,62 @@ def test_cladogram_is_off_by_default_everywhere_it_is_read():
     assert flat.geometry().xlim != plot(tree).geometry().xlim
     # x1 is where the tips end, the same in both; x0 is the clade's own root, which moves
     assert flat.clade_box("x").x0 != plot(tree).clade_box("x").x0
+
+
+# --- a tip_track column can be named (issue #38) -------------------------------------------------
+
+_TRACK_NWK = "((A:1,B:1)x:1,(C:1.5,D:1.5)y:0.5)r;"
+_TRACK_PALETTE = {"yes": "#2a78d6", "no": "#ffffff"}
+_TRACK_COLUMNS = {"truth": {"A": "yes", "B": "yes", "C": "no", "D": "no"},
+                  "tool 1": {"A": "yes", "B": "no", "C": "no", "D": "no"},
+                  "tool 2": {"A": "no", "B": "no", "C": "yes", "D": "no"}}
+
+
+def _three_columns(**kw):
+    fig = plot(loads(_TRACK_NWK), style=Style(width=560, height=320, margin_right=110, margin_top=70))
+    for i, (name, values) in enumerate(_TRACK_COLUMNS.items()):
+        fig = fig + tip_track(values, palette=_TRACK_PALETTE, offset=24 + 15 * i,
+                              stroke="#1a1a1a", label=name, **kw)
+    return fig
+
+
+def test_each_column_gets_its_own_header():
+    svg = _three_columns().as_svg()
+    for name in _TRACK_COLUMNS:
+        assert f">{name}<" in svg
+    # one header per column, each over its own column and none over another's
+    xs = [float(m) for m in re.findall(r'rotate\(-90(?:\.0)? ([\d.]+) [\d.]+\)', svg)]
+    assert len(xs) == 3
+    assert sorted(xs) == xs and len(set(xs)) == 3
+
+
+def test_a_header_sits_above_the_top_chip():
+    svg = _three_columns().as_svg()
+    header_y = min(float(m) for m in re.findall(r'rotate\(-90(?:\.0)? [\d.]+ ([\d.]+)\)', svg))
+    chip_y = min(float(m) for m in re.findall(r'<rect[^>]*y="([\d.]+)"[^>]*fill="#2a78d6"', svg))
+    assert header_y < chip_y, "the header must clear the chips, not land on them"
+
+
+def test_a_flat_header_is_centred_and_an_upright_one_is_not():
+    """Upright, the text has to grow away from the chips; flat, it reads best centred on them."""
+    flat = _three_columns(label_angle=0).as_svg()
+    header = [line for line in flat.splitlines() if ">truth<" in line][0]
+    assert 'text-anchor="middle"' in header
+    assert "rotate(" not in header
+    upright = [line for line in _three_columns().as_svg().splitlines() if ">truth<" in line][0]
+    assert 'text-anchor="start"' in upright and "rotate(-90" in upright
+
+
+def test_a_track_with_no_label_writes_nothing_new():
+    base = (plot(loads(_TRACK_NWK)) + tip_track(_TRACK_COLUMNS["truth"], palette=_TRACK_PALETTE)).as_svg()
+    assert "truth" not in base
+
+
+def test_a_radial_track_says_the_header_was_dropped():
+    """A radial layout fans the chips around the tree, so there is no column to head."""
+    fig = (plot(loads(_TRACK_NWK), layout="radial")
+           + tip_track(_TRACK_COLUMNS["truth"], palette=_TRACK_PALETTE, label="truth"))
+    with pytest.warns(UserWarning, match="radial"):
+        svg = fig.as_svg()
+    assert "truth" not in svg
+    assert svg.count("<rect") >= 4, "the chips are still drawn"
