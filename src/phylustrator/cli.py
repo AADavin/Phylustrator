@@ -79,7 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     # the axis runs along the bottom, so it reads only on a tree whose time runs across the page
     flat = args.layout == "rectangular" or (args.layout == "diagonal"
                                             and args.orientation in ("right", "left"))
-    figure = figure + (time_axis() if flat else scale_bar())
+    # a turned tree has a tip at every bottom corner, so its bar goes outside the panel
+    figure = figure + (time_axis() if flat else
+                       scale_bar(loc="below" if args.layout == "diagonal" else "bottom-right"))
 
     if args.output:
         out = figure.save(args.output)

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `trees.scale_bar(loc=…)` — a corner, or `"below"` / `"right"` to put the bar **outside** the
+  panel, past the tip labels and the axis, through the same margin claims the other guides use. On
+  a tree that grows down the page every tip is along the bottom, so both bottom corners hold a
+  name and the bar landed beside one; outside is the only free place there. The command line uses
+  it for a turned tree, where the bar is what it draws instead of a time axis (#56).
+
+### Changed
+- `trees.node_intervals` draws on a **diagonal** tree that grows across the page. The layout
+  carries the rectangular coordinates, so the bar runs along the same axis it runs along there; a
+  left-facing tree counts its depth the other way, which is followed. A turned tree still raises,
+  and says which orientation is the problem rather than which layout (#55).
+- `trees.highlight_clade` marks a clade on a diagonal tree with a **box** rather than a hull, and
+  `clade_extent` / `Figure.clade_box` accept the layout. A clade is a box wherever one axis is
+  depth and the other is tip order, which is both of them; the padding follows the axis the tips
+  are spaced along, so it turns with the tree (#55).
+
 ## [0.17.0] - 2026-10-25
 
 ### Added

@@ -32,17 +32,27 @@ def clade_node(tree, clade: str):
 
 def clade_extent(tree, layout, clade: str, pad: float = 0.4):
     """The clade's extent in *layout* coordinates: ``(x0, y0, x1, y1)`` from the clade's node to its
-    furthest tip, ``pad`` tip rows above and below. Rectangular layouts only, where y is tip order.
+    furthest tip, ``pad`` tip rows to either side.
+
+    Rectangular and diagonal layouts, the two where one axis is depth and the other is tip order —
+    a clade is a box on both, and the diagonal one turns, so the padding follows the axis the tips
+    are spaced along rather than always being y.
 
     :func:`highlight_clade` draws this, and :meth:`~phylustrator.trees.figure.Figure.clade_box` maps
     it to pixels, so the box a zoom line points at is the box on the page."""
-    if layout.kind != "rectangular":
-        raise ValueError(f"a clade box needs the rectangular layout, where y is tip order; "
-                         f"got {layout.kind!r}. highlight_clade itself draws on every layout")
+    if layout.kind not in ("rectangular", "diagonal"):
+        raise ValueError(f"a clade box needs a layout with a depth axis and a tip-order axis — "
+                         f"rectangular or diagonal; got {layout.kind!r}. highlight_clade itself "
+                         f"draws on every layout")
     node = clade_node(tree, clade)
     leaves = [n for n in _subtree(node) if n.is_leaf]
-    ys = [layout.y(leaf) for leaf in leaves]
-    return (layout.x(node), min(ys) - pad, max(layout.x(leaf) for leaf in leaves), max(ys) + pad)
+    if layout.grows_along_x:                     # depth across the page, tips down it
+        deep = [layout.x(node)] + [layout.x(leaf) for leaf in leaves]
+        across = [layout.y(leaf) for leaf in leaves]
+        return (min(deep), min(across) - pad, max(deep), max(across) + pad)
+    deep = [layout.y(node)] + [layout.y(leaf) for leaf in leaves]
+    across = [layout.x(leaf) for leaf in leaves]
+    return (min(across) - pad, min(deep), max(across) + pad, max(deep))
 
 
 def _hull(points):
@@ -66,8 +76,8 @@ def _hull(points):
 
 def highlight_clade(clade: str, *, color: str = "#FDBF6F", opacity: float = 0.35, pad: float = 0.4,
                     stroke: str | None = None, stroke_width: float = 0.8, pad_px: float = 4.0):
-    """Mark the clade rooted at the node named ``clade``: a box (rectangular), a wedge (radial) or a
-    hull around its branches (unrooted). Returns a layer.
+    """Mark the clade rooted at the node named ``clade``: a box (rectangular or diagonal), a wedge
+    (radial) or a hull around its branches (unrooted). Returns a layer.
 
     ``color`` fills it and ``stroke`` outlines it. ``color="none"`` with a ``stroke`` leaves an
     outline alone, which is the usual mark for "this clade is drawn enlarged in the next panel";
@@ -83,7 +93,7 @@ def highlight_clade(clade: str, *, color: str = "#FDBF6F", opacity: float = 0.35
         if not leaves:
             return
         edge = {"stroke": stroke, "stroke_width": stroke_width} if stroke else {}
-        if layout.kind == "rectangular":
+        if layout.kind in ("rectangular", "diagonal"):
             x0, y0, x1, y1 = clade_extent(tree, layout, clade, pad)
             canvas.region(x0, y0, x1, y1, fill=color, opacity=opacity, **edge)
             return

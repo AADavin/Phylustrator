@@ -21,6 +21,7 @@ from phylustrator.trees import (
     note,
     plot,
     rubberband,
+    scale_bar,
     time_axis,
     time_marker,
     tip_labels,
@@ -1365,3 +1366,61 @@ def test_the_canvas_keeps_the_boxes_it_is_given():
     assert canvas.obstacles() == []
     canvas.obstruct(30, 10, 10, 20)                 # given corner-first, kept as a box
     assert canvas.obstacles() == [(10.0, 10.0, 30.0, 20.0)]
+
+
+# --- the scale bar can sit outside the panel too (issue #56) -------------------------------------
+
+
+def _bar_line(svg):
+    """The scale bar: the one 1.6-wide ink line."""
+    found = re.findall(r'<path d="M ?([-\d.]+),([-\d.]+) L ?([-\d.]+),([-\d.]+)"'
+                       r'[^>]*stroke="#333333" stroke-width="1.6"', svg)
+    assert found, "no scale bar"
+    return tuple(float(v) for v in found[-1])
+
+
+def _turned(loc):
+    style = Style(width=460, height=400, margin=50, margin_bottom=110)
+    return (plot(loads("((A:1,B:1)ab:1,(C:1,D:1)cd:1)root:0.3;"), layout="diagonal",
+                 orientation="down", style=style)
+            + tip_labels() + scale_bar(loc=loc))
+
+
+def test_a_scale_bar_below_clears_the_tip_names():
+    """On a tree that grows down the page every tip is along the bottom, so both bottom corners
+    hold a name and the bar lands beside one."""
+    figure = _turned("below")
+    svg = figure.as_svg()
+    _, bar_y, _, _ = _bar_line(svg)
+    lowest_name = max(float(m) for m in re.findall(r'<text x="[-\d.]+" y="([-\d.]+)"', svg))
+    assert bar_y > lowest_name
+
+
+def test_a_scale_bar_in_a_corner_is_where_it_always_was():
+    figure = _turned("bottom-right")
+    x0, y, x1, _ = _bar_line(figure.as_svg())
+    assert x1 == pytest.approx(460 - 50)
+    assert y == pytest.approx(400 - 110 * 0.5)
+
+
+def test_a_left_corner_draws_on_the_left():
+    x0, _, x1, _ = _bar_line(_turned("bottom-left").as_svg())
+    assert x0 == pytest.approx(50.0), "the bar starts on the left margin"
+
+
+def test_a_scale_bar_takes_the_same_places_the_key_does():
+    assert callable(scale_bar(loc="right"))
+    with pytest.raises(ValueError, match="loc must be one of"):
+        scale_bar(loc="middle")
+
+
+def test_the_command_line_puts_a_turned_tree_s_bar_below_it(tmp_path):
+    from phylustrator.cli import main
+    nwk = tmp_path / "t.nwk"
+    nwk.write_text("((A:1,B:1)ab:1,(C:1,D:1)cd:1)root:0.3;\n")
+    out = tmp_path / "t.svg"
+    main([str(nwk), "--layout", "diagonal", "--orientation", "down", "-o", str(out)])
+    svg = out.read_text()
+    _, bar_y, _, _ = _bar_line(svg)
+    lowest_name = max(float(m) for m in re.findall(r'<text x="[-\d.]+" y="([-\d.]+)"', svg))
+    assert bar_y > lowest_name

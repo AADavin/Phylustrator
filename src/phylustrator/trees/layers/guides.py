@@ -393,20 +393,40 @@ def title(text: str, *, size: float | None = None, dy: float = 0.0, color: str |
     return layer
 
 
-def scale_bar(length: float | None = None, label: str | None = None):
-    """A short bar of a fixed distance, bottom-right — the branch-length key for any layout. Defaults
-    to a round fraction of the tree's extent. Returns a layer."""
+def scale_bar(length: float | None = None, label: str | None = None, *, loc: str = "bottom-right"):
+    """A short bar of a fixed distance — the branch-length key for any layout. Defaults to a round
+    fraction of the tree's extent.
+
+    ``loc`` is a corner (``"bottom-right"`` by default), or ``"below"`` / ``"right"`` to put the bar
+    **outside** the panel, past whatever the tip labels and the axis have taken. On a tree that
+    grows down the page every tip is along the bottom, so both bottom corners hold a tip's name and
+    the bar lands beside one: outside is the only free place there, and it is what the command line
+    uses for a turned tree. Returns a layer."""
+    if loc not in _CORNERS + _OUTSIDE:
+        raise ValueError(f"scale_bar: loc must be one of "
+                         f"{', '.join(_CORNERS + _OUTSIDE)}, not {loc!r}")
 
     def layer(canvas, tree, layout, style):
         width, height = canvas.size
         span = layout.xlim[1] - layout.xlim[0]
         L = length if length is not None else _round_nice(span / 5 or 1.0)
         px_len = abs(canvas.px(L) - canvas.px(0.0))
-        x1, y = width - style.margin_at("right"), height - style.margin_at("bottom") * 0.5
-        x0 = x1 - px_len
+        text = label or f"{L:.2g}"
+        fs = style.font_size * 0.85
+        if loc in _OUTSIDE:
+            # the text sits above the bar, so the block is a line and a row of type tall
+            x0, y = _outside_box(canvas, style, loc, max(px_len, _text_width(text, fs)),
+                                 fs + 10, "scale_bar")
+            y += fs + 6
+            x1 = x0 + px_len
+        else:
+            x1 = (style.margin_at("left") + px_len if "left" in loc
+                  else width - style.margin_at("right"))
+            y = (style.margin_at("top") * 0.6 + fs * 2 if "top" in loc
+                 else height - style.margin_at("bottom") * 0.5)
+            x0 = x1 - px_len
         canvas.raw_line(x0, y, x1, y, "#333333", 1.6)
-        canvas.raw_text((x0 + x1) / 2, y - 8, label or f"{L:.2g}",
-                        anchor="middle", size=style.font_size * 0.85)
+        canvas.raw_text((x0 + x1) / 2, y - 8, text, anchor="middle", size=fs)
 
     return layer
 
