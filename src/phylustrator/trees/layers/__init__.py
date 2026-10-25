@@ -17,6 +17,7 @@ from .lineage import highlight_lineage
 from .markers import branch_markers
 from .spindles import branch_spindles
 from .tracks import ring, rubberband, tip_track
+from .tube import gene_path, tube
 
 __all__ = [
     "color_branches",
@@ -42,4 +43,6 @@ __all__ = [
     "highlight_clade",
     "highlight_lineage",
     "node_intervals",
+    "tube",
+    "gene_path",
 ]
