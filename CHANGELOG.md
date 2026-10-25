@@ -7,22 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- `trees.legend(loc="auto")` measured the four corners against the **branches** only, so on a tree
-  whose long tips reach the right margin it would take a corner that was free of branches and
-  covered several tip names, with nothing said. It counts the names now, and a corner that still
-  covers something warns and says what — branches by name, names by number. A key placed before
-  `tip_labels` sees nothing, because the names are measured by the layer that writes them; the
-  natural order is the right one, and the docstring says so (#36).
+## [0.17.0] - 2026-10-25
 
 ### Added
-- `trees.node_points(intervals={node: (low, high)})` — the uncertainty on a value, drawn as a
-  whisker through its point. A value measured on a tree usually comes with one, and the panel could
-  draw the estimate and not the interval: the expected number of events per branch went on the tree
-  happily and its 95% interval had nowhere to go. The y range grows to hold the whiskers, since a
-  range taken from the estimates alone cuts the bars off at the edge of the panel, which reads as
-  an interval that stops there. An end the axis does not reach loses its cap, for the same reason.
-  An interval given backwards, or one for a node with no value, is refused rather than drawn (#12).
+
+- **`ph.page(rows, …)`** — several independent figures on one page, nested as vectors. `beside` and
+  `below` each pair one tree with one companion panel, so two trees side by side — the same tree
+  under two analyses, the commonest comparison there is — had to leave the library and be stitched
+  together as images, losing the shared axis and the shared scale. Every figure keeps its own
+  layers and style and is re-rendered at its cell's size where it can be, so the text stays the
+  size it was asked for rather than being scaled with the drawing. A cell may be `None` to leave a
+  gap (#30, #17).
+- `page(title=…)` is centred over the whole page, which a title on a figure inside it cannot be:
+  on a 45/55 split that one sits left of the middle. A `beside` composite can go on a page, which
+  is what gives it a title at last (#41).
+- `page(letters=True)` writes A, B, C … at the corner of each panel in reading order, or takes the
+  labels outright. An empty cell is a gap and does not eat a letter.
+- `page(units="pt")` (also `"mm"`, `"cm"`, `"in"`) sets the page's physical size and leaves the
+  drawing in pixels underneath, so a figure can hit a journal's column width exactly (#17).
+- `trees.legend(loc="right")` and `loc="below"` — put the key **outside** the panel, a column in
+  the right margin past the tip labels or a row under the time axis, instead of in a corner over
+  the tree. Which corner is free depends on the tree, and on one whose tips reach the right edge at
+  every row and whose root sits low there is no free corner at all: `loc="auto"` still has to pick
+  one. Outside, nothing is covered whatever the tree's shape, and a script drawing many trees needs
+  no corner chosen by eye (#40).
+- `trees.note` takes the same two places, and `branch_events(legend_loc=…)` with them.
 - `trees.tube()` — the species tree drawn as a **tube**: a wide branch with an outline and rounded
   bends, with room inside it for a gene's history. The usual picture of a reconciliation, and the
   one shape the library could not draw: the workaround wrote the paths by hand and spliced them
@@ -37,13 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cutting across it; one that starts part-way down begins there, which is what a copy born inside a
   branch looks like. `offset` runs two copies side by side in one tube, and `dash` draws a lineage
   that is inferred rather than observed (#42).
-
-### Fixed
-- The tube's tips end **on** the tip. A round cap reaches half the tube's width past the end of its
-  path, so a tube drawn to the tip overhung it and ran under the tip's own label; a free end is
-  pulled back by that much now. An inner branch keeps its cap, because that is what fills the wedge
-  between two branches leaving a node at an angle — squared off, a diagonal tree showed a notch at
-  every fork.
 - `trees.branch_markers(values, at=…)` — a mark on a branch coloured by a **number**, through the
   same colormap `color_branches` uses, recording the scale so a `colorbar` added after it reads the
   right range. `branch_events` colours a mark by its *kind* and reads from a key; a rate, a support
@@ -60,29 +62,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   above it on a rectangular tree, outward on a circular one. Along the branch the text runs into
   the tip's own name on any branch that ends at a tip, which is where a figure labelling every
   branch puts half of them.
-- **`ph.page(rows, …)`** — several independent figures on one page, nested as vectors. `beside` and
-  `below` each pair one tree with one companion panel, so two trees side by side — the same tree
-  under two analyses, the commonest comparison there is — had to leave the library and be stitched
-  together as images, losing the shared axis and the shared scale. Every figure keeps its own
-  layers and style and is re-rendered at its cell's size where it can be, so the text stays the
-  size it was asked for rather than being scaled with the drawing. A cell may be `None` to leave a
-  gap (#30, #17).
-- `page(title=…)` is centred over the whole page, which a title on a figure inside it cannot be:
-  on a 45/55 split that one sits left of the middle. A `beside` composite can go on a page, which
-  is what gives it a title at last (#41).
-- `page(letters=True)` writes A, B, C … at the corner of each panel in reading order, or takes the
-  labels outright. An empty cell is a gap and does not eat a letter.
-- `page(units="pt")` (also `"mm"`, `"cm"`, `"in"`) sets the page's physical size and leaves the
-  drawing in pixels underneath, so a figure can hit a journal's column width exactly (#17).
+- `trees.node_points(intervals={node: (low, high)})` — the uncertainty on a value, drawn as a
+  whisker through its point. A value measured on a tree usually comes with one, and the panel could
+  draw the estimate and not the interval: the expected number of events per branch went on the tree
+  happily and its 95% interval had nowhere to go. The y range grows to hold the whiskers, since a
+  range taken from the estimates alone cuts the bars off at the edge of the panel, which reads as
+  an interval that stops there. An end the axis does not reach loses its cap, for the same reason.
+  An interval given backwards, or one for a node with no value, is refused rather than drawn (#12).
 - `Canvas.embed_svg(svg, x, y)` — nest another figure's SVG as vectors, the twin of `embed_png` and
   the one to prefer. Every id in the nested document is renamed first: drawsvg numbers them from
   zero in every figure, so without that the second figure's gradients would answer to the first
   one's name and quietly draw the wrong colours.
 - `Canvas.physical_size(units)`.
-
-### Changed
-- `beside` nests its tree as **vectors** instead of rendering it to a PNG and pasting it in. A
-  composite for a journal was half a picture, and building one needed cairosvg at all (#17).
 - `Canvas.raw_path(d, …)` — an arbitrary SVG path in pixel space. Everything else on the canvas
   draws one named shape, and a figure that needs a rounded bend, a tube's outline or a lineage cut
   to part of a branch has none to ask for; the alternative was splicing hand-written paths into the
@@ -90,15 +81,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `join` sets how two segments meet (`"miter"` for the angular corners of a LaTeX diagram), `cap`
   defaults to the style's `line_cap`, and `dash` takes an SVG dash array. The `d` string is passed
   through as written — the one place here where the geometry is the caller's (#42).
-
-### Added
-- `trees.legend(loc="right")` and `loc="below"` — put the key **outside** the panel, a column in
-  the right margin past the tip labels or a row under the time axis, instead of in a corner over
-  the tree. Which corner is free depends on the tree, and on one whose tips reach the right edge at
-  every row and whose root sits low there is no free corner at all: `loc="auto"` still has to pick
-  one. Outside, nothing is covered whatever the tree's shape, and a script drawing many trees needs
-  no corner chosen by eye (#40).
-- `trees.note` takes the same two places, and `branch_events(legend_loc=…)` with them.
 - `Canvas.claim(side, edge)` / `Canvas.claimed(side, default)` — how far into a margin the layers
   drawn so far have written. `tip_labels`, `tip_track` and `time_axis` claim what they use, and a
   key placed outside starts past it, so it lands beside the figure rather than on its own tip
@@ -106,14 +88,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A margin too thin to hold the block warns and says what `margin_right` or `margin_bottom` it
   would need. The canvas size is fixed before any layer runs, so the key cannot widen it itself.
 
+### Changed
+
+- `beside` nests its tree as **vectors** instead of rendering it to a PNG and pasting it in. A
+  composite for a journal was half a picture, and building one needed cairosvg at all (#17).
+
 ### Fixed
+
+- `trees.legend(loc="auto")` measured the four corners against the **branches** only, so on a tree
+  whose long tips reach the right margin it would take a corner that was free of branches and
+  covered several tip names, with nothing said. It counts the names now, and a corner that still
+  covers something warns and says what — branches by name, names by number. A key placed before
+  `tip_labels` sees nothing, because the names are measured by the layer that writes them; the
+  natural order is the right one, and the docstring says so (#36).
+- The tube's tips end **on** the tip. A round cap reaches half the tube's width past the end of its
+  path, so a tube drawn to the tip overhung it and ran under the tip's own label; a free end is
+  pulled back by that much now. An inner branch keeps its cap, because that is what fills the wedge
+  between two branches leaving a node at an angle — squared off, a diagonal tree showed a notch at
+  every fork.
 - The missing-font check added in 0.16.0 reported **Helvetica** as missing. A family the renderer
   cannot find is drawn in the fallback face, and on most machines that face *is* Helvetica, so the
   two renderings matched and the check called the fallback missing — on nearly every default
   figure. The faces a renderer falls back to are now answered as installed: asking for Helvetica
   and getting Helvetica is the figure that was asked for. The cost is that a machine genuinely
   missing one of those names is not warned, which is written down beside the list.
-
 ## [0.16.0] - 2026-10-25
 
 ### Added
