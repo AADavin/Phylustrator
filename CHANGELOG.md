@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `trees.legend(loc="auto")` measured the four corners against the **branches** only, so on a tree
+  whose long tips reach the right margin it would take a corner that was free of branches and
+  covered several tip names, with nothing said. It counts the names now, and a corner that still
+  covers something warns and says what — branches by name, names by number. A key placed before
+  `tip_labels` sees nothing, because the names are measured by the layer that writes them; the
+  natural order is the right one, and the docstring says so (#36).
+
 ### Added
 - `trees.node_points(intervals={node: (low, high)})` — the uncertainty on a value, drawn as a
   whisker through its point. A value measured on a tree usually comes with one, and the panel could
