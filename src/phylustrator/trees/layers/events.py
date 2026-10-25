@@ -95,6 +95,10 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
     ``weight_floor`` is how much of the kind's style a weight of 0 keeps, so the lightest mark is
     still visible.
 
+    ``legend_loc`` also takes ``"right"`` and ``"below"``, which put the key outside the panel —
+    beside the tip labels or under the time axis — where no shape of tree can leave it covering a
+    branch.
+
     A transfer with no ``donor``, or one the tree does not hold, arrives from an unsampled lineage:
     it is drawn as a short straight arrow onto the recipient's branch, ``outside_length`` pixels long
     and coming from ``outside_side`` (``"above"`` or ``"below"``; one event may say its own ``side``).
@@ -250,6 +254,7 @@ def _arrow_glyph(canvas, form, x, y, ms, color) -> None:
 
 
 def _draw_legend(canvas, style, used, title, marker, loc, fsize, forms=None) -> None:
+    from .guides import _OUTSIDE, _outside_box
     width, height = canvas.size
     forms = forms or {}
     fs = fsize if fsize is not None else style.font_size
@@ -268,8 +273,13 @@ def _draw_legend(canvas, style, used, title, marker, loc, fsize, forms=None) -> 
     labels = ([title] if title else []) + list(used)
     box_w = ms * 2 + 14 + (widest_row - 1) * step + max(len(s) for s in labels) * fs * 0.62
     n_rows = len(used) + (1 if title else 0)
-    x = (style.margin_at("left") + ms + 6) if "left" in loc else (width - style.margin_at("right") - box_w)
-    y = (style.margin_at("top") * 0.6 + fs) if "top" in loc else (height - style.margin_at("bottom") - row_h * n_rows)
+    if loc in _OUTSIDE:
+        # outside the panel, past whatever the tip labels and the axis have taken
+        x, y = _outside_box(canvas, style, loc, box_w, row_h * n_rows, "branch_events")
+        x, y = x + ms, y + fs
+    else:
+        x = (style.margin_at("left") + ms + 6) if "left" in loc else (width - style.margin_at("right") - box_w)
+        y = (style.margin_at("top") * 0.6 + fs) if "top" in loc else (height - style.margin_at("bottom") - row_h * n_rows)
     if title:
         canvas.raw_text(x, y, title, anchor="start", weight="bold", size=fs)
         y += fs * 1.8

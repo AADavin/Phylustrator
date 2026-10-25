@@ -481,26 +481,64 @@ def test_a_label_can_be_set_in_its_own_family():
     assert 'font-family="Times New Roman"' in heading
 
 
-def test_a_missing_font_is_reported_rather_than_quietly_swapped(tmp_path):
-    """A family nothing has is substituted silently, and the figure comes back in a sans face."""
-    from phylustrator.render import _FONT_SEEN
-    _FONT_SEEN.clear()
-    figure = plot(loads(_DOT_NWK), style=Style(font_family="No Such Family 8f3a")) + tip_labels()
+def test_a_missing_font_is_reported_rather_than_quietly_swapped():
+    """A family the renderer cannot find is substituted in silence, and the figure comes back in a
+    sans face. The probe itself is stubbed here: the point is that save() acts on the answer."""
+    from phylustrator import render
+    canvas = render.Canvas(Style(font_family="No Such Family 8f3a"), (0.0, 1.0), (0.0, 1.0))
+    render._FONT_SEEN.clear()
+    render._FONT_SEEN["No Such Family 8f3a"] = False
     with pytest.warns(UserWarning, match="not installed"):
-        figure.save(tmp_path / "out.png")
+        canvas._warn_about_missing_fonts()
+    render._FONT_SEEN.clear()
+
+
+def test_the_label_family_is_checked_as_well_as_the_title_family():
+    from phylustrator import render
+    canvas = render.Canvas(Style(font_family="Helvetica", label_family="No Such Family 8f3a"),
+                           (0.0, 1.0), (0.0, 1.0))
+    render._FONT_SEEN.clear()
+    render._FONT_SEEN.update({"Helvetica": True, "No Such Family 8f3a": False})
+    with pytest.warns(UserWarning, match="No Such Family"):
+        canvas._warn_about_missing_fonts()
+    render._FONT_SEEN.clear()
+
+
+def test_a_font_that_is_there_says_nothing():
+    from phylustrator import render
+    canvas = render.Canvas(Style(font_family="Some Installed Face"), (0.0, 1.0), (0.0, 1.0))
+    render._FONT_SEEN.clear()
+    render._FONT_SEEN["Some Installed Face"] = True
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        canvas._warn_about_missing_fonts()
+    render._FONT_SEEN.clear()
+
+
+def test_the_fallback_face_itself_is_not_called_missing():
+    """A missing family is drawn in the fallback face, so asking for that face draws the same
+    pixels for an honest reason. Reporting it would fire on nearly every default figure."""
+    from phylustrator import render
+    render._FONT_SEEN.clear()
+    for name in ("Helvetica", "helvetica", "DejaVu Sans", "sans-serif"):
+        assert render.font_is_available(name) is True
+    assert not any(k.startswith("No Such") for k in render._FONT_SEEN)
+    render._FONT_SEEN.clear()
 
 
 def test_an_svg_carries_the_name_and_says_nothing(tmp_path):
     """It is resolved wherever the file is opened, so there is nothing to warn about here."""
-    from phylustrator.render import _FONT_SEEN
-    _FONT_SEEN.clear()
+    from phylustrator import render
+    render._FONT_SEEN.clear()
+    render._FONT_SEEN["No Such Family 8f3a"] = False
     figure = plot(loads(_DOT_NWK), style=Style(font_family="No Such Family 8f3a")) + tip_labels()
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         figure.save(tmp_path / "out.svg")
+    render._FONT_SEEN.clear()
 
 
-def test_a_probe_that_breaks_answers_yes(monkeypatch, tmp_path):
+def test_a_probe_that_breaks_answers_yes(monkeypatch):
     """A check that cannot run must not stop a figure from being saved, or a broken renderer
     probe would cost you the figure as well."""
     import cairosvg
@@ -518,21 +556,20 @@ def test_a_probe_that_breaks_answers_yes(monkeypatch, tmp_path):
 
 def test_a_family_is_probed_once(monkeypatch):
     """A figure drawn in a loop must not pay for the check every time."""
+    import cairosvg
+
     from phylustrator import render
     render._FONT_SEEN.clear()
     calls = []
-    real = render.cairosvg_probe if hasattr(render, "cairosvg_probe") else None
-    assert real is None                      # the probe is inline; count renders instead
-    import cairosvg
-    original = cairosvg.svg2png
 
     def counted(**kw):
         calls.append(1)
-        return original(**kw)
+        return b"pretend-png-" + str(len(calls)).encode()
 
     monkeypatch.setattr(cairosvg, "svg2png", counted)
     render.font_is_available("No Such Family 8f3a")
     first = len(calls)
+    assert first == 2, "the family as asked, and the fallback to compare it against"
     render.font_is_available("No Such Family 8f3a")
     assert len(calls) == first, "the answer is remembered"
     render._FONT_SEEN.clear()

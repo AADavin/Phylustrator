@@ -25,6 +25,14 @@ _FONT_SEEN: dict[str, bool] = {}
 #: A name no machine has, to render the fallback face and compare against.
 _NO_SUCH_FONT = "phylustrator no such font 8f3a"
 
+#: The faces a renderer falls back **to** when a family is missing. One of these, asked for by
+#: name, draws the same pixels as a missing font — it is what a missing font turns into — so the
+#: comparison below cannot tell the two apart, and silence is the right answer: a figure asked for
+#: in Helvetica and drawn in Helvetica is the figure that was asked for. The cost is that a machine
+#: genuinely missing one of these names is not warned about it.
+_FALLBACK_FACES = frozenset({"helvetica", "arial", "dejavu sans", "liberation sans", "nimbus sans",
+                             "sans", "sans-serif", "freesans"})
+
 
 def font_is_available(family: str) -> bool:
     """Whether the PNG/PDF renderer can actually find ``family``.
@@ -34,9 +42,15 @@ def font_is_available(family: str) -> bool:
     So the family is drawn twice, once as asked and once under a name nothing can have, and the two
     images are compared. Same image, same font, and the one you asked for is not installed.
 
-    Any failure answers ``True``: a check that cannot run must not stop a figure from being saved."""
+    A family that **is** the fallback face draws the fallback's pixels for the honest reason, so
+    those names (:data:`_FALLBACK_FACES`) answer ``True`` rather than raising a false alarm on every
+    default figure. Any other failure answers ``True`` too: a check that cannot run must not stop a
+    figure from being saved."""
     if family in _FONT_SEEN:
         return _FONT_SEEN[family]
+    if family.strip().lower() in _FALLBACK_FACES:
+        _FONT_SEEN[family] = True
+        return True
     try:
         import cairosvg
 
@@ -58,6 +72,11 @@ class Canvas:
                  *, equal_aspect: bool = False) -> None:
         self.style = style
         self.scale = None  # set by a colouring layer; read by colorbar()/legend()
+        # How far into each margin the layers drawn so far have written: the names beside the tips,
+        # the chips past them, the axis under the tree. A key asked to sit **outside** the panel
+        # starts past this, so it lands beside the figure instead of on top of its own tip labels.
+        # Keyed by side; a side nothing has claimed is absent.
+        self._claimed: dict[str, float] = {}
         # node names whose branch is dashed; set by the tree figure, read by a colouring layer
         self.dashed: Collection[str] | None = None
         self._d = draw.Drawing(style.width, style.height, origin=(0, 0))
@@ -81,6 +100,18 @@ class Canvas:
             cy = (style.margin_at("top") + style.height - self._bottom) / 2
             self._equal = (s, cx - s * (self._x0 + self._x1) / 2,
                            cy - s * (self._y0 + self._y1) / 2)
+
+    def claim(self, side: str, edge: float) -> None:
+        """Record that something has been drawn out to pixel ``edge`` in the ``"right"`` (or
+        ``"bottom"``) margin. The furthest claim wins, so the order the layers were added in does
+        not change where a key beside the figure ends up."""
+        if side not in ("right", "bottom"):
+            raise ValueError(f"a margin claim is for 'right' or 'bottom', not {side!r}")
+        self._claimed[side] = max(edge, self._claimed.get(side, edge))
+
+    def claimed(self, side: str, default: float) -> float:
+        """The furthest edge claimed on ``side``, or ``default`` when nothing has claimed it."""
+        return self._claimed.get(side, default)
 
     # --- data-space (transformed through the layout extent) ---------------
 
