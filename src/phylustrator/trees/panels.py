@@ -21,6 +21,11 @@ class NodePoints:
     names every node). A name the tree does not have raises an error rather than dropping the point:
     a typo would otherwise read as a missing measurement.
 
+    ``intervals`` is ``{node name: (low, high)}`` — the uncertainty on that node's value, drawn as
+    a whisker through its point. A value measured on a tree usually comes with one, and a panel that
+    could draw the estimate and not its interval left the interval nowhere to go. The y range grows
+    to hold the whiskers, so a bar is never cut off at the edge of the panel.
+
     ``colors`` tints points per node, else the flat ``color``. ``line`` joins the points left to
     right. ``zero`` draws a light line at 0 when the range crosses it — the reference a difference is
     read against. ``vmin`` / ``vmax`` fix the y range; by default it is the values' range, widened
@@ -30,10 +35,24 @@ class NodePoints:
     def __init__(self, values: dict, *, color: str = "#3a6ea5", colors: dict | None = None,
                  shape: str = "circle", size: float = 4.5, line: bool = False,
                  line_color: str | None = None, zero: bool = True, vmin: float | None = None,
-                 vmax: float | None = None, label: str = "", ticks: int = 5) -> None:
+                 vmax: float | None = None, label: str = "", ticks: int = 5,
+                 intervals: dict | None = None, interval_width: float = 1.4,
+                 interval_cap: float = 4.0) -> None:
         if not values:
             raise ValueError("node_points() needs at least one value")
         self.values = {str(k): float(v) for k, v in values.items()}
+        self.intervals = {}
+        for name, pair in (intervals or {}).items():
+            low, high = (float(v) for v in pair)
+            if low > high:
+                raise ValueError(f"node_points: the interval for {name!r} is ({low:g}, {high:g}), "
+                                 f"which runs backwards. Give it as (low, high).")
+            if str(name) not in self.values:
+                raise ValueError(f"node_points: {name!r} has an interval but no value. An interval "
+                                 f"is drawn through its point, so the point has to be there.")
+            self.intervals[str(name)] = (low, high)
+        self.interval_width = interval_width
+        self.interval_cap = interval_cap
         self.color = color
         self.colors = {str(k): v for k, v in colors.items()} if colors else {}
         self.shape = shape
@@ -49,8 +68,13 @@ class NodePoints:
     def _range(self) -> tuple[float, float, float]:
         """The y range and its tick step. An end the caller did not fix is pushed out to the next
         round tick, so the axis starts and stops on a labelled number."""
-        lo = min(self.values.values()) if self.vmin is None else self.vmin
-        hi = max(self.values.values()) if self.vmax is None else self.vmax
+        # the whiskers count: a range taken from the estimates alone cuts the bars off at the
+        # edge of the panel, which reads as an interval that stops there
+        reach = list(self.values.values())
+        for low, high in self.intervals.values():
+            reach += [low, high]
+        lo = min(reach) if self.vmin is None else self.vmin
+        hi = max(reach) if self.vmax is None else self.vmax
         if hi <= lo:                              # one value, or all equal: give it a band to sit in
             lo, hi = lo - 1.0, hi + 1.0
         step = _round_step(hi - lo, self.ticks)
@@ -94,6 +118,16 @@ class NodePoints:
                             anchor="middle", size=ls, rotate=-90)
         if self.zero and lo < 0.0 < hi:
             canvas.raw_line(x0, py(0.0), x1, py(0.0), "#b8bec3", 1.0)
+
+        # the whiskers go under the points, so a point is never half-hidden by its own bar
+        for name, (low, high) in self.intervals.items():
+            x, paint = at[name], self.colors.get(name, self.color)
+            y_low, y_high = py(max(low, lo)), py(min(high, hi))
+            canvas.raw_line(x, y_low, x, y_high, paint, self.interval_width)
+            for y, end in ((y_low, low), (y_high, high)):
+                if lo <= end <= hi:              # no cap on an end that runs past the axis
+                    canvas.raw_line(x - self.interval_cap, y, x + self.interval_cap, y, paint,
+                                    self.interval_width)
 
         points = sorted((at[name], py(v), name) for name, v in self.values.items())
         if self.line:
