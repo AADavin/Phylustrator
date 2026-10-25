@@ -52,8 +52,10 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
   the branch's own colour, and `node_halves` puts a two-colour disc on a node.
   An event given to `branch_events` can carry a `weight`, so arcs and marks scale with the count
   they stand for.
-- **Panels** — `node_points`, placed under a rectangular tree with `ph.below(tree, panel)`. The panel
-  shares the tree's time axis, so a value measured at a node sits directly under that node.
+- **Panels** — `node_points` and `band`, placed under a rectangular tree with
+  `ph.below(tree, panel)`. The panel shares the tree's time axis, so a value measured at a node
+  sits directly under that node; `node_points(intervals=…)` adds its uncertainty as a whisker,
+  and `band` shades between a low and a high series for a quantity sampled along the tree.
 
 ## One page, several figures
 

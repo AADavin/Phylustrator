@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.band({time: (low, high)}, middle=…)` — a shaded region between a low and a high series,
+  on the tree's time axis. `node_points` is keyed by node and says nothing between the nodes, so a
+  quantity sampled along the tree — a rate through time, a posterior band, a running count with its
+  credible interval — had nowhere to go: keyed by node it would need a node at every sample. The
+  band is drawn as one closed shape, out along the top and back along the bottom, since two lines
+  with a guess between them are not a band. `middle` is given separately because the middle of an
+  interval is not usually the estimate, and drawing it as one would put a line where no number is
+  (#54).
+- `panels.r_range()` answers the range a panel will draw itself on without drawing anything, so two
+  panels under one tree can be checked against each other and a caller comparing figures can fix it.
 - `trees.scale_bar(loc=…)` — a corner, or `"below"` / `"right"` to put the bar **outside** the
   panel, past the tip labels and the axis, through the same margin claims the other guides use. On
   a tree that grows down the page every tip is along the bottom, so both bottom corners hold a

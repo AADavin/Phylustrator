@@ -36,7 +36,7 @@ from .layers import (
                      title,
                      tube,
 )
-from .panels import NodePoints, node_points
+from .panels import Band, NodePoints, band, node_points
 from .tree import Node, Tree, lineage
 
 __all__ = [
@@ -46,5 +46,5 @@ __all__ = [
     "rubberband",
     "branch_events", "branch_markers", "branch_spindles", "node_dots", "node_halves", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",
     "highlight_clade", "highlight_lineage", "lineage", "node_intervals", "tube", "gene_path",
-    "node_points", "NodePoints",
+    "node_points", "band", "Band", "NodePoints",
 ]
