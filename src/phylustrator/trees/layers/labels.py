@@ -79,13 +79,13 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
                 # the name still steps outward from the tree, it just does not turn with it; the
                 # anchor follows the side, so the text always grows away from the tip
                 canvas.raw_text(ox, oy, written, anchor="start" if dx >= 0 else "end",
-                                size=size, color=color, style=style.label_style)
+                                size=size, color=color, style=style.label_style, family=style.label_family)
             elif -90 <= angle <= 90:
                 canvas.raw_text(ox, oy, written, anchor="start", rotate=angle, size=size,
-                                color=color, style=style.label_style)
+                                color=color, style=style.label_style, family=style.label_family)
             else:
                 canvas.raw_text(ox, oy, written, anchor="end", rotate=angle + 180, size=size,
-                                color=color, style=style.label_style)
+                                color=color, style=style.label_style, family=style.label_family)
 
     return layer
 

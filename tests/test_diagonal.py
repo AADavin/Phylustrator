@@ -441,3 +441,98 @@ def test_an_upright_name_still_grows_away_from_its_tip():
         tip = next(p for p in figure.geometry().tips if p.name == leaf.name)
         anchor = "start" if x >= tip.x else "end"
         assert f'text-anchor="{anchor}"' in written
+
+
+# --- the maths alphabet, and a font that is not there -------------------------------------------
+
+
+def test_maths_writes_the_italic_letters_latex_uses():
+    assert ph.styles.maths("abc") == "\U0001D44E\U0001D44F\U0001D450"
+    assert ph.styles.maths("Z") == "\U0001D44D"
+
+
+def test_the_h_that_is_not_where_the_arithmetic_says():
+    """The slot for italic h is reserved; the character is U+210E, PLANCK CONSTANT. Without this a
+    label containing an h comes out blank."""
+    assert ph.styles.maths("h") == "ℎ"
+    assert ph.styles.maths("hi") == "ℎ\U0001D456"
+
+
+def test_anything_that_is_not_a_letter_is_left_alone():
+    assert ph.styles.maths("H. sapiens 12_3") == ph.styles.maths("H") + ". " + \
+        ph.styles.maths("sapiens") + " 12_3"
+
+
+def test_the_maths_preset_uses_one_font_for_both_faces():
+    style = ph.styles.tikz_math()
+    assert style.font_family == ph.styles.LATEX_MATH
+    assert style.label_style == "normal", "the italic comes from the characters, not from the face"
+    assert style.line_cap == "butt", "and the rest of the tikz look is still there"
+    assert ph.styles.tikz_math(font_size=20).font_size == 20
+
+
+def test_a_label_can_be_set_in_its_own_family():
+    """A LaTeX figure takes its title from the text font and its names from the maths font."""
+    svg = (plot(loads(_DOT_NWK), style=ph.styles.tikz(label_family="Latin Modern Math"))
+           + tip_labels() + ph.trees.title("Rooted gene tree")).as_svg()
+    name = [line for line in svg.splitlines() if ">a</text>" in line][0]
+    heading = [line for line in svg.splitlines() if "Rooted gene tree" in line][0]
+    assert 'font-family="Latin Modern Math"' in name
+    assert 'font-family="Times New Roman"' in heading
+
+
+def test_a_missing_font_is_reported_rather_than_quietly_swapped(tmp_path):
+    """A family nothing has is substituted silently, and the figure comes back in a sans face."""
+    from phylustrator.render import _FONT_SEEN
+    _FONT_SEEN.clear()
+    figure = plot(loads(_DOT_NWK), style=Style(font_family="No Such Family 8f3a")) + tip_labels()
+    with pytest.warns(UserWarning, match="not installed"):
+        figure.save(tmp_path / "out.png")
+
+
+def test_an_svg_carries_the_name_and_says_nothing(tmp_path):
+    """It is resolved wherever the file is opened, so there is nothing to warn about here."""
+    from phylustrator.render import _FONT_SEEN
+    _FONT_SEEN.clear()
+    figure = plot(loads(_DOT_NWK), style=Style(font_family="No Such Family 8f3a")) + tip_labels()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        figure.save(tmp_path / "out.svg")
+
+
+def test_a_probe_that_breaks_answers_yes(monkeypatch, tmp_path):
+    """A check that cannot run must not stop a figure from being saved, or a broken renderer
+    probe would cost you the figure as well."""
+    import cairosvg
+
+    from phylustrator import render
+    render._FONT_SEEN.clear()
+
+    def boom(**kw):
+        raise RuntimeError("probe broke")
+
+    monkeypatch.setattr(cairosvg, "svg2png", boom)
+    assert render.font_is_available("No Such Family 8f3a") is True
+    render._FONT_SEEN.clear()
+
+
+def test_a_family_is_probed_once(monkeypatch):
+    """A figure drawn in a loop must not pay for the check every time."""
+    from phylustrator import render
+    render._FONT_SEEN.clear()
+    calls = []
+    real = render.cairosvg_probe if hasattr(render, "cairosvg_probe") else None
+    assert real is None                      # the probe is inline; count renders instead
+    import cairosvg
+    original = cairosvg.svg2png
+
+    def counted(**kw):
+        calls.append(1)
+        return original(**kw)
+
+    monkeypatch.setattr(cairosvg, "svg2png", counted)
+    render.font_is_available("No Such Family 8f3a")
+    first = len(calls)
+    render.font_is_available("No Such Family 8f3a")
+    assert len(calls) == first, "the answer is remembered"
+    render._FONT_SEEN.clear()
