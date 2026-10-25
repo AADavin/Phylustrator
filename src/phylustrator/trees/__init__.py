@@ -11,6 +11,7 @@ from .figure import CladeBox, Figure, Geometry, NodePos, TipPos, plot
 from .io import dumps, loads, read, write
 from .layers import (
                      branch_events,
+                     branch_markers,
                      branch_spindles,
                      color_branches,
                      color_history,
@@ -41,7 +42,7 @@ __all__ = [
     "plot", "Figure", "Geometry", "NodePos", "TipPos", "CladeBox",
     "color_branches", "color_history", "color_lanes", "tip_labels", "node_labels", "tip_track", "ring",
     "rubberband",
-    "branch_events", "branch_spindles", "node_dots", "node_halves", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",
+    "branch_events", "branch_markers", "branch_spindles", "node_dots", "node_halves", "colorbar", "legend", "note", "time_axis", "time_marker", "scale_bar", "title",
     "highlight_clade", "highlight_lineage", "lineage", "node_intervals",
     "node_points", "NodePoints",
 ]

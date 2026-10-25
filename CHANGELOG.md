@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.branch_markers(values, at=…)` — a mark on a branch coloured by a **number**, through the
+  same colormap `color_branches` uses, recording the scale so a `colorbar` added after it reads the
+  right range. `branch_events` colours a mark by its *kind* and reads from a key; a rate, a support
+  or a posterior wants a scale instead, and there was no layer for it. `at` is how far along the
+  branch the mark sits, from the parent (0) to the node (1), following the branch as drawn — the
+  horizontal run of a rectangular branch, the radial step of a circular one, the slanted segment of
+  a diagonal or unrooted one (#43).
+- `branch_markers(spread=True)`, the default, parts marks that land on top of each other. Near the
+  centre of a radial tree neighbouring branches are a few pixels apart, so two marks cover each
+  other and the figure shows one value where it has two. `gap` sets how close they may come;
+  `spread=False` leaves every mark exactly where its branch is. Two marks on exactly one point are
+  parted in a fixed direction, so a figure drawn twice comes out the same.
+- `branch_markers(labels=…)` writes beside the marks, **across** the branch rather than along it —
+  above it on a rectangular tree, outward on a circular one. Along the branch the text runs into
+  the tip's own name on any branch that ends at a tip, which is where a figure labelling every
+  branch puts half of them.
 - **`ph.page(rows, …)`** — several independent figures on one page, nested as vectors. `beside` and
   `below` each pair one tree with one companion panel, so two trees side by side — the same tree
   under two analyses, the commonest comparison there is — had to leave the library and be stitched
