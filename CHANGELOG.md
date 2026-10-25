@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.tube()` — the species tree drawn as a **tube**: a wide branch with an outline and rounded
+  bends, with room inside it for a gene's history. The usual picture of a reconciliation, and the
+  one shape the library could not draw: the workaround wrote the paths by hand and spliced them
+  into the output of `as_svg()`. Each branch is drawn twice, wide in the outline colour and
+  narrower in the fill, so the outlines of two branches leaving one node merge into one tube
+  instead of crossing it. Rectangular and diagonal layouts, where a branch is a segment across the
+  page; a radial tube would be an annulus, which is a different drawing, and it says so (#42).
+- `trees.gene_path(segments)` — a lineage along part of the tree, the gene inside the tube. A
+  segment is a branch name, or `{"branch": …, "from": depth, "to": depth}` for part of one, on the
+  same depth scale `branch_events` takes. A segment that starts at the top of its branch is drawn
+  through the bend out of its parent, so the line follows the tube round the corner instead of
+  cutting across it; one that starts part-way down begins there, which is what a copy born inside a
+  branch looks like. `offset` runs two copies side by side in one tube, and `dash` draws a lineage
+  that is inferred rather than observed (#42).
+
+### Fixed
+- The tube's tips end **on** the tip. A round cap reaches half the tube's width past the end of its
+  path, so a tube drawn to the tip overhung it and ran under the tip's own label; a free end is
+  pulled back by that much now. An inner branch keeps its cap, because that is what fills the wedge
+  between two branches leaving a node at an angle — squared off, a diagonal tree showed a notch at
+  every fork.
 - `trees.branch_markers(values, at=…)` — a mark on a branch coloured by a **number**, through the
   same colormap `color_branches` uses, recording the scale so a `colorbar` added after it reads the
   right range. `branch_events` colours a mark by its *kind* and reads from a key; a rate, a support
