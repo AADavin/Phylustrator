@@ -54,6 +54,22 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
 - **Panels** — `node_points`, placed under a rectangular tree with `ph.below(tree, panel)`. The panel
   shares the tree's time axis, so a value measured at a node sits directly under that node.
 
+## One page, several figures
+
+`ph.page` nests whole figures as vectors — two trees side by side, a tree beside a panel, a small
+inset — with one title centred over the lot and optional panel letters:
+
+```python
+ph.page([[ph.trees.plot(t1) + ph.trees.tip_labels(),
+          ph.trees.plot(t2) + ph.trees.tip_labels()]],
+        width=482, units="pt", title="The same tree under two analyses",
+        letters=True).save("figure1.pdf")
+```
+
+`units` gives the page a physical size, so it hits a journal's column width exactly. `ph.beside`
+and `ph.below` still pair one tree with one companion panel, lined up on the tips or on the time
+axis; a composite from either can itself go on a page.
+
 ## Genomes
 
 The same grammar, for genome maps. Plot a genome as a line or a ring, colour genes by family or

@@ -39,13 +39,11 @@ def beside(tree, panel, *, width: float = 1100.0, height: float | None = None,
 
     ``tree_fraction`` is the share of the width given to the tree column (the rest, minus ``gap`` and
     ``pad``, holds the panel). ``footer`` reserves blank height below the rows (for a panel's colour
-    key). Rows are matched to tips by label and drawn in the tree's tip order. Needs ``cairosvg``."""
-    try:
-        import cairosvg
-    except ImportError as exc:                       # pragma: no cover
-        raise RuntimeError("genustrator.beside needs cairosvg (pip install genustrator[export]) "
-                           "to place the tree into the composite") from exc
+    key). Rows are matched to tips by label and drawn in the tree's tip order.
 
+    The tree is nested as **vectors**, so the composite is one: it used to be rendered to a PNG and
+    pasted in, which made a figure for a journal a picture of a tree beside a drawing of a panel,
+    and needed cairosvg to build at all."""
     n_tips = len(tree.tree.leaves)
     # per-tip row height eases from ~44px (few tips) down to ~24px (many), so 25-40 rows stay sane
     row_px = max(24.0, 46.0 - 0.55 * n_tips)
@@ -55,11 +53,9 @@ def beside(tree, panel, *, width: float = 1100.0, height: float | None = None,
 
     sized = tree.with_size(tree_w, tree_h)
     geom = sized.geometry()
-    png = cairosvg.svg2png(bytestring=sized.as_svg().encode(),
-                           output_width=int(tree_w * 2), output_height=int(tree_h * 2))
 
     canvas = Canvas(Style(width=width, height=H, margin=0, background=background), (0.0, 1.0), (0.0, 1.0))
-    canvas.embed_png(png, 0, 0, tree_w, tree_h)
+    canvas.embed_svg(sized.as_svg(), 0, 0, tag="tree")
 
     # A panel that wants **every** tip row says so, and gets them all — including tips it has no
     # value for. `Bars` does: its axis sits under the last row it is handed, and filtering the rows
@@ -118,4 +114,105 @@ def below(tree, panel, *, panel_height: float = 200.0, gap: float = 18.0, axis: 
         # +14 below the panel, the offset trees.time_axis leaves below a tree
         draw_time_axis(canvas, geom.px, geom.xlim[1], bottom + 14, axis, ticks=ticks,
                        tick_size=ts, label_size=ls)
+    return Composite(canvas)
+
+
+#: How a figure is asked for its size, if it can be asked at all.
+def _natural_size(figure) -> tuple[float, float]:
+    style = getattr(figure, "style", None)
+    if style is not None:
+        return float(style.width), float(style.height)
+    canvas = getattr(figure, "_canvas", None)         # a Composite carries its canvas
+    if canvas is not None:
+        return float(canvas.size[0]), float(canvas.size[1])
+    return 400.0, 300.0
+
+
+def _letters_for(labels, cells: int):
+    """The panel letters, as a list one per cell. ``True`` is A, B, C … in reading order; a string
+    is taken one character per cell; a list is taken as written; ``None``/``False`` is none."""
+    if not labels:
+        return [None] * cells
+    if labels is True:
+        return [chr(ord("A") + i) for i in range(cells)]
+    given = list(labels)
+    if len(given) < cells:
+        given += [None] * (cells - len(given))
+    return given[:cells]
+
+
+def page(rows, *, width: float = 800.0, height: float | None = None, title: str | None = None,
+         letters=None, gap: float = 16.0, pad: float = 20.0, units: str | None = None,
+         background: str = "white", title_size: float | None = None,
+         letter_size: float | None = None, style: Style | None = None) -> Composite:
+    """Several independent figures on one page, nested **as vectors**.
+
+    ``rows`` is a list of rows, each a list of figures; a flat list is one row, and ``None`` leaves
+    a cell empty. Every figure keeps its own layers and style and is re-rendered at its cell's size
+    where it can be (a tree figure can), so the text stays the size it was asked for rather than
+    being scaled with the drawing.
+
+    This is what `beside`/`below` could not do: those pair **one** tree with **one** companion
+    panel, so two trees side by side — the same tree under two analyses, the commonest comparison
+    there is — had to leave the library and be stitched together as images.
+
+    ``title`` is centred over the whole page, which a title on a figure inside it cannot be: on a
+    45/55 split it would sit left of the middle. ``letters=True`` writes A, B, C … at the corner of
+    each cell in reading order, or pass the labels yourself.
+
+    ``units`` ("pt", "mm", "cm", "in") sets the page's physical size, leaving the drawing in pixels
+    underneath, so a figure can be made to hit a journal's column width exactly: ``width=482,
+    units="pt"`` is a 482 pt page. Saves to ``.svg``, ``.pdf`` or ``.png`` like any figure."""
+    grid = [r if isinstance(r, (list, tuple)) else [r] for r in rows] \
+        if rows and isinstance(rows[0], (list, tuple)) else [list(rows)]
+    n_cols = max(len(r) for r in grid)
+    base = style or Style()
+    ts = title_size if title_size is not None else base.font_size * 1.5
+    ls = letter_size if letter_size is not None else base.font_size * 1.25
+    head = (ts * 1.9 if title else 0.0)
+    cell_w = (width - 2 * pad - gap * (n_cols - 1)) / n_cols
+
+    # a row is as tall as the tallest cell in it, keeping each figure's own proportions
+    row_heights = []
+    for row in grid:
+        tall = 0.0
+        for figure in row:
+            if figure is None:
+                continue
+            w0, h0 = _natural_size(figure)
+            tall = max(tall, cell_w * h0 / (w0 or 1.0) if hasattr(figure, "with_size") else h0)
+        row_heights.append(tall or cell_w * 0.75)
+    if height is not None:                            # a fixed page: share what is left between rows
+        spare = height - 2 * pad - head - gap * (len(grid) - 1)
+        row_heights = [spare / len(grid)] * len(grid)
+    page_h = height if height is not None else (2 * pad + head + sum(row_heights)
+                                                + gap * (len(grid) - 1))
+
+    canvas = Canvas(Style(width=width, height=page_h, margin=0, background=background,
+                          font_family=base.font_family, label_color=base.label_color),
+                    (0.0, 1.0), (0.0, 1.0))
+    if title:
+        canvas.raw_text(width / 2, pad + ts * 0.8, title, anchor="middle", weight="bold", size=ts,
+                        color=base.label_color)
+
+    # letters go to the figures, not to the cells: an empty cell is a gap in the page, and a gap
+    # should not eat a letter and leave the next panel called C
+    marks = _letters_for(letters, sum(1 for r in grid for c in r if c is not None))
+    seen = 0
+    y = pad + head
+    for row, row_h in zip(grid, row_heights):
+        x = pad
+        for figure in row:
+            if figure is not None:
+                mark = marks[seen]
+                seen += 1
+                sized = figure.with_size(cell_w, row_h) if hasattr(figure, "with_size") else figure
+                canvas.embed_svg(sized.as_svg(), x, y, tag=f"c{seen}")
+                if mark:
+                    canvas.raw_text(x + 2, y + ls * 0.9, str(mark), anchor="start", weight="bold",
+                                    size=ls, color=base.label_color)
+            x += cell_w + gap
+        y += row_h + gap
+    if units:
+        canvas.physical_size(units)
     return Composite(canvas)

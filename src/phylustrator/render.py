@@ -10,6 +10,7 @@ through cairosvg, falling back to ``.svg`` (with a note) when it is absent.
 from __future__ import annotations
 
 import math
+import re
 import warnings
 from collections.abc import Collection
 from pathlib import Path
@@ -65,6 +66,18 @@ def font_is_available(family: str) -> bool:
     return _FONT_SEEN[family]
 
 
+def _rename_ids(svg: str, tag: str) -> str:
+    """Give every id in one SVG document a prefix, and follow it into the places that point at it:
+    ``url(#id)`` (a gradient or a filter) and ``href="#id"`` (a ``<use>``)."""
+    ids = set(re.findall(r'\bid="([^"]+)"', svg))
+    for name in sorted(ids, key=len, reverse=True):          # longest first: ids can share a prefix
+        new = f"{tag}-{name}"
+        svg = svg.replace(f'id="{name}"', f'id="{new}"')
+        svg = svg.replace(f"url(#{name})", f"url(#{new})")
+        svg = svg.replace(f'href="#{name}"', f'href="#{new}"')
+    return svg
+
+
 class Canvas:
     """A pixel canvas with a data→pixel transform fixed by the layout's extent."""
 
@@ -77,6 +90,7 @@ class Canvas:
         # starts past this, so it lands beside the figure instead of on top of its own tip labels.
         # Keyed by side; a side nothing has claimed is absent.
         self._claimed: dict[str, float] = {}
+        self._units: str | None = None       # a physical page size, set by physical_size()
         # node names whose branch is dashed; set by the tree figure, read by a colouring layer
         self.dashed: Collection[str] | None = None
         self._d = draw.Drawing(style.width, style.height, origin=(0, 0))
@@ -288,6 +302,25 @@ class Canvas:
         composite figure (see :func:`~phylustrator.compose.beside`)."""
         self._d.append(draw.Image(x, y, w, h, data=data, embed=True, mime_type="image/png"))
 
+    def embed_svg(self, svg: str, x: float, y: float, *, tag: str = "") -> None:
+        """Nest another figure's SVG at pixel ``(x, y)``, **as vectors**.
+
+        The twin of :meth:`embed_png`, and the one to prefer: a figure placed on a page this way
+        keeps its text as text and its lines as lines, so a journal gets a vector page rather than a
+        picture of one.
+
+        Two figures on one page each bring their own ``<defs>``, and drawsvg numbers those ids from
+        zero in every figure, so a gradient in the second would answer to the first one's name and
+        the wrong colours would be drawn. Every id in the nested document is renamed with ``tag``
+        first, references included."""
+        body = svg.split("?>", 1)[-1].lstrip() if svg.lstrip().startswith("<?xml") else svg
+        if tag:
+            body = _rename_ids(body, tag)
+        # a nested <svg> establishes its own viewport, so the child's own width/height and viewBox
+        # go on doing the work and only its position has to be said here
+        body = re.sub(r"<svg\b", f'<svg x="{x:g}" y="{y:g}"', body, count=1)
+        self._d.append(draw.Raw(body))
+
     def raw_marker(self, cx, cy, shape: str, color: str, size: float, *,
                    stroke: str = "#ffffff", stroke_width: float = 0.8,
                    angle: float = 0.0, opacity: float = 1.0) -> None:
@@ -388,8 +421,27 @@ class Canvas:
 
     # --- output -----------------------------------------------------------
 
+    #: The units a page may be sized in, besides pixels.
+    PHYSICAL_UNITS = ("pt", "mm", "cm", "in", "px")
+
+    def physical_size(self, units: str) -> None:
+        """Give the page a physical size — ``"pt"``, ``"mm"``, ``"cm"``, ``"in"`` — leaving the
+        drawing in pixels underneath.
+
+        A journal asks for a figure one column wide, and a pixel is not a width you can promise. The
+        numbers stay as they are and the unit is written on them: a 482-wide page in ``"pt"`` is
+        482 pt across, and everything inside keeps its proportions through the viewBox."""
+        if units not in self.PHYSICAL_UNITS:
+            raise ValueError(f"units must be one of {', '.join(self.PHYSICAL_UNITS)}, not {units!r}")
+        self._units = None if units == "px" else units
+
     def as_svg(self) -> str:
-        return str(self._d.as_svg())
+        svg = str(self._d.as_svg())
+        if self._units:
+            w, h = self.size
+            svg = re.sub(r'width="[\d.]+" height="[\d.]+"',
+                         f'width="{w:g}{self._units}" height="{h:g}{self._units}"', svg, count=1)
+        return svg
 
     def save(self, path: str | Path) -> Path:
         """Write the figure; format follows the extension (``.svg`` direct, ``.pdf`` / ``.png`` via
