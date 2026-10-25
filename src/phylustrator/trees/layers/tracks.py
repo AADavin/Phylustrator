@@ -7,6 +7,9 @@ import warnings
 
 from ...color import map_values
 
+#: Which way "past the tip" points, per orientation — the direction a chip is pushed out in.
+_OUTWARD = {"right": (1.0, 0.0), "left": (-1.0, 0.0), "down": (0.0, 1.0), "up": (0.0, -1.0)}
+
 
 def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
               size: float = 11.0, offset: float = 8.0, shape: str = "square",
@@ -41,8 +44,9 @@ def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
             if color is None:
                 continue
             cx, cy = canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf))
-            if layout.kind == "rectangular":
-                cx += offset
+            if layout.kind in ("rectangular", "diagonal"):
+                ox, oy = _OUTWARD[layout.orientation]
+                cx, cy = cx + offset * ox, cy + offset * oy
             else:  # push out along the radial direction
                 dx, dy = cx - cx0, cy - cy0
                 d = math.hypot(dx, dy) or 1.0
@@ -51,17 +55,18 @@ def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
             canvas.raw_marker(cx, cy, shape, color, size / 2, stroke=stroke, stroke_width=stroke_width)
             chips.append((cx, cy))
         if label and chips:
-            _header(canvas, style, chips, label, label_angle, label_size, size, layout.kind)
+            _header(canvas, style, chips, label, label_angle, label_size, size, layout)
 
     return layer
 
 
-def _header(canvas, style, chips, label, angle, fsize, chip, kind) -> None:
+def _header(canvas, style, chips, label, angle, fsize, chip, layout) -> None:
     """The column's name, above its top chip."""
-    if kind != "rectangular":
-        warnings.warn(f"tip_track: the label {label!r} was dropped — a {kind} layout fans the chips "
-                      f"around the tree, so there is no column to head. The chips are drawn.",
-                      stacklevel=2)
+    if layout.kind not in ("rectangular", "diagonal") or not layout.grows_along_x:
+        why = ("fans the chips around the tree" if layout.kind in ("radial", "unrooted")
+               else "runs down the page, so its chips are a row and not a column")
+        warnings.warn(f"tip_track: the label {label!r} was dropped — a {layout.kind} "
+                      f"{layout.orientation} layout {why}. The chips are drawn.", stacklevel=2)
         return
     fs = fsize if fsize is not None else style.font_size
     x = max(cx for cx, _ in chips)       # the rightmost chip: a ragged column still gets one header

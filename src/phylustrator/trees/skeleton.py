@@ -22,7 +22,8 @@ def draw_branches(canvas, tree, layout, *, color, width, gradient: bool = False,
     dashed = dashed or set()
     w = width if callable(width) else (lambda node: width)
     keep = include or (lambda node: True)
-    dispatch = {"rectangular": _rectangular, "radial": _radial, "unrooted": _unrooted}
+    dispatch = {"rectangular": _rectangular, "radial": _radial, "unrooted": _unrooted,
+                "diagonal": _diagonal}
     draw = dispatch.get(layout.kind)
     if draw is None:
         raise ValueError(f"no branch drawer for layout {layout.kind!r}")
@@ -66,6 +67,22 @@ def _rectangular(canvas, tree, layout, color, width, gradient, dashed, keep) -> 
                 if keep(c):                # the drop is the child's, so it follows the child's width
                     canvas.line(x, y, x, layout.y(c), _drop(color, node, c, cn, gradient), width(c),
                                 dash=(c.name in dashed))                               # connector
+
+
+def _diagonal(canvas, tree, layout, color, width, gradient, dashed, keep) -> None:
+    """One straight segment from each parent to each child — no connector, so nothing joins at a
+    right angle. The stem runs back along the depth axis, whichever way the tree faces."""
+    for node in tree.walk():
+        x, y, cn = layout.x(node), layout.y(node), color(node)
+        d = node.name in dashed
+        if node.is_root:
+            if layout.root_branch > 0 and keep(node):
+                back = -layout.root_branch if layout.orientation in ("right", "down") else layout.root_branch
+                sx, sy = (x + back, y) if layout.grows_along_x else (x, y + back)
+                canvas.line(sx, sy, x, y, cn, width(node), dash=d)
+        elif keep(node):
+            _branch(canvas, layout.x(node.parent), layout.y(node.parent), x, y,
+                    color(node.parent), cn, width(node), gradient, dash=d)
 
 
 def _radial(canvas, tree, layout, color, width, gradient, dashed, keep) -> None:

@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The **`diagonal`** layout — each parent joined to each child by one straight slanted segment,
+  instead of the right-angle pair the rectangular layout draws. It is the shape of a textbook or
+  TikZ diagram, and it was the one tree picture the library could not draw: the workaround took the
+  coordinates from `layout.rectangular` and drew the branches by hand on a bare `Canvas`, which
+  gives up every layer. The coordinates are the rectangular ones, so a diagonal phylogram still
+  carries its lengths — the depth projection of a segment is its length, while the slanted segment
+  itself is longer (#44).
+- `trees.plot(orientation=…)` — `"right"` (the default), `"down"`, `"left"` or `"up"`, for the
+  `diagonal` layout. A `"down"` tree has the root at the top and the tips along the bottom, the
+  usual teaching diagram. This is a layout and not a rotation of the finished drawing, because
+  rotating the drawing lays every tip label on its side: here the geometry turns and the text stays
+  upright. `tip_labels`, `node_labels` and `tip_track` follow the orientation; the other layouts
+  refuse the argument rather than ignoring it (#44, and #18, which was closed on the grounds that a
+  caller could rotate the drawing themselves).
+- **`ph.styles`** and `styles.tikz()` — the look of a LaTeX/TikZ diagram as one `Style`: serif text,
+  fine black lines, squared-off branch ends, a white page. It is a style, so it works with every
+  layout and every layer, and every field it sets is an ordinary `Style` field left available to
+  the caller. `styles.TIKZ_EVENTS` is the matching set of event marks in ink, for
+  `branch_events(styles=…)`, since a kind's colour belongs to the layer and not to a style (#44).
+- `Style.line_cap` — how a branch ends. `"round"` (unchanged) or `"butt"`, which squares it off. A
+  round cap adds half the stroke width at each end, so a wide or short branch reads as longer than
+  it is. A dashed line is still always squared off, or each dash grows a cap and the gaps close up.
+- `phyl --layout diagonal --orientation down --tikz` — the same from the command line.
+- `trees.node_dots()` — the dot a textbook diagram puts on a node, so a branch ends in a point
+  rather than trailing off. `where` takes a group (`"tips"`, `"internal"`, `"root"`, `"all"`) and a
+  list of names takes them one by one, for the single node a figure is about: `node_dots(["ab"],
+  shape="star")`. It carries no data, which is what separates it from `node_points` (#44).
+- `Canvas.raw_marker` draws a `"star"`, the five-pointed mark for the one node a diagram is about.
+- `Style.label_style` — the face a node's own label is written in, `"normal"` or `"italic"`. A
+  LaTeX figure sets its taxon names in maths, which is italic, while its title stays roman, so this
+  is the label's face alone and the title, key and axis are not dragged along with it. `tikz()`
+  sets it to italic (#44).
+- `trees.plot(align_tips=True)` — end every lineage on the furthest tip's row, which is how a
+  teaching diagram lines its taxa up: the picture is about the topology, and a tip left short reads
+  as a shallower lineage rather than as a shorter branch. The internal nodes keep their own depth,
+  so it is a drawing choice and not a transformation of the tree. Rectangular, radial and diagonal;
+  the unrooted layout has no tip row and refuses it (#44).
+- `trees.tip_labels(upright=True)` — keep a radial or unrooted tree's names horizontal instead of
+  turning them along the branch. A fan of turned names is what a large circular tree needs; a
+  diagram of five taxa wants them read straight (#44).
+- `Layout.depth(node)`, `Layout.orientation` and `Layout.grows_along_x` — a node's distance along
+  the tree whichever way it is drawn, and which way that is. A layer that needs a distance (an
+  event part-way down a branch) asks for it instead of reading a coordinate that only means depth
+  on an untarned tree.
+
+### Fixed
+- `branch_events` clamped a point marker to its branch by reading the layout's x coordinate, which
+  is the distance only on a rectangular tree. The same code on a turned tree clamped every marker
+  to a tip index and drew it off the tree. It reads the branch's own depth range now, which is the
+  same number on every layout (#44).
+
+### Known limits
+- Two font traps, on the PNG/PDF path only (cairosvg), now written down in `styles`: a CSS font
+  stack is read as one family name, so `"Latin Modern Roman, serif"` matches nothing and falls back
+  to a **sans** face; and the generic `"serif"` resolves to a face that renders **bold** at every
+  weight. `tikz()` therefore names one real family, Times, and says what to pass on a machine
+  without it. An `.svg` for a browser or Inkscape is unaffected.
+- `node_intervals` and `highlight_clade` raise on the `diagonal` layout, and `time_axis` draws on a
+  right- or left-facing diagonal tree and warns on a turned one: an axis along the bottom cannot
+  carry a time that runs down the page. Each says so rather than drawing something wrong.
+
 ## [0.15.0] - 2026-10-25
 
 ### Added

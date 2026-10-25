@@ -39,6 +39,10 @@ def node_intervals(spans, *, color: str = "#6a9bd8", colors: dict | None = None,
             raise ValueError("node_intervals needs a layout with a distance axis, and the unrooted "
                              "layout has none: it places branches by angle, so an age is not a place "
                              "on it. Use the rectangular or radial layout.")
+        if layout.kind == "diagonal":
+            raise ValueError("node_intervals cannot be drawn on the diagonal layout yet: a bar at a "
+                             "node's row needs an axis the bar can run along, and a slanted branch "
+                             "has none. Use the rectangular layout for a dated tree with intervals.")
         by_name = {n.name: n for n in tree.walk() if n.name}
         missing = sorted(set(table) - set(by_name))
         if missing:
