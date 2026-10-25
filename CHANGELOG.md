@@ -48,6 +48,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `trees.tip_labels(upright=True)` — keep a radial or unrooted tree's names horizontal instead of
   turning them along the branch. A fan of turned names is what a large circular tree needs; a
   diagram of five taxa wants them read straight (#44).
+- `styles.maths(text)` and `styles.tikz_math()` — a figure whose labels match a LaTeX document
+  exactly rather than closely. LaTeX sets `$a$` in Computer Modern's **maths** italic (cmmi), which
+  is a different face from text italic (cmti), and asking for italic gets the second one. `maths()`
+  writes the Mathematical Italic characters themselves, so the first is what the renderer uses.
+  `tikz_math()` sets the text in Latin Modern Math, whose upright letters are the roman text face
+  and whose italic letters are the maths ones — one font for a roman title and italic labels. The
+  slot for italic *h* is reserved in Unicode and its character is U+210E, PLANCK CONSTANT; a label
+  with an `h` in it comes out blank without that, and `maths()` handles it (#44).
+- `Style.label_family` — the family a node's own label is written in, where it differs from the
+  title's. A LaTeX figure takes its title from the text font and its names from the maths font, and
+  those are two different files (#44).
+- A **missing font is now reported** when a PNG or PDF is saved. A family the renderer cannot find
+  is substituted silently, and the figure comes back set in the fallback face — usually a sans one,
+  which is the opposite of what a serif figure asked for. There is no asking the renderer, so the
+  family is drawn twice, once as asked and once under a name nothing can have, and the two images
+  are compared. Any failure of the check answers "installed", since a check that cannot run must
+  not stop a figure from being saved; the answer is remembered per family. SVG says nothing: it
+  carries the name and is resolved wherever it is opened.
 - `Layout.depth(node)`, `Layout.orientation` and `Layout.grows_along_x` — a node's distance along
   the tree whichever way it is drawn, and which way that is. A layer that needs a distance (an
   event part-way down a branch) asks for it instead of reading a coordinate that only means depth

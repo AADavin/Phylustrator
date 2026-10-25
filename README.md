@@ -39,7 +39,9 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
 - **Styles** — `ph.styles.tikz()` is a whole figure's look in one call: serif text, fine black
   lines, squared-off branch ends, a white page — a small figure that sits in a LaTeX document
   without looking like it came from somewhere else. Every field is an ordinary `Style` field, so
-  `tikz(branch_width=1.4)` is yours to set.
+  `tikz(branch_width=1.4)` is yours to set. With Computer Modern installed, `ph.styles.tikz_math()`
+  plus `tip_labels(values={n: ph.styles.maths(n) for n in names})` matches a LaTeX document
+  exactly: the title in cmr, the taxon names in cmmi, the face `$a$` is set in.
 - **Layers** — `color_branches`, `color_history`, `tip_labels`, `node_labels`, `tip_track`,
   `branch_events`, `branch_spindles`, `node_halves`, `colorbar`, `legend`, `time_axis`,
   `time_marker`, `scale_bar`, `note`, `title`, `highlight_clade`, `highlight_lineage`,

@@ -48,6 +48,10 @@ class Style:
     #: sets its taxon names in maths, which is italic, while its title stays roman; this is the
     #: label's face alone, so the title, the key and the axis are not dragged along with it.
     label_style: str = "normal"
+    #: the family a node's own label is written in; ``None`` takes ``font_family``. A LaTeX figure
+    #: sets its taxon names from the maths font and its title from the text font, and those are two
+    #: different files.
+    label_family: str | None = None
     label_color: str = "#222222"
     background: str | None = "white"
 

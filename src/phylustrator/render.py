@@ -10,6 +10,7 @@ through cairosvg, falling back to ``.svg`` (with a note) when it is absent.
 from __future__ import annotations
 
 import math
+import warnings
 from collections.abc import Collection
 from pathlib import Path
 
@@ -17,6 +18,37 @@ import drawsvg as draw
 
 from .color import colormap_hex
 from .style import Style
+
+#: Families already probed, so a figure drawn in a loop pays for the check once.
+_FONT_SEEN: dict[str, bool] = {}
+
+#: A name no machine has, to render the fallback face and compare against.
+_NO_SUCH_FONT = "phylustrator no such font 8f3a"
+
+
+def font_is_available(family: str) -> bool:
+    """Whether the PNG/PDF renderer can actually find ``family``.
+
+    There is no asking it: a missing family is substituted silently, and the figure comes back in
+    the fallback face — usually a sans one, which is the opposite of what a serif figure asked for.
+    So the family is drawn twice, once as asked and once under a name nothing can have, and the two
+    images are compared. Same image, same font, and the one you asked for is not installed.
+
+    Any failure answers ``True``: a check that cannot run must not stop a figure from being saved."""
+    if family in _FONT_SEEN:
+        return _FONT_SEEN[family]
+    try:
+        import cairosvg
+
+        def pixels(name):
+            svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="150" height="26">'
+                   f'<text x="2" y="19" font-size="17" font-family="{name}">Hamburgefons</text></svg>')
+            return cairosvg.svg2png(bytestring=svg.encode())
+
+        _FONT_SEEN[family] = pixels(family) != pixels(_NO_SUCH_FONT)
+    except Exception:
+        _FONT_SEEN[family] = True
+    return _FONT_SEEN[family]
 
 
 class Canvas:
@@ -96,7 +128,7 @@ class Canvas:
         """A label in *data* coordinates — a node's own name, so it is written in the style's
         ``label_style``. The chrome (title, key, axis) goes through ``raw_text`` and stays roman."""
         self.raw_text(self.px(x) + dx, self.py(y) + dy, s, anchor=anchor, color=color, size=size,
-                      style=self.style.label_style)
+                      style=self.style.label_style, family=self.style.label_family)
 
     # --- pixel-space (fixed page position) --------------------------------
 
@@ -105,12 +137,13 @@ class Canvas:
 
     def raw_text(self, x, y, s: str, *, anchor="start", baseline="central",
                  color: str | None = None, size: float | None = None, weight="normal",
-                 rotate: float = 0.0, style: str = "normal") -> None:
+                 rotate: float = 0.0, style: str = "normal", family: str | None = None) -> None:
         extra = {"transform": f"rotate({rotate} {x} {y})"} if rotate else {}
         if style != "normal":
             extra["font_style"] = style
         self._d.append(draw.Text(s, size or self.style.font_size, x, y,
-                                 fill=color or self.style.label_color, font_family=self.style.font_family,
+                                 fill=color or self.style.label_color,
+                                 font_family=family or self.style.font_family,
                                  text_anchor=anchor, dominant_baseline=baseline, font_weight=weight, **extra))
 
     def raw_rect(self, x, y, w, h, *, fill, stroke="none", stroke_width=0.0, opacity=1.0,
@@ -321,6 +354,7 @@ class Canvas:
                 print(f"[phylustrator] cairosvg not installed — wrote {fallback.name} instead of "
                       f"{path.name}. Install phylustrator[export] for PDF/PNG.")
                 return fallback
+            self._warn_about_missing_fonts()
             data = svg.encode()
             if ext == ".pdf":
                 cairosvg.svg2pdf(bytestring=data, write_to=str(path))
@@ -328,3 +362,17 @@ class Canvas:
                 cairosvg.svg2png(bytestring=data, write_to=str(path), scale=2.0)
             return path
         raise ValueError(f"unsupported output extension {path.suffix!r}; use .svg, .pdf or .png")
+
+    def _warn_about_missing_fonts(self) -> None:
+        """Say so when the family this figure asks for is not installed, rather than handing back a
+        figure quietly set in something else. Only for PNG and PDF: an SVG carries the name and is
+        resolved wherever it is opened."""
+        for family in dict.fromkeys(f for f in (self.style.font_family, self.style.label_family)
+                                    if f and "," not in f):
+            if not font_is_available(family):
+                warnings.warn(f"the font {family!r} is not installed, so this PNG/PDF is being set "
+                              f"in the fallback face — usually a sans one, whatever the figure "
+                              f"asked for. Install it, or pass a family this machine has. Saving "
+                              f"to .svg instead keeps the name for whoever opens it.", stacklevel=3)
+
+

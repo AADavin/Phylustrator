@@ -34,6 +34,13 @@ from .style import Style
 #: have.
 LATEX_SERIF = "Latin Modern Roman"
 
+#: The font that carries Computer Modern's **maths** italic — the face LaTeX uses for ``$a$``, and
+#: the one a diagram's taxon labels are set in. Its upright letters are the roman text face, so one
+#: family gives a roman title and italic labels; the italic letters live in the Mathematical Italic
+#: block, which is what :func:`maths` writes. Ships with any TeX distribution as
+#: ``latinmodern-math.otf``, and has to be installed for the system to see it.
+LATEX_MATH = "Latin Modern Math"
+
 #: Event marks for a figure printed in ink: one shape per kind, drawn in black and greys rather than
 #: the default colour set. Pass it through ``branch_events(styles=…)``, which merges it over the
 #: defaults, so a kind left out keeps its usual colour.
@@ -43,6 +50,52 @@ TIKZ_EVENTS = {
     "transfer": ("arrow", "#555555"),
     "origination": ("diamond", "#000000"),
 }
+
+
+def maths(text: str) -> str:
+    """ASCII letters as their **Mathematical Italic** characters, the ones LaTeX sets ``$a$`` in.
+
+        tip_labels(values={name: maths(name) for name in tree_names})
+
+    A figure's taxon labels are maths in LaTeX, and maths italic is a different face from text
+    italic: asking for italic gets the second one. Writing the maths characters themselves asks for
+    the first, so they come out as the document does, provided the text is set in a font that holds
+    them (:data:`LATEX_MATH`). Anything that is not an ASCII letter — a digit, a space, a subscript
+    already written as one — is left exactly as it is, as LaTeX leaves digits upright in maths.
+
+    One letter is not where the arithmetic says: the slot for italic *h* is reserved, and the
+    character is U+210E, named PLANCK CONSTANT. A label containing an ``h`` comes out blank without
+    this."""
+    out = []
+    for ch in text:
+        if ch == "h":
+            out.append("\u210e")                                  # the reserved slot's stand-in
+        elif "a" <= ch <= "z":
+            out.append(chr(0x1D44E + ord(ch) - ord("a")))
+        elif "A" <= ch <= "Z":
+            out.append(chr(0x1D434 + ord(ch) - ord("A")))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def tikz_math(**overrides) -> Style:
+    """:func:`tikz`, with the text set in :data:`LATEX_MATH` — the figure that matches a LaTeX
+    document exactly, rather than closely.
+
+    That one font carries both faces: its upright letters are Computer Modern roman, so a title
+    written normally comes out as the document's text, and its italic letters are the maths ones, so
+    labels written through :func:`maths` come out as ``$a$`` does.
+
+        style = ph.styles.tikz_math()
+        plot(tree, layout="diagonal", orientation="down", style=style) \
+            + tip_labels(values={n: ph.styles.maths(n) for n in names}) \
+            + title("Rooted gene tree", weight="normal")
+
+    The font has to be installed for the system to find it, and a TeX distribution's copy inside its
+    own tree does not count — on macOS, add ``latinmodern-math.otf`` through Font Book. Saving a PNG
+    or PDF warns when it is missing, rather than handing back a figure quietly set in a sans face."""
+    return replace(tikz(), font_family=LATEX_MATH, label_style="normal", **overrides)
 
 
 def tikz(**overrides) -> Style:
