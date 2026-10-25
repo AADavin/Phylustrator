@@ -189,6 +189,30 @@ class Canvas:
         self._d.append(draw.Lines(*flat, fill=fill, fill_opacity=opacity, stroke=stroke,
                                   stroke_width=stroke_width, close=True))
 
+    def raw_path(self, d: str, *, fill: str = "none", stroke: str = "none",
+                 stroke_width: float = 0.0, opacity: float = 1.0, cap: str | None = None,
+                 join: str = "round", dash: str | None = None) -> None:
+        """An arbitrary SVG path in **pixel** space, from its ``d`` string.
+
+        The escape hatch: everything else here draws one named shape, and a figure that needs a
+        rounded bend, a tube's outline or a lineage cut to part of a branch has none to ask for. It
+        was that or splicing hand-written paths into the output of :meth:`as_svg`, which is outside
+        the library and breaks the moment the rest of it changes.
+
+        ``d`` is passed through as written, so it is the caller's to get right — the one place in
+        Phylustrator where that is true. ``cap`` defaults to the style's ``line_cap``, and ``join``
+        says how two segments meet (``"round"``, ``"miter"`` for the angular corners of a LaTeX
+        diagram, or ``"bevel"``). ``dash`` is an SVG dash array, e.g. ``"5,4"``."""
+        extra: dict = {}
+        if opacity < 1.0:
+            extra["fill_opacity"] = opacity
+            extra["stroke_opacity"] = opacity
+        if dash:
+            extra["stroke_dasharray"] = dash
+        self._d.append(draw.Path(d=d, fill=fill, stroke=stroke, stroke_width=stroke_width,
+                                 stroke_linecap=cap or self.style.line_cap,
+                                 stroke_linejoin=join, **extra))
+
     def raw_annulus_sector(self, cx, cy, r_in, r_out, a0, a1, *, fill,
                            stroke="#ffffff", stroke_width=0.5, opacity=1.0) -> None:
         """A filled arc segment (annulus sector) between angles ``a0..a1`` (radians) and radii

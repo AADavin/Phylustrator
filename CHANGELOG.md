@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `Canvas.raw_path(d, …)` — an arbitrary SVG path in pixel space. Everything else on the canvas
+  draws one named shape, and a figure that needs a rounded bend, a tube's outline or a lineage cut
+  to part of a branch has none to ask for; the alternative was splicing hand-written paths into the
+  output of `as_svg()`, which is outside the library and breaks whenever the rest of it changes.
+  `join` sets how two segments meet (`"miter"` for the angular corners of a LaTeX diagram), `cap`
+  defaults to the style's `line_cap`, and `dash` takes an SVG dash array. The `d` string is passed
+  through as written — the one place here where the geometry is the caller's (#42).
+
+### Added
 - `trees.legend(loc="right")` and `loc="below"` — put the key **outside** the panel, a column in
   the right margin past the tip labels or a row under the time axis, instead of in a corner over
   the tree. Which corner is free depends on the tree, and on one whose tips reach the right edge at
