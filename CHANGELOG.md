@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`ph.page(rows, …)`** — several independent figures on one page, nested as vectors. `beside` and
+  `below` each pair one tree with one companion panel, so two trees side by side — the same tree
+  under two analyses, the commonest comparison there is — had to leave the library and be stitched
+  together as images, losing the shared axis and the shared scale. Every figure keeps its own
+  layers and style and is re-rendered at its cell's size where it can be, so the text stays the
+  size it was asked for rather than being scaled with the drawing. A cell may be `None` to leave a
+  gap (#30, #17).
+- `page(title=…)` is centred over the whole page, which a title on a figure inside it cannot be:
+  on a 45/55 split that one sits left of the middle. A `beside` composite can go on a page, which
+  is what gives it a title at last (#41).
+- `page(letters=True)` writes A, B, C … at the corner of each panel in reading order, or takes the
+  labels outright. An empty cell is a gap and does not eat a letter.
+- `page(units="pt")` (also `"mm"`, `"cm"`, `"in"`) sets the page's physical size and leaves the
+  drawing in pixels underneath, so a figure can hit a journal's column width exactly (#17).
+- `Canvas.embed_svg(svg, x, y)` — nest another figure's SVG as vectors, the twin of `embed_png` and
+  the one to prefer. Every id in the nested document is renamed first: drawsvg numbers them from
+  zero in every figure, so without that the second figure's gradients would answer to the first
+  one's name and quietly draw the wrong colours.
+- `Canvas.physical_size(units)`.
+
+### Changed
+- `beside` nests its tree as **vectors** instead of rendering it to a PNG and pasting it in. A
+  composite for a journal was half a picture, and building one needed cairosvg at all (#17).
 - `Canvas.raw_path(d, …)` — an arbitrary SVG path in pixel space. Everything else on the canvas
   draws one named shape, and a figure that needs a rounded bend, a tube's outline or a lineage cut
   to part of a branch has none to ask for; the alternative was splicing hand-written paths into the

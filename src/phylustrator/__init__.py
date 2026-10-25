@@ -25,7 +25,7 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
 from . import genomes, styles, trees, zombi
-from .compose import Composite, below, beside
+from .compose import Composite, below, beside, page
 from .style import Style
 
 try:  # single source of truth is pyproject.toml; read it from the installed metadata
@@ -33,5 +33,5 @@ try:  # single source of truth is pyproject.toml; read it from the installed met
 except PackageNotFoundError:  # a source tree that hasn't been installed
     __version__ = "0.0.0+unknown"
 
-__all__ = ["trees", "genomes", "zombi", "styles", "beside", "below", "Composite", "Style",
+__all__ = ["trees", "genomes", "zombi", "styles", "beside", "below", "page", "Composite", "Style",
            "__version__"]
