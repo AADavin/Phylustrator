@@ -39,10 +39,10 @@ def node_intervals(spans, *, color: str = "#6a9bd8", colors: dict | None = None,
             raise ValueError("node_intervals needs a layout with a distance axis, and the unrooted "
                              "layout has none: it places branches by angle, so an age is not a place "
                              "on it. Use the rectangular or radial layout.")
-        if layout.kind == "diagonal":
-            raise ValueError("node_intervals cannot be drawn on the diagonal layout yet: a bar at a "
-                             "node's row needs an axis the bar can run along, and a slanted branch "
-                             "has none. Use the rectangular layout for a dated tree with intervals.")
+        if layout.kind == "diagonal" and not layout.grows_along_x:
+            raise ValueError(f"node_intervals cannot be drawn on a {layout.orientation} tree: it "
+                             f"carries its time down the page, and the bar at a node's row would "
+                             f"run across it. Use orientation='right' or 'left'.")
         by_name = {n.name: n for n in tree.walk() if n.name}
         missing = sorted(set(table) - set(by_name))
         if missing:
@@ -50,18 +50,21 @@ def node_intervals(spans, *, color: str = "#6a9bd8", colors: dict | None = None,
             raise ValueError(f"node_intervals: {len(missing)} name(s) not in the tree: {shown}")
         # the radial layout starts at the crown and drops the stem, as branch_events does
         stem_off = float(tree.root.length or 0.0) if layout.kind == "radial" else 0.0
-        if layout.kind == "rectangular":
-            end = layout.xlim[1]
+        flat = layout.kind in ("rectangular", "diagonal")
+        if flat:
+            end = max(layout.depth(n) for n in tree.walk())
         else:
             end = stem_off + max(math.hypot(layout.x(n), layout.y(n)) for n in tree.walk())
+        # a left-facing diagonal tree counts its depth the other way along the axis
+        sign = -1.0 if layout.orientation == "left" else 1.0
         for name, (lo, hi) in table.items():
             node = by_name[name]
             paint = tint.get(name, color)
             if before_present:                     # ages run the other way: the older end is first
                 lo, hi = end - hi, end - lo
-            if layout.kind == "rectangular":
+            if flat:
                 y = layout.y(node)
-                canvas.line(lo, y, hi, y, paint, width, opacity=opacity, cap=cap)
+                canvas.line(sign * lo, y, sign * hi, y, paint, width, opacity=opacity, cap=cap)
             else:
                 a = layout.angle[node]
                 r0, r1 = max(lo - stem_off, 0.0), max(hi - stem_off, 0.0)

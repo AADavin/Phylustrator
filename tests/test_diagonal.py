@@ -279,9 +279,47 @@ def test_a_transfer_outside_the_window_is_still_refused():
 # --- the layers that cannot draw on a turned tree say so --------------------------------------
 
 
-def test_node_intervals_refuses_the_diagonal_layout():
-    with pytest.raises(ValueError, match="slanted branch has none"):
-        (plot(loads(_NWK), layout="diagonal") + node_intervals({"ab": (0.5, 1.5)})).as_svg()
+def test_node_intervals_draws_on_a_diagonal_tree_that_grows_across_the_page():
+    """The diagonal layout carries the rectangular coordinates, so the bar runs along the same
+    axis it runs along there (#55)."""
+    figure = plot(loads(_NWK), layout="diagonal") + node_intervals({"ab": (0.5, 1.5)})
+    assert "#6a9bd8" in figure.as_svg()
+
+
+def test_node_intervals_refuses_a_turned_tree():
+    """There the time runs down the page and the bar at a node's row would run across it."""
+    with pytest.raises(ValueError, match="carries its time down the page"):
+        (plot(loads(_NWK), layout="diagonal", orientation="down")
+         + node_intervals({"ab": (0.5, 1.5)})).as_svg()
+
+
+def test_an_interval_on_a_left_facing_tree_runs_the_other_way():
+    """Depth counts the other way along the axis there, and a bar drawn without that lands on the
+    far side of the tree."""
+    import re
+    for orientation, inside in (("right", True), ("left", False)):
+        svg = (plot(loads(_NWK), layout="diagonal", orientation=orientation)
+               + node_intervals({"ab": (0.5, 1.5)})).as_svg()
+        xs = [float(m) for m in re.findall(r'<path d="M ?([-\d.]+),', svg)]
+        node_x = next(p.x for p in plot(loads(_NWK), layout="diagonal",
+                                        orientation=orientation).geometry().nodes
+                      if p.name == "ab")
+        bar = [x for x in xs if abs(x - node_x) < 200]
+        assert bar, f"a bar is drawn near the node on a {orientation} tree"
+
+
+def test_a_clade_box_follows_the_orientation():
+    """A clade is a box on a diagonal tree too; which axis the tips are spaced along turns."""
+    tree = loads("((A:3,B:3)x:1,C:4)r;")
+    across = plot(tree, layout="diagonal").clade_box("x")
+    down = plot(tree, layout="diagonal", orientation="down").clade_box("x")
+    assert across.x1 > across.x0 and across.y1 > across.y0
+    assert down.x1 > down.x0 and down.y1 > down.y0
+
+
+def test_a_clade_box_still_needs_a_tip_order_axis():
+    with pytest.raises(ValueError, match="rectangular or diagonal"):
+        plot(loads(_NWK), layout="radial").clade_box("ab")
 
 
 def test_a_time_axis_draws_on_a_right_facing_tree_and_warns_on_a_turned_one():
