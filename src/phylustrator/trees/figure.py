@@ -18,13 +18,21 @@ from typing import Callable
 from ..render import Canvas
 from ..style import Style
 from .layers.clades import clade_extent
-from .layout import Layout, radial, rectangular, unrooted
+from .layout import Layout, diagonal, radial, rectangular, unrooted
 from .skeleton import draw_branches
 from .tree import Tree
 
 Layer = Callable[[Canvas, Tree, Layout, Style], None]
 
-_LAYOUTS = {"rectangular": rectangular, "radial": radial, "unrooted": unrooted}
+_LAYOUTS = {"rectangular": rectangular, "radial": radial, "unrooted": unrooted,
+            "diagonal": diagonal}
+
+#: Layouts that take an ``orientation``; the others always grow to the right.
+_TURNS = ("diagonal",)
+
+#: Layouts that can end every lineage on the furthest tip's row. The unrooted layout has no row to
+#: end on: it places branches by angle from a centre, so there is no tip edge to line them up with.
+_ALIGNS = ("rectangular", "radial", "diagonal")
 
 
 @dataclass
@@ -94,9 +102,17 @@ class Figure:
 
     def __init__(self, tree: Tree, *, layout: str = "rectangular", stem: bool = True,
                  style: Style | None = None, dashed=None, skeleton: bool = True,
-                 cladogram: bool = False, layers: tuple[Layer, ...] = ()) -> None:
+                 cladogram: bool = False, orientation: str = "right", align_tips: bool = False,
+                 layers: tuple[Layer, ...] = ()) -> None:
         if layout not in _LAYOUTS:
             raise ValueError(f"unknown layout {layout!r}; choose from {sorted(_LAYOUTS)}")
+        if orientation != "right" and layout not in _TURNS:
+            raise ValueError(f"the {layout} layout always grows to the right; only "
+                             f"{', '.join(_TURNS)} takes an orientation")
+        if align_tips and layout not in _ALIGNS:
+            raise ValueError(f"the {layout} layout has no tip row to line the tips up on: it places "
+                             f"branches by angle from a centre. align_tips is for "
+                             f"{', '.join(_ALIGNS)}")
         self.tree = tree
         self.layout = layout
         self.stem = stem
@@ -105,6 +121,10 @@ class Figure:
         # (the usual shape of a large tree) could only be drawn with its deep nodes on top of each
         # other, or by rewriting every length to 1 first (#43).
         self.cladogram = cladogram
+        self.orientation = orientation
+        # end every lineage on the furthest tip's row, as a teaching diagram does: the picture is
+        # about the topology, and a tip left short reads as a shallower lineage
+        self.align_tips = align_tips
         self.style = style or Style()
         self.dashed = dashed  # node names whose branch is drawn dashed (e.g. extinct lineages)
         # whether to draw the default-colour base skeleton first. Turn OFF when a colouring layer
@@ -116,6 +136,7 @@ class Figure:
     def __add__(self, layer: Layer) -> "Figure":
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=self.style,
                       dashed=self.dashed, skeleton=self.skeleton, cladogram=self.cladogram,
+                      orientation=self.orientation, align_tips=self.align_tips,
                       layers=self.layers + (layer,))
 
     def with_size(self, width: float, height: float) -> "Figure":
@@ -127,12 +148,22 @@ class Figure:
         """A copy of this figure drawn with ``style`` (same tree, layers and options otherwise)."""
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=style,
                       dashed=self.dashed, skeleton=self.skeleton, cladogram=self.cladogram,
+                      orientation=self.orientation, align_tips=self.align_tips,
                       layers=self.layers)
+
+    def _lay_out(self) -> Layout:
+        """This figure's layout. One place, so an option reaches the drawing, ``geometry()`` and
+        ``clade_box()` alike — a figure whose box was computed from a different layout than the one
+        drawn is a figure whose zoom lines point at nothing."""
+        extra: dict = {"orientation": self.orientation} if self.layout in _TURNS else {}
+        if self.layout in _ALIGNS:
+            extra["align_tips"] = self.align_tips
+        return _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram, **extra)
 
     def geometry(self) -> Geometry:
         """The pixel positions of the tips and of every node for this figure's current style, and
         the x-to-pixel mapping — so a companion panel can line up with the tree without redrawing it."""
-        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram)
+        layout = self._lay_out()
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(self.layout != "rectangular"))
         tips = [TipPos(leaf.name or "", canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf)))
@@ -149,14 +180,14 @@ class Figure:
         Computed from the layout, so it is there before anything is drawn: lay out the zoom lines
         from it, then draw. ``highlight_clade`` with the same ``pad`` outlines exactly this box.
         Rectangular layouts only, where a clade is a box; it raises on the others."""
-        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram)
+        layout = self._lay_out()
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(self.layout != "rectangular"))
         x0, y0, x1, y1 = clade_extent(self.tree, layout, clade, pad)
         return CladeBox(clade, canvas.px(x0), canvas.py(y0), canvas.px(x1), canvas.py(y1))
 
     def _build(self) -> Canvas:
-        layout = _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram)
+        layout = self._lay_out()
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
                         equal_aspect=(layout.kind != "rectangular"))
         # A colouring layer overdraws the skeleton, so it has to know which branches were dashed or
@@ -180,7 +211,8 @@ class Figure:
 
 def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
          style: Style | None = None, dashed=None, skeleton: bool = True,
-         cladogram: bool = False) -> Figure:
+         cladogram: bool = False, orientation: str = "right",
+         align_tips: bool = False) -> Figure:
     """Start a figure for ``tree``. Add layers with ``+``, then :meth:`Figure.save`. ``dashed`` is an
     optional set of node names whose branches are drawn dashed (e.g. extinct lineages). Set
     ``skeleton=False`` when a colouring layer paints every branch itself (so dashed branches are not
@@ -188,9 +220,17 @@ def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
 
     ``cladogram=True`` spaces the nodes by topological depth and ignores the branch lengths, which is
     what a large tree needs: drawn to scale, a deep clade's short branches collapse onto the centre
-    of a radial tree and cannot be read."""
+    of a radial tree and cannot be read.
+
+    ``orientation`` turns the ``diagonal`` layout — ``"right"`` (the default), ``"down"`` for the
+    usual teaching diagram with the root at the top, ``"left"`` or ``"up"``. The other layouts
+    always grow to the right and refuse it.
+
+    ``align_tips=True`` ends every lineage on the furthest tip's row, which is how a teaching
+    diagram lines its taxa up. It changes the drawing and not the tree, so a figure that carries
+    lengths should keep its time axis off."""
     return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed, skeleton=skeleton,
-                  cladogram=cladogram)
+                  cladogram=cladogram, orientation=orientation, align_tips=align_tips)
 
 
 def _draw_skeleton(canvas: Canvas, tree: Tree, layout: Layout, style: Style, dashed=None) -> None:

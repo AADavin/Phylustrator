@@ -112,30 +112,40 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
 
         by_name = {n.name: n for n in tree.walk() if n.name}
         radial = layout.kind == "radial"
+        slanted = layout.kind == "diagonal"
         # events carry distance on the stem-inclusive scale (the rectangular default); the radial
         # layout drops the stem (its radius starts at the crown), so shift by the stem's length
         stem_off = float(tree.root.length or 0.0) if radial else 0.0
 
-        def rad(node):
-            return math.hypot(layout.x(node), layout.y(node))
-
         def span(node):
             """The distance range over which this lineage's own branch is drawn."""
-            here = rad(node) if radial else layout.x(node)
+            here = layout.depth(node)
             if node.parent is None:                      # the root: its branch is the stem, if drawn
                 return 0.0, here
-            up = rad(node.parent) if radial else layout.x(node.parent)
-            return min(up, here), max(up, here)
+            return min(layout.depth(node.parent), here), max(layout.depth(node.parent), here)
 
         # branch lengths come from a reconstruction, so let a time sit on a branch end
         tol = 1e-6 * max(layout.xlim[1] - layout.xlim[0], 1.0)
 
         def place(node, t):
             """An event at distance ``t`` on ``node``'s branch, in layout coordinates."""
-            if not radial:
+            if radial:
+                a = layout.angle[node]                   # the distance is the radius
+                return t * math.cos(a), t * math.sin(a)
+            if not slanted:
                 return t, layout.y(node)
-            a = layout.angle[node]                       # the distance is the radius
-            return t * math.cos(a), t * math.sin(a)
+            # a slanted branch has no axis to read the distance off, so walk the segment itself:
+            # the fraction of the branch's depth that `t` stands at is the fraction of the segment
+            lo, hi = span(node)
+            f = (t - lo) / ((hi - lo) or 1.0)
+            if node.parent is None:                      # along the stem, back from the root
+                back = -layout.root_branch if layout.orientation in ("right", "down") else layout.root_branch
+                sx, sy = ((layout.x(node) + back, layout.y(node)) if layout.grows_along_x
+                          else (layout.x(node), layout.y(node) + back))
+            else:
+                sx, sy = layout.x(node.parent), layout.y(node.parent)
+            ex, ey = layout.x(node), layout.y(node)
+            return sx + f * (ex - sx), sy + f * (ey - sy)
 
         used: dict[str, tuple] = {}
         # how each kind's arrows were actually drawn: "in" is donor -> recipient, "down"/"up" is
@@ -186,16 +196,18 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                     continue
                 x = ev["x"] - stem_off        # onto the layout's own distance scale
                 if clamp and node.parent is not None:
-                    if radial:
-                        lo, hi = sorted((rad(node.parent), rad(node)))
-                    else:
-                        lo, hi = sorted((layout.x(node.parent), layout.x(node)))
+                    # the branch's own depth range, whichever way the layout draws it. Reading it
+                    # off layout.x instead was right only for the rectangular layout: on a turned
+                    # diagonal tree x is the tip order, so every marker clamped to a tip index and
+                    # landed off the tree.
+                    lo, hi = span(node)
                     x = min(max(x, lo), hi)
                 mx, my = place(node, x)
-                if radial:
+                if radial or slanted:
                     # the glyph's "forward" must follow the branch: rotate by the branch
                     # direction in PIXEL space (py may flip y, so measure it there)
-                    ax, ay = place(node, max(x - 1e-6, 0.0))
+                    lo_b, _ = span(node)
+                    ax, ay = place(node, max(x - 1e-6, lo_b))
                     px, py = canvas.px(mx), canvas.py(my)
                     ang = math.atan2(py - canvas.py(ay), px - canvas.px(ax))
                     if glyph == "triangle_right":

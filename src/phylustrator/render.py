@@ -68,15 +68,18 @@ class Canvas:
 
     def line(self, x1, y1, x2, y2, color: str, width: float, *, dash: bool = False,
              opacity: float = 1.0, cap: str | None = None) -> None:
-        """A line in *data* coordinates. ``cap`` overrides the line ending (``"butt"`` squares off a
-        wide bar that would otherwise read as longer than it is), and ``opacity`` fades it, so a
-        broad mark drawn over the tree does not hide it."""
+        """A line in *data* coordinates. ``cap`` overrides the line ending for this one call
+        (``"butt"`` squares off a wide bar that would otherwise read as longer than it is), and
+        ``opacity`` fades it, so a broad mark drawn over the tree does not hide it. Left out, the
+        ending is the style's ``line_cap`` — a dashed line is always squared off, or each dash grows
+        a cap of its own and the gaps close up."""
         extra: dict = {"stroke_dasharray": "5,4"} if dash else {}
         if opacity < 1.0:
             extra["stroke_opacity"] = opacity
         self._d.append(draw.Line(self.px(x1), self.py(y1), self.px(x2), self.py(y2),
                                  stroke=color, stroke_width=width,
-                                 stroke_linecap=cap or ("butt" if dash else "round"), **extra))
+                                 stroke_linecap=cap or ("butt" if dash else self.style.line_cap),
+                                 **extra))
 
     def gradient_line(self, x1, y1, x2, y2, color1: str, color2: str, width: float) -> None:
         """A branch coloured with a gradient from ``color1`` (start) to ``color2`` (end)."""
@@ -90,7 +93,10 @@ class Canvas:
 
     def text(self, x, y, s: str, *, dx=0.0, dy=0.0, anchor="start",
              color: str | None = None, size: float | None = None) -> None:
-        self.raw_text(self.px(x) + dx, self.py(y) + dy, s, anchor=anchor, color=color, size=size)
+        """A label in *data* coordinates — a node's own name, so it is written in the style's
+        ``label_style``. The chrome (title, key, axis) goes through ``raw_text`` and stays roman."""
+        self.raw_text(self.px(x) + dx, self.py(y) + dy, s, anchor=anchor, color=color, size=size,
+                      style=self.style.label_style)
 
     # --- pixel-space (fixed page position) --------------------------------
 
@@ -99,8 +105,10 @@ class Canvas:
 
     def raw_text(self, x, y, s: str, *, anchor="start", baseline="central",
                  color: str | None = None, size: float | None = None, weight="normal",
-                 rotate: float = 0.0) -> None:
+                 rotate: float = 0.0, style: str = "normal") -> None:
         extra = {"transform": f"rotate({rotate} {x} {y})"} if rotate else {}
+        if style != "normal":
+            extra["font_style"] = style
         self._d.append(draw.Text(s, size or self.style.font_size, x, y,
                                  fill=color or self.style.label_color, font_family=self.style.font_family,
                                  text_anchor=anchor, dominant_baseline=baseline, font_weight=weight, **extra))
@@ -197,7 +205,8 @@ class Canvas:
                    angle: float = 0.0, opacity: float = 1.0) -> None:
         """A small glyph at pixel ``(cx, cy)``: ``circle`` / ``square`` / ``triangle`` /
         ``triangle_right`` (points along the time axis, for a state transition) / ``diamond``
-        (filled), ``ring`` (open), or ``cross`` (an ✕, for a loss).
+        (filled), ``star`` (five-pointed, for the one node a figure is about), ``ring`` (open), or
+        ``cross`` (an ✕, for a loss).
 
         ``ring`` is the marker for something that is there but not counted — a lineage alive at the
         present that sampling did not take — which is why it is the same shape as ``circle`` and
@@ -216,8 +225,14 @@ class Canvas:
                 self._d.append(draw.Line(cx + a, cy + b, cx + c, cy + d, stroke=color,
                                          stroke_width=max(1.6, r * 0.55), stroke_linecap="round",
                                          **ink))
-        elif shape in ("triangle", "triangle_right", "diamond"):
-            pts = {"triangle": [(cx, cy - r), (cx + r, cy + r * 0.85),
+        elif shape in ("triangle", "triangle_right", "diamond", "star"):
+            star = []
+            for i in range(10):                      # alternate outer and inner points
+                a = -math.pi / 2 + i * math.pi / 5
+                reach = r if i % 2 == 0 else r * 0.42
+                star.append((cx + reach * math.cos(a), cy + reach * math.sin(a)))
+            pts = {"star": star,
+                   "triangle": [(cx, cy - r), (cx + r, cy + r * 0.85),
                                 (cx - r, cy + r * 0.85)],
                    # points along the time axis — a state transition carries its
                    # lineage forward into the new state

@@ -28,6 +28,11 @@ class Style:
     # trees
     branch_color: str = "#333333"
     branch_width: float = 1.6
+    #: how a branch ends. ``"round"`` (the default) softens the tips and hides the joint where two
+    #: segments meet; ``"butt"`` squares them off, which is what a LaTeX/TikZ diagram looks like —
+    #: and what a wide branch needs, since a round cap adds half its width at each end and so reads
+    #: as longer than it is. A single call may still override it.
+    line_cap: str = "round"
     # genomes
     gene_height: float = 0.6            # gene-arrow height as a fraction of the row spacing
     gene_stroke: str = "#2a2a2a"
@@ -39,6 +44,10 @@ class Style:
     # shared text / background
     font_family: str = "Helvetica"
     font_size: float = 12.0
+    #: the face a node's own label is written in — ``"normal"`` or ``"italic"``. A LaTeX figure
+    #: sets its taxon names in maths, which is italic, while its title stays roman; this is the
+    #: label's face alone, so the title, the key and the axis are not dragged along with it.
+    label_style: str = "normal"
     label_color: str = "#222222"
     background: str | None = "white"
 

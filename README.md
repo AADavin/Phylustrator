@@ -32,11 +32,18 @@ brain = {"Human": 1350, "Chimp": 400, "Gorilla": 500, "Orang": 400, "Gibbon": 10
 
 That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one decoration.
 
-- **Layouts** — `rectangular` (default), `radial`, `unrooted`.
+- **Layouts** — `rectangular` (default), `radial`, `unrooted`, `diagonal`. The diagonal layout
+  joins each parent to its child with one straight slanted segment, the shape of a textbook
+  diagram, and is the one that turns: `plot(tree, layout="diagonal", orientation="down")` puts the
+  root at the top with the tips along the bottom, names upright.
+- **Styles** — `ph.styles.tikz()` is a whole figure's look in one call: serif text, fine black
+  lines, squared-off branch ends, a white page — a small figure that sits in a LaTeX document
+  without looking like it came from somewhere else. Every field is an ordinary `Style` field, so
+  `tikz(branch_width=1.4)` is yours to set.
 - **Layers** — `color_branches`, `color_history`, `tip_labels`, `node_labels`, `tip_track`,
   `branch_events`, `branch_spindles`, `node_halves`, `colorbar`, `legend`, `time_axis`,
   `time_marker`, `scale_bar`, `note`, `title`, `highlight_clade`, `highlight_lineage`,
-  `node_intervals`. `legend` and `note` take a corner;
+  `node_intervals`, `node_dots`. `legend` and `note` take a corner;
   `title` is centred over the panel. `branch_spindles` marks a branch with a lens that fades into
   the branch's own colour, and `node_halves` puts a two-colour disc on a node.
   An event given to `branch_events` can carry a `weight`, so arcs and marks scale with the count
@@ -88,7 +95,8 @@ phyl tree.nwk -o fig.svg      # save instead (format from the extension: .svg / 
 phyl tree.nwk --radial --no-labels
 ```
 
-Flags: `--layout {rectangular,radial,unrooted}` (or `--radial` / `--unrooted`), `--no-labels`,
+Flags: `--layout {rectangular,radial,unrooted,diagonal}` (or `--radial` / `--unrooted`),
+`--orientation {right,down,left,up}` for a diagonal tree, `--tikz`, `--no-labels`,
 `--node-labels`, `--no-stem`, `--no-open`. Colouring and everything else live in the Python API.
 
 ## Dependencies

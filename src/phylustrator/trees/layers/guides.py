@@ -392,7 +392,12 @@ def time_axis(label: str = "Time", *, ticks: int = 5, step: float | None = None,
         raise ValueError("labels= needs at=, so that each label has a tick of its own")
 
     def layer(canvas, tree, layout, style):
-        if layout.kind != "rectangular":
+        if layout.kind == "diagonal" and not layout.grows_along_x:
+            warnings.warn(f"time_axis: a {layout.orientation} tree carries its time down the page, "
+                          f"and the axis is drawn along the bottom. Nothing was drawn. Use "
+                          f"orientation='right' or 'left' for a tree with a time axis.", stacklevel=2)
+            return
+        if layout.kind not in ("rectangular", "diagonal"):
             return
         _, height = canvas.size
         ts = tick_size if tick_size is not None else style.font_size * 0.85

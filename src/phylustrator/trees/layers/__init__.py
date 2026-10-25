@@ -7,6 +7,7 @@ Each layer is a callable ``(canvas, tree, layout, style) -> None``. Import them 
 
 from .clades import highlight_clade
 from .coloring import color_branches, color_history, color_lanes
+from .dots import node_dots
 from .events import branch_events
 from .guides import colorbar, legend, note, scale_bar, time_axis, time_marker, title
 from .halves import node_halves
@@ -28,6 +29,7 @@ __all__ = [
     "branch_events",
     "branch_spindles",
     "node_halves",
+    "node_dots",
     "colorbar",
     "legend",
     "note",
