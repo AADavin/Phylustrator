@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `trees.branch_events(offset=…)`, and an `offset` on one event — move the marks sideways off the
+  middle of the branch, across whichever way it runs. It is what puts a mark on a **copy** rather
+  than on the lineage: a tube with two gene copies running side by side has a loss that belongs to
+  one of them, and a cross in the middle of the tube sits on neither. Without an offset the old
+  drawing path is used unchanged, so no existing figure moves by a pixel (#42).
+
 ### Fixed
 - `trees.gene_path` ends a segment with both `from` and `to` at the requested depth,
   measured from the original branch rather than from its shortened start (#76).
@@ -15,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A figure that colours by a number **and** by a category keeps both scales: `colorbar` reads the
   last continuous one and `legend` the last categorical one, instead of each reading whichever
   layer went on last (#61, #65).
+- `trees.tube` ended every branch in a **round** cap: the tube grew a nose half its width past each
+  tip and past the open end of the stem. The ends are flat now and closed with a line across the
+  tube — a tube ends where its branch ends. The wedge between two branches leaving a node at an
+  angle was what the round cap had been filling, so a joint is drawn at each internal node instead;
+  squared off and with nothing in the middle, a diagonal tree showed a notch at every fork (#42).
 
 ## [0.18.0] - 2026-10-25
 
