@@ -38,7 +38,7 @@ DEFAULT_EVENT_STYLES = {
 
 
 #: What one event may say about its own drawing, on top of what its kind says.
-_OVERRIDES = ("weight", "color", "size", "side")
+_OVERRIDES = ("weight", "color", "size", "side", "offset")
 
 
 def _unpack(ev):
@@ -86,7 +86,8 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                   legend: bool = True, legend_title: str = "events",
                   legend_loc: str = "top-right", legend_size: float | None = None,
                   clamp: bool = True, weight_floor: float = 0.25,
-                  outside_length: float = 22.0, outside_side: str = "above"):
+                  outside_length: float = 22.0, outside_side: str = "above",
+                  offset: float = 0.0):
     """Mark ``events`` on the tree. ``styles`` maps a kind to ``(glyph, colour)`` (merged over the
     D/T/L/O default). ``legend_loc`` is a corner; ``legend_size`` sets the legend font size (glyphs
     scale with it). ``clamp`` keeps a point marker within its branch's span.
@@ -94,6 +95,13 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
     An event may carry its own ``weight`` (0-1), ``color`` and ``size`` — see the module docstring.
     ``weight_floor`` is how much of the kind's style a weight of 0 keeps, so the lightest mark is
     still visible.
+
+    ``offset`` moves the marks sideways off the middle of the branch, in pixels, across whichever
+    way the branch runs. It is what puts a mark on a **copy** rather than on the lineage: a species
+    tree drawn as a :func:`~phylustrator.trees.tube` with two gene copies running side by side in
+    it has a loss that belongs to one of them, and a cross in the middle of the tube sits on
+    neither. One event may carry its own ``offset``, so the marks of several copies can be drawn in
+    one call.
 
     ``legend_loc`` also takes ``"right"`` and ``"below"``, which put the key outside the panel —
     beside the tip labels or under the time axis — where no shape of tree can leave it covering a
@@ -163,6 +171,22 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
             color = ev.get("color") or kind_color
             weight = _weight_scale(ev.get("weight"), weight_floor)
             marked = float(ev.get("size", size)) * weight
+            shift = float(ev.get("offset", offset))
+
+            def across(node, at, shift=0.0):
+                """A point on ``node``'s branch at distance ``at``, moved ``shift`` pixels across
+                the branch. Measured in pixel space, so it follows the branch whichever way the
+                layout runs it and whether or not ``py`` flips."""
+                ax, ay = place(node, at)
+                px_, py_ = canvas.px(ax), canvas.py(ay)
+                if not shift:
+                    return px_, py_
+                lo_b, hi_b = span(node)
+                back = place(node, min(max(at - (hi_b - lo_b) * 0.01, lo_b), hi_b))
+                dx, dy = px_ - canvas.px(back[0]), py_ - canvas.py(back[1])
+                d = math.hypot(dx, dy) or 1.0
+                return px_ - dy / d * shift, py_ + dx / d * shift
+
             if glyph == "arrow":                                    # transfer: donor -> recipient
                 recip = by_name.get(ev.get("recipient"))
                 if recip is None:
@@ -192,8 +216,12 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                                      color, width=shaft, head=tip, curve=0.0, opacity=weight)
                 else:
                     forms.setdefault(ev["kind"], set()).add("in")
-                    dx, dy = place(donor, x)
-                    canvas.arrow(dx, dy, rx, ry, color, width=shaft, head=tip, opacity=weight)
+                    if shift:
+                        canvas.raw_arrow(*across(donor, x, shift), *across(recip, x, shift),
+                                         color, width=shaft, head=tip, opacity=weight)
+                    else:
+                        dx, dy = place(donor, x)
+                        canvas.arrow(dx, dy, rx, ry, color, width=shaft, head=tip, opacity=weight)
             else:
                 node = by_name.get(ev.get("node"))
                 if node is None:
@@ -212,7 +240,7 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                     # direction in PIXEL space (py may flip y, so measure it there)
                     lo_b, _ = span(node)
                     ax, ay = place(node, max(x - 1e-6, lo_b))
-                    px, py = canvas.px(mx), canvas.py(my)
+                    px, py = across(node, x, shift)
                     ang = math.atan2(py - canvas.py(ay), px - canvas.px(ax))
                     if glyph == "triangle_right":
                         # tip AT the event's instant, body trailing over the state it leaves:
@@ -224,6 +252,9 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                     # colour, and without a silhouette the flared base reads as the point
                     canvas.raw_marker(px, py, glyph, color, marked, angle=ang,
                                       stroke="#1a1a1a", stroke_width=1.1, opacity=weight)
+                elif shift:
+                    canvas.raw_marker(*across(node, x, shift), glyph, color, marked,
+                                      stroke="#ffffff", stroke_width=0.8, opacity=weight)
                 else:
                     canvas.marker(mx, my, glyph, color, marked, opacity=weight)
             # the key names the kind, so it shows the kind's colour — never one event's override

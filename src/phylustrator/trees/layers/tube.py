@@ -58,19 +58,6 @@ def _path_through(start, corner, end, radius: float) -> str:
             f"L {ex:g},{ey:g}")
 
 
-def _pulled_back(corner, end, by: float):
-    """``end``, moved back towards ``corner`` by ``by`` pixels.
-
-    A round cap reaches half the tube's width past the end of its path, so a tube drawn to the tip
-    overhangs it and runs under the tip's own label. Pulling the path back by that much puts the
-    outside of the cap exactly on the tip."""
-    dx, dy = end[0] - corner[0], end[1] - corner[1]
-    d = math.hypot(dx, dy)
-    if d <= by:
-        return end
-    return (end[0] - dx / d * by, end[1] - dy / d * by)
-
-
 def _supported(layout, who: str) -> None:
     if layout.kind not in ("rectangular", "diagonal"):
         raise ValueError(f"{who} needs a layout whose branches are drawn as segments across the "
@@ -99,20 +86,41 @@ def tube(*, width: float = 16.0, fill: str = "#f2f2f2", stroke: str = "#1a1a1a",
             if node.parent is None and layout.root_branch <= 0:
                 continue
             start, corner, end = _branch_corner(canvas, layout, node)
-            # A free end — a tip, or the open end of the root stem — is pulled back so the cap sits
-            # on it rather than past it. A branch that carries on into another is left alone: there
-            # the cap is what fills the wedge between two branches leaving at an angle, and without
-            # it a diagonal tree shows a notch at every fork.
-            if node.is_leaf:
-                end = _pulled_back(corner, end, width / 2)
-            if node.parent is None:
-                start = _pulled_back(corner, start, width / 2)
             paths.append(_path_through(start, corner, end, radius))
         inner = max(width - 2 * edge, 0.5)
+        # Flat ends. A tube ends where its branch ends: a tip is a cut across the lineage, not a
+        # rounded nose poking past the tip into its own label, and the same goes for the open end
+        # of the stem. The wedge between two branches leaving a node at an angle is filled by a
+        # joint at the node instead — squared off and with nothing in the middle, a diagonal tree
+        # shows a notch at every fork.
+        joints = [(canvas.px(layout.x(n)), canvas.py(layout.y(n)))
+                  for n in tree.walk() if not n.is_leaf]
+        # the free ends: a tip, and the open end of the stem. Each is closed with a line across the
+        # tube, drawn last — a tube cut off and left open reads as unfinished rather than as ended.
+        caps = []
+        for node in tree.walk():
+            if node.is_leaf:
+                _, corner, end = _branch_corner(canvas, layout, node)
+                caps.append((corner, end))
+            elif node.parent is None and layout.root_branch > 0:
+                start, corner, _ = _branch_corner(canvas, layout, node)
+                caps.append((corner, start))
         for d in paths:                             # every outline first, so none cuts a neighbour
-            canvas.raw_path(d, stroke=stroke, stroke_width=width, cap="round", opacity=opacity)
+            canvas.raw_path(d, stroke=stroke, stroke_width=width, cap="butt", opacity=opacity)
+        for x, y in joints:
+            canvas.raw_marker(x, y, "circle", stroke, width / 2, stroke="none", stroke_width=0.0,
+                              opacity=opacity)
         for d in paths:
-            canvas.raw_path(d, stroke=fill, stroke_width=inner, cap="round", opacity=opacity)
+            canvas.raw_path(d, stroke=fill, stroke_width=inner, cap="butt", opacity=opacity)
+        for x, y in joints:
+            canvas.raw_marker(x, y, "circle", fill, inner / 2, stroke="none", stroke_width=0.0,
+                              opacity=opacity)
+        for inner_point, tip in caps:
+            dx, dy = tip[0] - inner_point[0], tip[1] - inner_point[1]
+            d = math.hypot(dx, dy) or 1.0
+            nx, ny = -dy / d * width / 2, dx / d * width / 2      # across the branch
+            canvas.raw_path(f"M {tip[0] - nx:g},{tip[1] - ny:g} L {tip[0] + nx:g},{tip[1] + ny:g}",
+                            stroke=stroke, stroke_width=edge, cap="butt", opacity=opacity)
 
     return layer
 

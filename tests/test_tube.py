@@ -55,9 +55,9 @@ def test_every_branch_is_drawn_twice_wide_then_narrow():
 
 def test_every_outline_is_drawn_before_any_fill():
     """Otherwise a branch drawn later cuts its outline across one drawn earlier."""
-    svg = (_figure() + tube()).as_svg()
-    order = [paint for _, paint, _ in _paths(svg)]
-    assert order == sorted(order, key=lambda p: 0 if p == "#1a1a1a" else 1)
+    svg = (_figure() + tube(width=18, edge=2.0)).as_svg()
+    branches = [paint for _, paint, w in _paths(svg) if w in (18.0, 14.0)]
+    assert branches == sorted(branches, key=lambda p: 0 if p == "#1a1a1a" else 1)
 
 
 def test_a_bend_is_rounded():
@@ -70,15 +70,35 @@ def test_no_radius_means_no_curve():
     assert all("Q" not in d for d, _, _ in _paths(svg))
 
 
-def test_a_tip_gets_the_outside_of_its_cap_on_the_tip():
-    """A round cap reaches half the tube's width past the end of its path, so a tube drawn to the
-    tip would overhang it and run under the tip's own label."""
-    width = 18.0
-    figure = _figure() + tube(width=width)
+def test_a_tube_ends_on_its_tip_and_is_closed_there():
+    """Flat, not round: a tube ends where its branch ends, and a rounded nose would poke half the
+    tube's width past the tip into its own label."""
+    width, edge = 18.0, 1.6
+    figure = _figure() + tube(width=width, edge=edge)
+    svg = figure.as_svg()
+    assert 'stroke-linecap="butt"' in svg and 'stroke-linecap="round"' not in svg
     tips = {p.name: p for p in figure.geometry().tips}
-    ends = [_points(d)[-1] for d, _, _ in _paths(figure.as_svg(), stroke="#1a1a1a")]
-    near_a = min(ends, key=lambda p: abs(p[1] - tips["A"].y) + abs(p[0] - tips["A"].x))
-    assert near_a[0] == pytest.approx(tips["A"].x - width / 2, abs=1.0)
+    ends = [_points(d)[-1] for d, _, w in _paths(svg, stroke="#1a1a1a") if w == width]
+    assert any(p == pytest.approx((tips["A"].x, tips["A"].y), abs=0.6) for p in ends)
+    # and a line across the tube closes it, as wide as the tube and as thin as its outline
+    caps = [_points(d) for d, _, w in _paths(svg, stroke="#1a1a1a") if w == edge]
+    at_a = [c for c in caps if abs(c[0][0] - tips["A"].x) < 0.6]
+    assert at_a and abs(at_a[0][0][1] - at_a[0][1][1]) == pytest.approx(width, abs=0.1)
+
+
+def test_a_fork_is_filled_by_a_joint_at_the_node():
+    """Squared off and with nothing in the middle, two branches leaving a node at an angle leave a
+    notch between them — on a diagonal tree, at every fork."""
+    width, edge = 16.0, 1.6
+    figure = _figure(layout="diagonal") + tube(width=width, edge=edge)
+    svg = figure.as_svg()
+    nodes = {p.name: p for p in figure.geometry().nodes if not p.is_leaf}
+    joints = re.findall(r'<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([\d.]+)"', svg)
+    outer = [(float(x), float(y)) for x, y, r in joints if float(r) == pytest.approx(width / 2)]
+    inner = [(float(x), float(y)) for x, y, r in joints
+             if float(r) == pytest.approx((width - 2 * edge) / 2)]
+    assert len(outer) == len(inner) == len(nodes)
+    assert all(any(p == pytest.approx((n.x, n.y), abs=0.6) for p in outer) for n in nodes.values())
 
 
 def test_an_inner_branch_keeps_its_cap_to_fill_the_fork():
@@ -184,3 +204,52 @@ def test_the_whole_reconciliation_draws():
     svg = figure.as_svg()
     assert len(_paths(svg, stroke="#c1443c")) == 6
     assert "#2e8b57" in svg, "the transfer arrow"
+
+
+# --- a mark that belongs to one copy, not to the lineage (the loss in a two-copy tube) ----------
+
+
+def _crosses(svg):
+    """Where each loss ✕ sits. It is two crossed strokes that share a midpoint, so the pair
+    collapses to the one point."""
+    found = re.findall(r'<path d="M ?([-\d.]+),([-\d.]+) L ?([-\d.]+),([-\d.]+)"'
+                       r'[^>]*stroke="#c1443c"', svg)
+    seen = []
+    for a, b, c, d in found:
+        mid = (round((float(a) + float(c)) / 2, 3), round((float(b) + float(d)) / 2, 3))
+        if mid not in seen:
+            seen.append(mid)
+    return seen
+
+
+def test_a_mark_can_be_moved_onto_the_copy_it_belongs_to():
+    """Two copies run side by side in one tube; a cross in the middle sits on neither."""
+    events = [{"kind": "loss", "node": "B", "x": 0.75}]
+    middle = (_figure() + branch_events(events, legend=False)).as_svg()
+    moved = (_figure() + branch_events(events, legend=False, offset=5.0)).as_svg()
+    (mx, my), = _crosses(middle)
+    (sx, sy), = _crosses(moved)
+    assert sx == pytest.approx(mx, abs=0.6), "along the branch it has not moved"
+    assert sy - my == pytest.approx(5.0, abs=0.3), "across it, by what it was given"
+
+
+def test_one_event_can_carry_its_own_offset():
+    """So the marks of several copies go on in one call."""
+    svg = (_figure() + branch_events([{"kind": "loss", "node": "B", "x": 0.75, "offset": -6.0},
+                                      {"kind": "loss", "node": "C", "x": 0.75, "offset": 6.0}],
+                                     legend=False)).as_svg()
+    plain = (_figure() + branch_events([{"kind": "loss", "node": "B", "x": 0.75},
+                                        {"kind": "loss", "node": "C", "x": 0.75}],
+                                       legend=False)).as_svg()
+    shifted = sorted(y for _, y in _crosses(svg))
+    straight = sorted(y for _, y in _crosses(plain))
+    assert shifted[0] - straight[0] == pytest.approx(-6.0, abs=0.3)
+    assert shifted[1] - straight[1] == pytest.approx(6.0, abs=0.3)
+
+
+def test_no_offset_draws_exactly_what_it_drew_before():
+    """The old path is kept for the usual case, so no existing figure moves by a pixel."""
+    events = [{"kind": "duplication", "node": "ab", "x": 0.35}]
+    plain = (_figure() + branch_events(events, legend=False)).as_svg()
+    zero = (_figure() + branch_events(events, legend=False, offset=0.0)).as_svg()
+    assert plain == zero
