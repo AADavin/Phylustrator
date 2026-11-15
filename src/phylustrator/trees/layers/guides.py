@@ -126,7 +126,7 @@ def _outside_box(canvas, style, loc: str, box_w: float, box_h: float, who: str) 
         top, bottom = style.margin_at("top"), h - style.margin_at("bottom")
         y = (top + bottom) / 2 - box_h / 2
         if x + box_w > w:
-            need = round(w - x + box_w - (w - panel_edge) + gap)
+            need = math.ceil(x + box_w - panel_edge)
             warnings.warn(f"{who}: loc='right' needs about margin_right={need} to hold it; this "
                           f"figure has {round(style.margin_at('right'))}, so the block runs off the "
                           f"page. Widen the margin, or put it below.", stacklevel=3)
