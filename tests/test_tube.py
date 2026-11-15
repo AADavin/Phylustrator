@@ -142,6 +142,24 @@ def test_a_segment_can_stop_early():
     assert _points(drawn[0][0])[-1][0] < nodes["C"].x
 
 
+@pytest.mark.parametrize("layout", ["rectangular", "diagonal"])
+@pytest.mark.parametrize("begins,stops", [(1.0, 1.2), (1.2, 1.2), (1.0, 3.0), (-1.0, 1.2)])
+def test_bounded_segment_uses_the_original_branch(layout: str, begins: float, stops: float) -> None:
+    tree = loads("((A:1,B:1)ab:1,C:2);")
+    figure = plot(tree, layout=layout, stem=False, skeleton=False, style=Style(width=600, height=300, margin=40))
+    nodes = {node.name: node for node in figure.geometry().nodes}
+    root, tip = nodes[""], nodes["C"]
+    origin = (root.x, tip.y if layout == "rectangular" else root.y)
+
+    figure += gene_path([{"branch": "C", "from": begins, "to": stops}])
+    ((path, _, _),) = _paths(figure.as_svg(), stroke="#c1443c")
+    points = _points(path)
+    for actual, depth in ((points[0], begins), (points[-1], stops)):
+        fraction = min(max(depth / 2.0, 0.0), 1.0)
+        expected = (origin[0] + fraction * (tip.x - origin[0]), origin[1] + fraction * (tip.y - origin[1]))
+        assert actual == pytest.approx(expected, abs=0.001)
+
+
 def test_depths_outside_the_branch_are_pulled_onto_it():
     figure, drawn = _gene([{"branch": "C", "from": -5.0, "to": 99.0}])
     nodes = {p.name: p for p in figure.geometry().nodes}

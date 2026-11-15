@@ -148,6 +148,8 @@ def gene_path(segments, *, color: str = "#c1443c", width: float = 1.8, dash: boo
         for piece in wanted:
             node = by_name[piece["branch"]]
             start, corner, end = _branch_corner(canvas, layout, node)
+            # `from` moves the corner, but `to` remains a depth on the original branch.
+            branch_origin = corner
             lo = layout.depth(node) if node.parent is None else layout.depth(node.parent)
             hi = layout.depth(node)
             span = (hi - lo) or 1.0
@@ -159,8 +161,10 @@ def gene_path(segments, *, color: str = "#c1443c", width: float = 1.8, dash: boo
                                   corner[1] + f * (end[1] - corner[1]))
             if stops is not None:
                 f = min(max((float(stops) - lo) / span, 0.0), 1.0)
-                end = (corner[0] + f * (end[0] - corner[0]),
-                       corner[1] + f * (end[1] - corner[1]))
+                end = (
+                    branch_origin[0] + f * (end[0] - branch_origin[0]),
+                    branch_origin[1] + f * (end[1] - branch_origin[1]),
+                )
             if offset:
                 across = (0.0, offset) if layout.grows_along_x else (offset, 0.0)
                 start = (start[0] + across[0], start[1] + across[1])

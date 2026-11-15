@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `trees.gene_path` ends a segment with both `from` and `to` at the requested depth,
+  measured from the original branch rather than from its shortened start (#76).
+
 ## [0.18.0] - 2026-10-25
 
 ### Added
