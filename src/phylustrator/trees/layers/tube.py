@@ -153,14 +153,15 @@ def gene_path(segments, *, color: str = "#c1443c", width: float = 1.8, dash: boo
             span = (hi - lo) or 1.0
             begins = piece.get("from")
             stops = piece.get("to")
+            branch_corner = corner
             if begins is not None:                  # part-way down: start on the branch itself
                 f = min(max((float(begins) - lo) / span, 0.0), 1.0)
                 start = corner = (corner[0] + f * (end[0] - corner[0]),
                                   corner[1] + f * (end[1] - corner[1]))
             if stops is not None:
                 f = min(max((float(stops) - lo) / span, 0.0), 1.0)
-                end = (corner[0] + f * (end[0] - corner[0]),
-                       corner[1] + f * (end[1] - corner[1]))
+                end = (branch_corner[0] + f * (end[0] - branch_corner[0]),
+                       branch_corner[1] + f * (end[1] - branch_corner[1]))
             if offset:
                 across = (0.0, offset) if layout.grows_along_x else (offset, 0.0)
                 start = (start[0] + across[0], start[1] + across[1])

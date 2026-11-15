@@ -142,6 +142,27 @@ def test_a_segment_can_stop_early():
     assert _points(drawn[0][0])[-1][0] < nodes["C"].x
 
 
+@pytest.mark.parametrize("layout", ["rectangular", "diagonal"])
+@pytest.mark.parametrize("begin, stop", [(1.0, 1.2), (1.0, 1.0), (1.8, 0.8), (-5.0, 1.2), (1.0, 99.0)])
+def test_segment_endpoints_are_independent(layout: str, begin: float, stop: float) -> None:
+    """Choosing a start must not move the requested end, or vice versa."""
+    tree = loads("((A:1,B:1)ab:1,C:2);")
+    figure = plot(tree, layout=layout, stem=False, skeleton=False,
+                  style=Style(width=600, height=300, margin=40))
+
+    def points(piece: dict[str, str | float]) -> list[tuple[float, float]]:
+        drawn = _paths((figure + gene_path([piece])).as_svg(), stroke="#c1443c")
+        assert len(drawn) == 1
+        return _points(drawn[0][0])
+
+    combined = points({"branch": "C", "from": begin, "to": stop})
+    assert combined[0] == pytest.approx(points({"branch": "C", "from": begin})[0], abs=0.001)
+    assert combined[-1] == pytest.approx(points({"branch": "C", "to": stop})[-1], abs=0.001)
+    if layout == "rectangular" and (begin, stop) == (1.0, 1.2):
+        assert combined[0] == pytest.approx((300.0, 260.0), abs=0.001)
+        assert combined[-1] == pytest.approx((352.0, 260.0), abs=0.001)
+
+
 def test_depths_outside_the_branch_are_pulled_onto_it():
     figure, drawn = _gene([{"branch": "C", "from": -5.0, "to": 99.0}])
     nodes = {p.name: p for p in figure.geometry().nodes}
