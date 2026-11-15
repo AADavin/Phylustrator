@@ -168,7 +168,8 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
              inset: float | None = None):
     """A gradient bar for a continuous scale, pinned to a left corner (``"top-left"`` default or
     ``"bottom-left"`` — to clear the tree). ``size`` sets the label font (default the style's). ``inset`` anchors the corner at a fixed distance instead of the style margin, so a large-margin figure can still tuck its guides into the corner. No-op
-    unless a continuous scale was set.
+    unless a continuous scale was set. Uses the most recent continuous scale, even if a
+    categorical layer has been added since.
 
     ``labels`` replaces the two end labels. The bar otherwise prints the values it was coloured by,
     which is wrong whenever those are a transform of the quantity the reader cares about: colour a
@@ -182,8 +183,8 @@ def colorbar(title: str = "", *, loc: str = "top-left", width: float = 130.0, he
     _corner(loc, "colorbar")
 
     def layer(canvas, tree, layout, style):
-        scale = canvas.scale
-        if not scale or scale.get("kind") != "continuous":
+        scale = canvas.get_scale("continuous")
+        if not scale:
             return
         _, h = canvas.size
         left, top, bottom = ((inset, inset, inset) if inset is not None else
@@ -236,17 +237,17 @@ def legend(title: str = "", *, loc: str = "top-left", swatch: float | None = Non
     tree's shape. The margin has to be wide enough, and the warning says by how much when it is not.
 
     ``size`` sets the label font (default the style's) and the swatch scales with it. Reads the
-    recorded categorical scale, or ``entries`` (``{label: colour}``) to draw an explicit list — a
-    figure whose scale slot is taken by a continuous ring still gets its categorical legend that
-    way. ``dy`` shifts the list down, so it can sit below a ``colorbar`` in the same corner. No-op
+    most recent categorical scale, even if a continuous layer has been added since, or ``entries``
+    (``{label: colour}``) to draw an explicit list. ``dy`` shifts the list down, so it can sit below
+    a ``colorbar`` in the same corner. No-op
     without a source of entries."""
     _corner(loc, "legend")
 
     def layer(canvas, tree, layout, style):
         palette = entries
         if palette is None:
-            scale = canvas.scale
-            if not scale or scale.get("kind") != "categorical":
+            scale = canvas.get_scale("categorical")
+            if not scale:
                 return
             palette = scale["palette"]
         w, h = canvas.size

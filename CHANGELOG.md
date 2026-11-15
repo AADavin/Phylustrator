@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measured from the original branch rather than from its shortened start (#76).
 - The margin a guide outside the panel asks for now covers the blocks already placed beside it, and
   is rounded up, so following the suggestion silences the warning instead of warning again (#67).
+- A figure that colours by a number **and** by a category keeps both scales: `colorbar` reads the
+  last continuous one and `legend` the last categorical one, instead of each reading whichever
+  layer went on last (#61, #65).
 
 ## [0.18.0] - 2026-10-25
 
