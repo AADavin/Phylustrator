@@ -37,8 +37,40 @@ _PAST_THE_TIP = {"right": (1.0, 0.0, "start"), "left": (-1.0, 0.0, "end"),
                  "down": (0.0, 1.0, "middle"), "up": (0.0, -1.0, "middle")}
 
 
+#: Which coordinate carries the depth, and which end of it the tips are at, per orientation. An
+#: aligned column stands at the furthest tip's depth, and "furthest" is the far end of that axis.
+_DEPTH_AXIS = {"right": (0, max), "left": (0, min), "down": (1, max), "up": (1, min)}
+
+
+def _column(tree, layout) -> float:
+    """The depth coordinate every aligned name is written at: past the furthest tip."""
+    which, far = _DEPTH_AXIS[layout.orientation]
+    return float(far(layout.coords[leaf][which] for leaf in tree.leaves))
+
+
+def _leader(canvas, layout, leaf, at_x, at_y, ox, oy, gap, color, width, dash) -> None:
+    """The thin dotted join from a tip to its name in the column.
+
+    Drawn from a little past the tip to a little before the text, so it touches neither: a leader
+    that runs into the glyphs reads as an underline, and one that starts on the tip reads as more
+    branch."""
+    sx, sy = canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf))
+    # measured to the **column**, not to the text: every name stands one gap past the column, so a
+    # tip already at it would still look a gap short and get a stub of a leader lying on itself
+    if math.hypot(canvas.px(at_x) - sx, canvas.py(at_y) - sy) < 1.0:
+        return
+    ex, ey = canvas.px(at_x) + ox * gap, canvas.py(at_y) + oy * gap
+    clear = 2.0
+    sx, sy = sx + ox * clear, sy + oy * clear
+    ex, ey = ex - ox * clear, ey - oy * clear
+    canvas.raw_path(f"M {sx:g},{sy:g} L {ex:g},{ey:g}", stroke=color, stroke_width=width,
+                    dash=dash, cap="butt")
+
+
 def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=None,
-               upright: bool = False):
+               upright: bool = False, aligned: bool = False, leader: bool = True,
+               leader_color: str = "#bbbbbb", leader_width: float = 0.7,
+               leader_dash: str = "1,3"):
     """Write each leaf's name just past its tip. On a rectangular tree the names sit to the right; on
     a diagonal tree they follow its orientation — to the right, or centred under the tips of a
     ``"down"`` tree — and stay upright; on a radial or unrooted tree they are rotated to run along
@@ -49,10 +81,23 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
     ``upright=True`` keeps a radial or unrooted tree's names horizontal instead of turning them
     along the branch. A turned name is what a large circular tree needs, where the names make a
     fan; a small diagram of five taxa wants them read straight, as a LaTeX figure sets them.
+
+    ``aligned=True`` writes every name in **one column** past the furthest tip, and joins each
+    shorter tip to its name with a thin dotted leader. On a tree drawn to scale the tips are ragged
+    and so are the names; the alternative was ``align_tips``, which lines them up by drawing the
+    terminal branches longer than they are, so the figure no longer shows the lengths it is about.
+    ``leader=False`` leaves the joins out, and ``leader_color`` / ``leader_width`` / ``leader_dash``
+    set how they look. Rectangular and diagonal trees, where the tips end along one line.
     Returns a layer."""
     say = _labeller(values, text)
 
     def layer(canvas, tree, layout, style):
+        if aligned and layout.kind not in ("rectangular", "diagonal"):
+            raise ValueError(f"tip_labels(aligned=True) writes the names in one column past the "
+                             f"furthest tip, which needs a layout whose tips end along a line — "
+                             f"rectangular or diagonal; got {layout.kind!r}. On a round tree the "
+                             f"names already fan out from one centre.")
+        edge = _column(tree, layout) if aligned else None
         for leaf in tree.leaves:
             written = say(leaf)
             if not written:
@@ -62,13 +107,20 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
                 # across the text rather than along it, the gap has to clear the glyphs themselves,
                 # since the baseline runs through the middle of them
                 gap = offset + (0.0 if oy == 0 else (size or style.font_size) * 0.45)
-                canvas.text(layout.x(leaf), layout.y(leaf), written, dx=ox * gap, dy=oy * gap,
+                # aligned, the name stands at the column rather than at its own tip; the tip keeps
+                # its place, and the leader is what says which name belongs to it
+                at_x = layout.x(leaf) if ox == 0 else (edge if aligned else layout.x(leaf))
+                at_y = layout.y(leaf) if oy == 0 else (edge if aligned else layout.y(leaf))
+                if aligned and leader:
+                    _leader(canvas, layout, leaf, at_x, at_y, ox, oy, gap,
+                            leader_color, leader_width, leader_dash)
+                canvas.text(at_x, at_y, written, dx=ox * gap, dy=oy * gap,
                             anchor=anchor, size=size, color=color)
                 # a key placed beside the figure has to clear these, and only this layer knows how
                 # long they are
                 fs = size or style.font_size
                 wide, tall = len(written) * fs * 0.58, fs
-                tx, ty = canvas.px(layout.x(leaf)) + ox * gap, canvas.py(layout.y(leaf)) + oy * gap
+                tx, ty = canvas.px(at_x) + ox * gap, canvas.py(at_y) + oy * gap
                 if ox > 0:
                     canvas.claim("right", tx + wide)
                 elif oy > 0:
