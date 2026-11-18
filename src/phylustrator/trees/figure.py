@@ -25,11 +25,14 @@ from .tree import Tree
 
 Layer = Callable[[Canvas, Tree, Layout, Style], None]
 
-_LAYOUTS = {"rectangular": rectangular, "radial": radial, "unrooted": unrooted,
-            "diagonal": diagonal}
+# Annotated, because the four do not take the same keywords — only the flat two take an
+# orientation, and only three take align_tips — so the call below passes what each one accepts.
+_LAYOUTS: dict[str, Callable[..., Layout]] = {
+    "rectangular": rectangular, "radial": radial, "unrooted": unrooted, "diagonal": diagonal}
 
-#: Layouts that take an ``orientation``; the others always grow to the right.
-_TURNS = ("diagonal",)
+#: Layouts that take an ``orientation``: the flat ones. A round layout places its branches by angle
+#: from a centre, so there is no direction left to choose.
+_TURNS = ("rectangular", "diagonal")
 
 #: The layouts drawn at one scale for both axes, where a circle has to come out round. The others
 #: give each axis the whole panel: tip order fills one and depth fills the other, as a phylogram is
@@ -121,8 +124,8 @@ class Figure:
         if layout not in _LAYOUTS:
             raise ValueError(f"unknown layout {layout!r}; choose from {sorted(_LAYOUTS)}")
         if orientation != "right" and layout not in _TURNS:
-            raise ValueError(f"the {layout} layout always grows to the right; only "
-                             f"{', '.join(_TURNS)} takes an orientation")
+            raise ValueError(f"the {layout} layout places its branches by angle from a centre, so "
+                             f"it has no orientation to take; {' and '.join(_TURNS)} do")
         if align_tips and layout not in _ALIGNS:
             raise ValueError(f"the {layout} layout has no tip row to line the tips up on: it places "
                              f"branches by angle from a centre. align_tips is for "
@@ -287,9 +290,11 @@ def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
     what a large tree needs: drawn to scale, a deep clade's short branches collapse onto the centre
     of a radial tree and cannot be read.
 
-    ``orientation`` turns the ``diagonal`` layout — ``"right"`` (the default), ``"down"`` for the
-    usual teaching diagram with the root at the top, ``"left"`` or ``"up"``. The other layouts
-    always grow to the right and refuse it.
+    ``orientation`` turns a flat layout, ``rectangular`` or ``diagonal`` — ``"right"`` (the
+    default), ``"down"`` for the root at the top and the tips along the bottom, ``"left"`` or
+    ``"up"``. Text stays upright in all four, which is why this is a layout and not a rotation of
+    the finished drawing. The round layouts place branches by angle from a centre, so they have no
+    orientation to take and refuse it.
 
     ``align_tips=True`` ends every lineage on the furthest tip's row, which is how a teaching
     diagram lines its taxa up. It changes the drawing and not the tree, so a figure that carries

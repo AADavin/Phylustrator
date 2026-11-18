@@ -38,8 +38,9 @@ class Layout:
     root_branch: float = 0.0  # length of the root's stem as laid out (0 when stem is hidden/absent)
     angle: dict | None = None  # radial only: each node's angle in radians, monotonic (no atan2 wrap)
     #: which way the tree grows from its root — ``"right"`` (the default everywhere else),
-    #: ``"down"``, ``"left"`` or ``"up"``. Only ``diagonal`` turns; a layer that places something
-    #: beside a tip reads this rather than assuming the tips face right.
+    #: ``"down"``, ``"left"`` or ``"up"``. The flat layouts, ``rectangular`` and ``diagonal``, turn;
+    #: the round ones face right by definition. A layer that places something beside a tip reads
+    #: this rather than assuming the tips face right.
     orientation: str = "right"
     #: each node's depth from the origin, in the tree's own units, whatever direction it is drawn
     #: in. A turned layout has no one axis that carries time, so a layer that needs a distance
@@ -103,18 +104,54 @@ def _tip_order_y(tree: Tree) -> dict[Node, float]:
     return y
 
 
-def rectangular(tree: Tree, *, stem: bool = True, cladogram: bool = False,
-                align_tips: bool = False) -> Layout:
-    """Phylogram: ``x`` = distance from the origin, ``y`` = tip order. With ``stem`` (the default) the
-    origin is the start of the root branch and the crown sits at ``root.length``; otherwise the origin
-    is the crown. ``align_tips`` ends every lineage on the furthest tip's row."""
+#: The four ways a rooted tree may face. The name says where the tips are, as a reader describes
+#: a figure: a ``"down"`` tree has its root at the top and its tips along the bottom.
+ORIENTATIONS = ("right", "down", "left", "up")
+
+
+def _turned(kind: str, tree: Tree, *, stem: bool, cladogram: bool, orientation: str,
+            align_tips: bool) -> Layout:
+    """The coordinates of a rooted tree facing any of the four ways: depth along one axis of the
+    page, tip order along the other.
+
+    ``rectangular`` and ``diagonal`` share this. They are the same tree in the same places and
+    differ only in how a branch is drawn between them — a right-angle pair or one slanted segment —
+    so having two copies of the turning would be two chances to turn it differently."""
+    if orientation not in ORIENTATIONS:
+        raise ValueError(f"orientation must be one of {', '.join(ORIENTATIONS)}, not {orientation!r}")
     offset = float(tree.root.length) if stem else 0.0
-    base = _distance_from_crown(tree, cladogram, align_tips)
-    y = _tip_order_y(tree)
-    coords = {node: (base[node] + offset, y[node]) for node in tree.walk()}
-    x_max = max(p[0] for p in coords.values())
-    y_vals = [p[1] for p in coords.values()]
-    return Layout("rectangular", coords, (0.0, x_max), (min(y_vals), max(y_vals)), root_branch=offset)
+    depth = {node: d + offset
+             for node, d in _distance_from_crown(tree, cladogram, align_tips).items()}
+    order = _tip_order_y(tree)
+    # the depth axis points away from the root; the order axis is the page's other one. Flipping
+    # depth (left/up) rather than reversing the tip order keeps the tips in the order they were
+    # read, so a figure turned round is the same tree, not its mirror image.
+    flip = -1.0 if orientation in ("left", "up") else 1.0
+    along_x = orientation in ("right", "left")
+    coords = {node: ((flip * depth[node], order[node]) if along_x
+                     else (order[node], flip * depth[node]))
+              for node in tree.walk()}
+    # the stem is drawn back from the root to depth 0, so the extent has to reach it or the stem
+    # runs off the page
+    xs = [p[0] for p in coords.values()] + ([0.0] if along_x else [])
+    ys = [p[1] for p in coords.values()] + ([] if along_x else [0.0])
+    return Layout(kind, coords, (min(xs), max(xs)), (min(ys), max(ys)),
+                  root_branch=offset, orientation=orientation, depths=depth)
+
+
+def rectangular(tree: Tree, *, stem: bool = True, cladogram: bool = False,
+                orientation: str = "right", align_tips: bool = False) -> Layout:
+    """Phylogram: distance from the origin along one axis, tip order along the other, with each
+    branch drawn as a connector and a run meeting at a right angle. With ``stem`` (the default) the
+    origin is the start of the root branch and the crown sits at ``root.length``; otherwise the
+    origin is the crown. ``align_tips`` ends every lineage on the furthest tip's row.
+
+    ``orientation`` says where the tips go: ``"right"`` (the default, root on the left), ``"down"``
+    (root at the top, tips along the bottom — how a tree goes into a multi-panel figure beside
+    another), ``"left"`` or ``"up"``. Text stays upright in all four, which is why this is a layout
+    and not a rotation of the finished drawing."""
+    return _turned("rectangular", tree, stem=stem, cladogram=cladogram, orientation=orientation,
+                   align_tips=align_tips)
 
 
 def radial(tree: Tree, *, stem: bool = False, start: float = 0.0, end: float = 350.0,
@@ -141,11 +178,6 @@ def radial(tree: Tree, *, stem: bool = False, start: float = 0.0, end: float = 3
                   root_branch=0.0, angle=angle)
 
 
-#: The four ways a rooted tree may face. The name says where the tips are, as a reader describes
-#: a figure: a ``"down"`` tree has its root at the top and its tips along the bottom.
-ORIENTATIONS = ("right", "down", "left", "up")
-
-
 def diagonal(tree: Tree, *, stem: bool = True, cladogram: bool = False,
              orientation: str = "right", align_tips: bool = False) -> Layout:
     """Rooted tree whose branches are straight slanted segments from parent to child — the shape of a
@@ -161,25 +193,8 @@ def diagonal(tree: Tree, *, stem: bool = True, cladogram: bool = False,
     ``orientation`` says where the tips go: ``"right"`` (the default, root on the left), ``"down"``
     (root at the top, the usual teaching diagram), ``"left"`` or ``"up"``. Text stays upright in all
     four, which is why this is a layout and not a rotation of the finished drawing."""
-    if orientation not in ORIENTATIONS:
-        raise ValueError(f"orientation must be one of {', '.join(ORIENTATIONS)}, not {orientation!r}")
-    offset = float(tree.root.length) if stem else 0.0
-    depth = {node: d + offset
-             for node, d in _distance_from_crown(tree, cladogram, align_tips).items()}
-    order = _tip_order_y(tree)
-    # the depth axis points away from the root; the order axis is the page's other one. Flipping
-    # depth (left/up) rather than reversing the tip order keeps the tips in the order they were
-    # read, so a figure turned round is the same tree, not its mirror image.
-    flip = -1.0 if orientation in ("left", "up") else 1.0
-    coords = {node: ((flip * depth[node], order[node]) if orientation in ("right", "left")
-                     else (order[node], flip * depth[node]))
-              for node in tree.walk()}
-    # the stem is drawn back from the root to depth 0, so the extent has to reach it or the stem
-    # runs off the page (rectangular includes it by starting its xlim at 0 for the same reason)
-    xs = [p[0] for p in coords.values()] + ([0.0] if orientation in ("right", "left") else [])
-    ys = [p[1] for p in coords.values()] + ([] if orientation in ("right", "left") else [0.0])
-    return Layout("diagonal", coords, (min(xs), max(xs)), (min(ys), max(ys)),
-                  root_branch=offset, orientation=orientation, depths=depth)
+    return _turned("diagonal", tree, stem=stem, cladogram=cladogram, orientation=orientation,
+                   align_tips=align_tips)
 
 
 def _leaf_counts(tree: Tree) -> dict[Node, int]:

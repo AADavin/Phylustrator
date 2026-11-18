@@ -22,8 +22,11 @@ def _along(layout, node, at: float):
     if node.parent is None:
         return x, y
     if layout.kind == "rectangular":
-        # the drawn branch is the horizontal run at this node's row; the drop belongs to the parent
-        return layout.x(node.parent) + at * (x - layout.x(node.parent)), y
+        # the drawn branch is the run along the depth axis at this node's row; the connector belongs
+        # to the parent. A turned tree carries its depth down the page, so the run does too.
+        if layout.grows_along_x:
+            return layout.x(node.parent) + at * (x - layout.x(node.parent)), y
+        return x, layout.y(node.parent) + at * (y - layout.y(node.parent))
     if layout.kind == "radial":
         a = layout.angle[node]
         r_parent = math.hypot(layout.x(node.parent), layout.y(node.parent))
@@ -73,7 +76,11 @@ def _label_side(canvas, layout, node, px_, py_, cx0, cy0):
     ax, ay = canvas.px(layout.x(node.parent)), canvas.py(layout.y(node.parent))
     bx, by = canvas.px(layout.x(node)), canvas.py(layout.y(node))
     if layout.kind == "rectangular":
-        ay = by                                    # the drawn branch is the horizontal run
+        # the drawn branch is the run along the depth axis, so the other coordinate is the node's
+        if layout.grows_along_x:
+            ay = by
+        else:
+            ax = bx
     dx, dy = bx - ax, by - ay
     d = math.hypot(dx, dy)
     if d < 1e-9:
@@ -84,8 +91,11 @@ def _label_side(canvas, layout, node, px_, py_, cx0, cy0):
     if layout.kind in ("radial", "unrooted"):
         if nx * (px_ - cx0) + ny * (py_ - cy0) < 0:
             nx, ny = -nx, -ny
-    elif ny > 0:
-        nx, ny = -nx, -ny
+    elif layout.grows_along_x:
+        if ny > 0:
+            nx, ny = -nx, -ny                      # above the branch, where a support value goes
+    elif nx > 0:
+        nx, ny = -nx, -ny                          # a turned tree has no "above": keep to one side
     return nx, ny
 
 

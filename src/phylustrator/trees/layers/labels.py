@@ -117,7 +117,7 @@ def node_labels(*, size=None, color="#888888", offset: float = 4.0, values=None,
             written = say(node)
             if not written:
                 continue
-            if layout.kind == "diagonal" and not layout.grows_along_x:
+            if not layout.grows_along_x:
                 # the tree runs down the page, so above-left of the node is on top of its own
                 # branch: put the name beside it, clear of the fork
                 canvas.text(layout.x(node), layout.y(node), written, dx=offset, dy=-offset,

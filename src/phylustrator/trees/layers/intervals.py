@@ -39,7 +39,7 @@ def node_intervals(spans, *, color: str = "#6a9bd8", colors: dict | None = None,
             raise ValueError("node_intervals needs a layout with a distance axis, and the unrooted "
                              "layout has none: it places branches by angle, so an age is not a place "
                              "on it. Use the rectangular or radial layout.")
-        if layout.kind == "diagonal" and not layout.grows_along_x:
+        if not layout.grows_along_x:
             raise ValueError(f"node_intervals cannot be drawn on a {layout.orientation} tree: it "
                              f"carries its time down the page, and the bar at a node's row would "
                              f"run across it. Use orientation='right' or 'left'.")

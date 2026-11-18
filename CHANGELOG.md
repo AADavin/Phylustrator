@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.plot(layout="rectangular", orientation=…)` — the rectangular layout turns, as the diagonal
+  one already did: `"right"` (the default), `"down"` for the root at the top and the tips along the
+  bottom, `"left"` or `"up"`. That is how a tree goes into a multi-panel figure beside another one,
+  and the only ways to get it were a slanted tree or rotating the finished SVG, which lays every
+  name on its side. The two flat layouts are the same tree in the same places and differ only in
+  how a branch is drawn between them, so they now share one turning rather than keeping two copies
+  of it. The drawing follows: the run goes along the depth axis and the connector across it,
+  whichever way round those are. So do the layers that had assumed a rectangular branch runs across
+  the page — branch colouring, the marks and their labels, the species tube's corner, the events on
+  a branch, and the branch walk a corner key uses to see what it would cover. A turned tree gets a
+  scale bar rather than a time axis, as a turned diagonal tree does (#68).
 - Every `cmap=` in the library takes a ramp of your own, not only one of the six built-in names: the
   colours themselves — `cmap=["#fff7bc", "#fec44f", "#d95f0e", "#993404"]`, hex strings or
   `(R, G, B)` triples in 0–255, read as evenly spaced anchors — or a name given to such a list once
@@ -17,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounds to `(1, 0, 0)`, so the silent version of that mistake is a black figure (#70).
 
 ### Fixed
+- `trees.tube` left a zero-length path at the open end of the stem instead of a line across it: the
+  cap was measured between the root's corner and its start, which for a root are the same point, so
+  it had no direction to lie across. Every orientation, and visible as a stray dot in the PNG.
 - The right and bottom margins are **automatic** unless the style pins them: the panel narrows
   until the tip names, the chips past them and any key placed beside the figure fit the page. A
   long tip label used to be cut off at the right edge, because the canvas size was fixed before any
