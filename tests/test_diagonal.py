@@ -681,3 +681,103 @@ def test_geometry_and_the_drawing_agree_about_the_scale():
     drawn = [float(y) for _, y in re.findall(r"([-\d.]+),([-\d.]+)", svg)]
     nodes = [p.y for p in figure.geometry().nodes]
     assert max(drawn) == pytest.approx(max(nodes), abs=1.0)
+
+
+# --- italic that survives the PNG and the PDF (issue #73) ----------------------------------------
+
+
+def _name_line(figure, name="a"):
+    return [line for line in figure.as_svg().splitlines() if f">{name}</text>" in line][0]
+
+
+def _italic_figure(**style):
+    return (plot(loads(_DOT_NWK), style=Style(label_style="italic", **style)) + tip_labels())
+
+
+def test_a_family_with_no_italic_face_is_leaned_by_hand():
+    """`font-style="italic"` is a request, and cairosvg honours it only when the family ships an
+    Italic face. Helvetica ships an Oblique, so the names came out upright in the PNG while the SVG
+    said italic — right on screen, wrong in the file that goes into the paper."""
+    from phylustrator import render
+    render._ITALIC_SEEN.clear()
+    render._ITALIC_SEEN["Helvetica"] = False
+    line = _name_line(_italic_figure(font_family="Helvetica"))
+    assert "skewX(-12)" in line
+    assert "font-style" not in line, "asking for it as well would lean a browser's text twice"
+    render._ITALIC_SEEN.clear()
+
+
+def test_a_family_that_has_one_is_left_alone():
+    from phylustrator import render
+    render._ITALIC_SEEN.clear()
+    render._ITALIC_SEEN["Times New Roman"] = True
+    line = _name_line(_italic_figure(font_family="Times New Roman"))
+    assert 'font-style="italic"' in line and "skewX" not in line
+    render._ITALIC_SEEN.clear()
+
+
+def test_the_lean_is_about_the_label_s_own_point():
+    """Skew is measured from the origin, so a label leaned without being moved there first slides
+    across the figure by its own height times the slant."""
+    from phylustrator import render
+    render._ITALIC_SEEN.clear()
+    render._ITALIC_SEEN["Helvetica"] = False
+    line = _name_line(_italic_figure(font_family="Helvetica"))
+    x, y = re.search(r'<text x="([-\d.]+)" y="([-\d.]+)"', line).groups()
+    there, back = re.findall(r"translate\(([-\d.]+) ([-\d.]+)\)", line)
+    assert (float(there[0]), float(there[1])) == pytest.approx((float(x), float(y)), abs=0.01)
+    assert (float(back[0]), float(back[1])) == pytest.approx((-float(x), -float(y)), abs=0.01)
+    render._ITALIC_SEEN.clear()
+
+
+def test_a_turned_label_keeps_its_turn_and_gains_the_lean():
+    from phylustrator import render
+    render._ITALIC_SEEN.clear()
+    render._ITALIC_SEEN["Helvetica"] = False
+    figure = (plot(loads(_DOT_NWK), layout="radial",
+                   style=Style(label_style="italic", font_family="Helvetica")) + tip_labels())
+    turned = [line for line in figure.as_svg().splitlines()
+              if "<text" in line and "rotate(" in line]
+    assert turned, "a radial tree turns its names along the branch"
+    assert all("skewX" in line for line in turned)
+    assert all(line.index("rotate(") < line.index("skewX") for line in turned)
+    render._ITALIC_SEEN.clear()
+
+
+def test_upright_text_is_untouched():
+    line = _name_line(plot(loads(_DOT_NWK)) + tip_labels())
+    assert "skewX" not in line and "font-style" not in line
+
+
+def test_a_probe_that_cannot_run_leaves_the_italic_alone(monkeypatch):
+    """A check that cannot run must not cost anyone their slant."""
+    import cairosvg
+
+    from phylustrator import render
+    render._ITALIC_SEEN.clear()
+
+    def boom(**kw):
+        raise RuntimeError("probe broke")
+
+    monkeypatch.setattr(cairosvg, "svg2png", boom)
+    assert render.font_has_italic("Whatever Face") is True
+    render._ITALIC_SEEN.clear()
+
+
+def test_a_family_is_asked_about_once(monkeypatch):
+    import cairosvg
+
+    from phylustrator import render
+    render._ITALIC_SEEN.clear()
+    calls = []
+
+    def counted(**kw):
+        calls.append(1)
+        return b"png-" + str(len(calls)).encode()
+
+    monkeypatch.setattr(cairosvg, "svg2png", counted)
+    render.font_has_italic("Some Face")
+    assert len(calls) == 2, "the word upright, and the word italic"
+    render.font_has_italic("Some Face")
+    assert len(calls) == 2
+    render._ITALIC_SEEN.clear()
