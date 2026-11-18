@@ -27,7 +27,11 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "drawsvg",
+    # 2.5.0 (18 November 2026) raises NameError at import on every Python we support: its
+    # drawing.py annotates a default argument with SyncedAnimationConfig without importing it.
+    # Nothing here can work around an import that fails, so that one release is excluded rather
+    # than the 2.5 line, and a fixed 2.5.1 will be taken as soon as it exists.
+    "drawsvg>=2.0,!=2.5.0",
 ]
 
 [project.urls]
