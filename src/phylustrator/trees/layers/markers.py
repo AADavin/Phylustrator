@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 
-from ...color import map_values
+from ...color import Colormap, map_values
 
 
 def _along(layout, node, at: float):
@@ -89,7 +89,7 @@ def _label_side(canvas, layout, node, px_, py_, cx0, cy0):
     return nx, ny
 
 
-def branch_markers(values, *, at: float = 0.8, cmap: str = "viridis", palette: dict | None = None,
+def branch_markers(values, *, at: float = 0.8, cmap: Colormap = "viridis", palette: dict | None = None,
                    limits: tuple[float, float] | None = None, size: float = 5.0,
                    shape: str = "circle", stroke: str = "#1a1a1a", stroke_width: float = 0.8,
                    labels: dict | None = None, label_size: float | None = None,

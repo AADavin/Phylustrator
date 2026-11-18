@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 
-from ...color import colormap, to_hex
+from ...color import Colormap, colormap, to_hex
 from ..track import draw_genes
 
 
@@ -16,7 +16,7 @@ def _key(value: str):
     return (0, int(value)) if str(value).lstrip("-").isdigit() else (1, str(value))
 
 
-def genes(by: str = "family", *, cmap: str = "viridis", palette: dict | None = None):
+def genes(by: str = "family", *, cmap: Colormap = "viridis", palette: dict | None = None):
     """Colour gene arrows by ``by`` (an attribute of each gene). Returns a layer."""
 
     def layer(canvas, primary, layout, style):

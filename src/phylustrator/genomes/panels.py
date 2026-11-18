@@ -8,7 +8,7 @@ rows. ``heatmap`` shows a :class:`~genustrator.matrix.Matrix`; ``alignment`` sho
 
 from __future__ import annotations
 
-from ..color import colormap, to_hex
+from ..color import Colormap, colormap, to_hex
 
 # A clean nucleotide palette; unknown residues fall back to a neutral grey.
 NT_COLORS = {"A": "#3a923a", "C": "#3a6ea5", "G": "#e0a327", "T": "#c1443c",
@@ -358,7 +358,7 @@ class Tracks:
     ``palette`` (``{family: colour}``) overrides either.
     """
 
-    def __init__(self, genomes, *, reference=None, cmap: str = "viridis", palette=None,
+    def __init__(self, genomes, *, reference=None, cmap: Colormap = "viridis", palette=None,
                  ribbons: bool = True, opacity: float = 0.30, gene_gap: float = 0.16,
                  gene_height: float = 0.58):
         self.genomes = list(genomes)
@@ -431,7 +431,7 @@ class Tracks:
                                       opacity=self.opacity)
 
 
-def tracks(genomes, *, reference=None, cmap: str = "viridis", palette=None,
+def tracks(genomes, *, reference=None, cmap: Colormap = "viridis", palette=None,
            ribbons: bool = True, opacity: float = 0.30, gene_height: float = 0.58) -> Tracks:
     """Genomes as gene tracks beside a tree, homologues ribboned between neighbouring rows.
 
