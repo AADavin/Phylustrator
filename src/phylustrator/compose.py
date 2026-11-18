@@ -141,10 +141,32 @@ def _letters_for(labels, cells: int):
     return given[:cells]
 
 
+def _spans(labels, n: int, which: str) -> list[tuple[str, int, int]]:
+    """``["a", "b"]`` or ``[("ALE", 2), ("TEQUILA", 2)]`` as ``(text, first, last)`` over the grid.
+
+    A plain string covers one row or column; a pair says how many it covers, which is how one name
+    goes over a group of them — two rows of one analysis, say."""
+    out: list[tuple[str, int, int]] = []
+    at = 0
+    for entry in labels:
+        text, span = entry if isinstance(entry, (tuple, list)) else (entry, 1)
+        span = int(span)
+        if span < 1:
+            raise ValueError(f"page: a {which} label spans at least one {which}; got {span}")
+        out.append((text, at, at + span - 1))
+        at += span
+    if at != n:
+        raise ValueError(f"page: the {which} labels cover {at} {which}s, but the grid has {n}. "
+                         f"Give one per {which}, or (text, span) pairs that add up to {n}.")
+    return out
+
+
 def page(rows, *, width: float = 800.0, height: float | None = None, title: str | None = None,
          letters=None, gap: float = 16.0, pad: float = 20.0, units: str | None = None,
          background: str = "white", title_size: float | None = None,
-         letter_size: float | None = None, style: Style | None = None) -> Composite:
+         letter_size: float | None = None, col_labels=None, row_labels=None,
+         label_size: float | None = None, label_color: str | None = None,
+         style: Style | None = None) -> Composite:
     """Several independent figures on one page, nested **as vectors**.
 
     ``rows`` is a list of rows, each a list of figures; a flat list is one row, and ``None`` leaves
@@ -160,6 +182,13 @@ def page(rows, *, width: float = 800.0, height: float | None = None, title: str 
     45/55 split it would sit left of the middle. ``letters=True`` writes A, B, C … at the corner of
     each cell in reading order, or pass the labels yourself.
 
+    ``col_labels`` names the columns across the top and ``row_labels`` names the rows down the
+    left, each centred on the cells it covers, as ``title`` is centred on the page — what a grid of
+    small multiples needs, the same tree coloured three ways under four analyses. One label per
+    column or row, or ``(text, span)`` pairs so one name covers a group of them:
+    ``row_labels=[("ALE", 2), ("TEQUILA", 2)]`` over four rows. A row label is turned to read
+    upwards, which is what keeps the gutter narrow enough to be worth having.
+
     ``units`` ("pt", "mm", "cm", "in") sets the page's physical size, leaving the drawing in pixels
     underneath, so a figure can be made to hit a journal's column width exactly: ``width=482,
     units="pt"`` is a 482 pt page. Saves to ``.svg``, ``.pdf`` or ``.png`` like any figure."""
@@ -169,8 +198,14 @@ def page(rows, *, width: float = 800.0, height: float | None = None, title: str 
     base = style or Style()
     ts = title_size if title_size is not None else base.font_size * 1.5
     ls = letter_size if letter_size is not None else base.font_size * 1.25
-    head = (ts * 1.9 if title else 0.0)
-    cell_w = (width - 2 * pad - gap * (n_cols - 1)) / n_cols
+    cs = label_size if label_size is not None else base.font_size * 1.1
+    paint = label_color if label_color is not None else base.label_color
+    columns = _spans(col_labels, n_cols, "column") if col_labels else []
+    rows_named = _spans(row_labels, len(grid), "row") if row_labels else []
+    band = cs * 1.9 if columns else 0.0            # above the grid, under the title
+    gutter = cs * 1.9 if rows_named else 0.0       # to the left of it
+    head = (ts * 1.9 if title else 0.0) + band
+    cell_w = (width - 2 * pad - gutter - gap * (n_cols - 1)) / n_cols
 
     # a row is as tall as the tallest cell in it, keeping each figure's own proportions
     row_heights = []
@@ -197,11 +232,30 @@ def page(rows, *, width: float = 800.0, height: float | None = None, title: str 
 
     # letters go to the figures, not to the cells: an empty cell is a gap in the page, and a gap
     # should not eat a letter and leave the next panel called C
+    def cell_x(i: int) -> float:
+        return pad + gutter + i * (cell_w + gap)
+
+    top = pad + head
+    for text, first, last in columns:
+        middle = (cell_x(first) + cell_x(last) + cell_w) / 2
+        canvas.raw_text(middle, top - band + cs * 0.9, str(text), anchor="middle", weight="bold",
+                        size=cs, color=paint)
+    if rows_named:
+        edges, at = [], top
+        for row_h in row_heights:
+            edges.append((at, at + row_h))
+            at += row_h + gap
+        for text, first, last in rows_named:
+            middle = (edges[first][0] + edges[last][1]) / 2
+            # turned to read upwards, so the gutter is a line of text wide and not a name wide
+            canvas.raw_text(pad + cs * 0.9, middle, str(text), anchor="middle", weight="bold",
+                            size=cs, color=paint, rotate=-90.0)
+
     marks = _letters_for(letters, sum(1 for r in grid for c in r if c is not None))
     seen = 0
-    y = pad + head
+    y = top
     for row, row_h in zip(grid, row_heights):
-        x = pad
+        x = pad + gutter
         for figure in row:
             if figure is not None:
                 mark = marks[seen]

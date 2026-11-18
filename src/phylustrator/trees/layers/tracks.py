@@ -78,16 +78,43 @@ def _header(canvas, style, chips, label, angle, fsize, chip, layout) -> None:
     canvas.raw_text(x, y, label, anchor=anchor, size=fs, rotate=angle)
 
 
+def _bands(ordered, colors, values):
+    """The contiguous runs of one value, as ``(value, first index, last index)``.
+
+    A band is a run and not a value: two groups of tips that happen to carry the same name are two
+    bands on the ring, and naming them once between them would put the name in the gap."""
+    runs = []
+    for i, leaf in enumerate(ordered):
+        here = values.get(leaf.name)
+        if here is None or colors.get(leaf.name) is None:
+            continue
+        if runs and runs[-1][0] == here and runs[-1][2] == i - 1:
+            runs[-1][2] = i
+        else:
+            runs.append([here, i, i])
+    return [tuple(r) for r in runs]
+
+
 def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
          gap: float | None = None, width: float | None = None, radius_pct: float = 100.0,
-         opacity: float = 1.0, edge: str | None = None, edge_width: float = 0.6):
+         opacity: float = 1.0, edge: str | None = None, edge_width: float = 0.6,
+         labels=None, label_size: float | None = None, label_color: str | None = None,
+         label_offset: float = 10.0):
     """An outer ring of coloured arcs — one contiguous segment per tip at a fixed radius — the
     classic circular-tree "population ring". Best with a ``radial`` (or ``unrooted``) layout: each
     tip's arc spans the angle halfway to its neighbours, so same-coloured neighbours merge into a
     band. ``edge`` outlines every sector in one colour (so a white sector still shows). ``radius_pct`` sets the ring's radius as that percentile of the tip distances (100 = at the
     outermost tip; lower brings it in, so a few long branches can extend past it instead of blowing
     the ring outward). Colours ``values`` like :func:`color_branches` and records the scale for a
-    ``legend``. Returns a layer."""
+    ``legend``.
+
+    ``labels=True`` writes each band's own value just outside the ring, at the middle of the band
+    and upright, which is how the major clades around a circular tree are usually named — the
+    alternative was a key away from the tree. ``labels={value: text}`` writes something else, and a
+    value left out of that dict is not labelled. A band is a **run** of neighbouring tips, so a
+    value that appears in two places on the ring is named twice, once on each; naming it once would
+    put the name in the gap between them. ``label_color`` defaults to the band's own colour.
+    Returns a layer."""
 
     def layer(canvas, tree, layout, style):
         colors, scale = map_values(values, cmap=cmap, palette=palette)
@@ -125,6 +152,23 @@ def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
                                           fill=color, stroke=edge or color,
                                           stroke_width=edge_width if edge else 0.4,
                                           opacity=opacity)
+        if not labels:
+            return
+        said = labels if isinstance(labels, dict) else None
+        fs = label_size if label_size is not None else style.font_size * 0.95
+        by_name = {str(k): v for k, v in values.items()}
+        for value, first, last in _bands(ordered, colors, {lf.name: by_name.get(lf.name)
+                                                           for lf in ordered}):
+            written = said.get(value) if said is not None else value
+            if written is None or written == "":
+                continue
+            mid = (b[first] + b[last + 1]) / 2
+            r = r_out + label_offset
+            x, y = cx0 + r * math.cos(mid), cy0 + r * math.sin(mid)
+            # upright, and growing away from the tree rather than back across it
+            canvas.raw_text(x, y, str(written), anchor="start" if math.cos(mid) >= 0 else "end",
+                            size=fs, color=label_color or colors[ordered[first].name],
+                            family=style.label_family)
 
     return layer
 

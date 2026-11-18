@@ -38,7 +38,7 @@ DEFAULT_EVENT_STYLES = {
 
 
 #: What one event may say about its own drawing, on top of what its kind says.
-_OVERRIDES = ("weight", "color", "size", "side", "offset")
+_OVERRIDES = ("weight", "color", "size", "side", "offset", "curve")
 
 
 def _unpack(ev):
@@ -87,7 +87,7 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                   legend_loc: str = "top-right", legend_size: float | None = None,
                   clamp: bool = True, weight_floor: float = 0.25,
                   outside_length: float = 22.0, outside_side: str = "above",
-                  offset: float = 0.0):
+                  offset: float = 0.0, curve: float = 20.0):
     """Mark ``events`` on the tree. ``styles`` maps a kind to ``(glyph, colour)`` (merged over the
     D/T/L/O default). ``legend_loc`` is a corner; ``legend_size`` sets the legend font size (glyphs
     scale with it). ``clamp`` keeps a point marker within its branch's span.
@@ -95,6 +95,11 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
     An event may carry its own ``weight`` (0-1), ``color`` and ``size`` — see the module docstring.
     ``weight_floor`` is how much of the kind's style a weight of 0 keeps, so the lightest mark is
     still visible.
+
+    ``curve`` is how far a transfer arrow bows out, in pixels; ``curve=0`` draws it straight, which
+    is what a rectangular tree wants — a transfer happens at one time, so a straight arrow at that
+    time shows the donor and the recipient both standing there. One event may carry its own
+    ``"curve"``, for the arrow that would otherwise run along a branch and be lost in it.
 
     ``offset`` moves the marks sideways off the middle of the branch, in pixels, across whichever
     way the branch runs. It is what puts a mark on a **copy** rather than on the lineage: a species
@@ -220,12 +225,14 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                                      color, width=shaft, head=tip, curve=0.0, opacity=weight)
                 else:
                     forms.setdefault(ev["kind"], set()).add("in")
+                    bow = float(ev.get("curve", curve))
                     if shift:
                         canvas.raw_arrow(*across(donor, x, shift), *across(recip, x, shift),
-                                         color, width=shaft, head=tip, opacity=weight)
+                                         color, width=shaft, head=tip, curve=bow, opacity=weight)
                     else:
                         dx, dy = place(donor, x)
-                        canvas.arrow(dx, dy, rx, ry, color, width=shaft, head=tip, opacity=weight)
+                        canvas.arrow(dx, dy, rx, ry, color, width=shaft, head=tip, curve=bow,
+                                     opacity=weight)
             else:
                 node = by_name.get(ev.get("node"))
                 if node is None:
