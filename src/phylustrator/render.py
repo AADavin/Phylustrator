@@ -78,6 +78,42 @@ def _rename_ids(svg: str, tag: str) -> str:
     return svg
 
 
+#: Families already probed for an italic face.
+_ITALIC_SEEN: dict[str, bool] = {}
+
+#: How far a synthesised italic leans, in degrees. Twelve is about what a type designer draws and
+#: what a browser synthesises when a family has no italic of its own.
+_SLANT = 12.0
+
+
+def font_has_italic(family: str) -> bool:
+    """Whether the PNG/PDF renderer has a real italic face for ``family``.
+
+    ``font-style="italic"`` is a request, and cairosvg honours it only when the family ships an
+    *Italic* face. Helvetica, the default here and on every Mac, ships an *Oblique* instead, so the
+    names came out upright in the PNG while the SVG said italic — a figure of species names that is
+    right on screen and wrong in the file that goes into the paper.
+
+    Asked the only way there is: draw the same word twice, once upright and once italic, and see
+    whether the renderer drew anything different. Any failure answers ``True``, so a check that
+    cannot run never costs anyone their slant."""
+    if family in _ITALIC_SEEN:
+        return _ITALIC_SEEN[family]
+    try:
+        import cairosvg
+
+        def pixels(style):
+            svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="150" height="26"><text x="2" '
+                   f'y="19" font-size="17" font-family="{family}" font-style="{style}">'
+                   f'Hamburgefons</text></svg>')
+            return cairosvg.svg2png(bytestring=svg.encode())
+
+        _ITALIC_SEEN[family] = pixels("italic") != pixels("normal")
+    except Exception:
+        _ITALIC_SEEN[family] = True
+    return _ITALIC_SEEN[family]
+
+
 class Canvas:
     """A pixel canvas with a data→pixel transform fixed by the layout's extent."""
 
@@ -217,9 +253,19 @@ class Canvas:
     def raw_text(self, x, y, s: str, *, anchor="start", baseline="central",
                  color: str | None = None, size: float | None = None, weight="normal",
                  rotate: float = 0.0, style: str = "normal", family: str | None = None) -> None:
-        extra = {"transform": f"rotate({rotate} {x} {y})"} if rotate else {}
+        extra = {}
+        turn = f"rotate({rotate} {x} {y})" if rotate else ""
         if style != "normal":
-            extra["font_style"] = style
+            # A family with no italic face of its own is leaned over by hand. Asking for italic and
+            # being handed upright text is the worse answer: it is the species names that are set
+            # this way, and the figure then says something it does not mean.
+            if font_has_italic(family or self.style.font_family):
+                extra["font_style"] = style
+            else:
+                lean = f"translate({x:g} {y:g}) skewX({-_SLANT:g}) translate({-x:g} {-y:g})"
+                turn = f"{turn} {lean}".strip()
+        if turn:
+            extra["transform"] = turn
         self._d.append(draw.Text(s, size or self.style.font_size, x, y,
                                  fill=color or self.style.label_color,
                                  font_family=family or self.style.font_family,

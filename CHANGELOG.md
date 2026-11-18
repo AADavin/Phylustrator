@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tube — a tube ends where its branch ends. The wedge between two branches leaving a node at an
   angle was what the round cap had been filling, so a joint is drawn at each internal node instead;
   squared off and with nothing in the middle, a diagonal tree showed a notch at every fork (#42).
+- `Style(label_style="italic")` wrote `font-style="italic"` into the SVG and the PNG and PDF came
+  back **upright**. `font-style` is a request, and cairosvg honours it only when the family ships
+  an *Italic* face: Helvetica, the default here and on every Mac, ships an *Oblique* instead. So a
+  figure of species names was right on screen and wrong in the file that went into the paper. A
+  family with no italic face of its own is leaned over by hand now, about its own point and after
+  any turn it already carries, so a radial tree's names keep their angle. A family that has one —
+  Times, which `styles.tikz` uses — is left exactly as it was. Asked the only way there is: the
+  same word drawn twice, upright and italic, and compared; a check that cannot run answers "it has
+  one", so nothing loses its slant to a broken probe (#73).
 
 ## [0.18.0] - 2026-10-25
 
