@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one of them, and a cross in the middle of the tube sits on neither. Without an offset the old
   drawing path is used unchanged, so no existing figure moves by a pixel (#42).
 
+### Changed
+- `drawsvg` 2.5.0 is excluded. Released on 18 November 2026, it raises `NameError` on import on
+  every Python this package supports — its `drawing.py` annotates a default argument with
+  `SyncedAnimationConfig` without importing it — so nothing here could run with it installed. The
+  one release is excluded rather than the 2.5 line, and a fixed 2.5.1 will be taken as soon as it
+  exists (#83).
+
 ### Fixed
 - The `diagonal` layout was drawn at **one scale for both axes**, so a tree of many tips came out
   flat: forty tips and branch lengths near 0.1 spanned eight pixels of an eight-hundred-pixel
