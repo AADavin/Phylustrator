@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.tip_labels(aligned=True)` — every name written in **one column** past the furthest tip,
+  with a thin dotted leader joining each shorter tip to its own. On a tree drawn to scale the tips
+  are ragged and so were the names; the only way to line them up was `align_tips`, which lines up
+  the **tips**, by drawing the terminal branches longer than they are. That is a lie about the one
+  thing a phylogram is for, so this moves the names and leaves the tree alone. A tip already at the
+  column gets no leader — measured to the column and not to the text, or every name would look a
+  gap short and get a stub lying on its own tip. `leader=False` drops the joins, and
+  `leader_color` / `leader_width` / `leader_dash` set how they look. It follows the tree round all
+  four orientations, and says why it cannot do it on a round layout (#75).
 - `trees.plot(cut=3.0)`, and `phyl --cut` — every branch is capped at that length for the drawing.
   One branch of 10 in a tree whose others run 0.1 to 1 sets the scale and collapses the rest, which
   is what a gene tree looks like whenever the program that inferred it caps a branch; in the figure
