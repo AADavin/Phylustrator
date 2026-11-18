@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.tip_labels(markup=True)` and `node_labels(markup=True)` read `*…*` as italic, so part of a
+  label can be set apart from the rest: `"gene 1 (*Escherichia coli*)"` writes the species in
+  italics and the gene upright. `\\*` writes a literal asterisk, and a lone one is left as it is, so
+  a label carrying a footnote mark does not turn the rest of the name italic. Off by default, for
+  the same reason.
+
+  Each piece is drawn as **its own** text element at a measured offset rather than as `<tspan>`s
+  inside one, which is what the obvious implementation would be. Two reasons, both about the file
+  that goes into the paper: cairosvg anchors a label containing tspans by its *last* chunk alone,
+  so an end-anchored name — every name on the left of a radial tree — slid most of its own width to
+  the right; and a tspan takes no transform, so a family with no italic face of its own could not
+  be leaned the way a whole label has been since 0.19.0, and the species names would have come out
+  upright in the PNG. Where cairo cannot be asked how wide a piece is, it falls back to one element
+  with tspans, which the renderer spaces correctly — and the anchoring bug is cairosvg's, so it
+  cannot arise where cairosvg is absent. A turned name lays its pieces out along itself rather than
+  along the page (#74).
+- `render.text_width()` — how wide a string is when drawn, its trailing spaces included, asked of
+  cairo rather than guessed at. The guess the library has always used, a flat 0.58 em a character,
+  is wrong by a factor of two on a run of `i` or of `m`. `render.can_measure_text()` says whether a
+  real answer is available.
 - `trees.tip_labels(aligned=True)` — every name written in **one column** past the furthest tip,
   with a thin dotted leader joining each shorter tip to its own. On a tree drawn to scale the tips
   are ragged and so were the names; the only way to line them up was `align_tips`, which lines up
