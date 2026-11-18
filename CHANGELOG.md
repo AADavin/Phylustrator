@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.branch_events(curve=…)`, and a per-event `"curve"` — how far a transfer arrow bows out, in
+  pixels. `curve=0` draws it straight, which is what a rectangular tree wants: a transfer happens
+  at one time, so a straight arrow at that time shows the donor and the recipient both standing
+  there. Only the arrow from a donor outside the tree was ever drawn straight, and the rest had no
+  way to ask (#77).
+- `trees.ring(labels=True)` writes each band's own value just outside the ring, at the middle of
+  the band and upright, in the band's colour — how the major clades around a circular tree are
+  usually named, where before the only way was a key away from the tree. `labels={value: text}`
+  writes something else and skips what it leaves out. A band is a **run** of neighbouring tips, so
+  a value appearing in two places on the ring is named on each; named once it would sit in the gap
+  between them (#69).
+- `page(col_labels=…, row_labels=…)` names the columns across the top and the rows down the left,
+  each centred on the cells it covers — what a grid of small multiples needs, the same tree
+  coloured three ways under four analyses. One label per column or row, or `(text, span)` pairs so
+  one name covers a group: `row_labels=[("ALE", 2), ("TEQUILA", 2)]` over four rows. Labels that do
+  not add up to the grid are refused, with both numbers. A row label is turned to read upwards,
+  which is what keeps the gutter a line of text wide rather than a name wide (#72).
 - `trees.tip_labels(markup=True)` and `node_labels(markup=True)` read `*…*` as italic, so part of a
   label can be set apart from the rest: `"gene 1 (*Escherichia coli*)"` writes the species in
   italics and the gene upright. `\\*` writes a literal asterisk, and a lone one is left as it is, so
