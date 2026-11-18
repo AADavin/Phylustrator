@@ -129,7 +129,8 @@ def _outside_box(canvas, style, loc: str, box_w: float, box_h: float, who: str) 
             need = math.ceil(x + box_w - panel_edge)
             warnings.warn(f"{who}: loc='right' needs about margin_right={need} to hold it; this "
                           f"figure has {round(style.margin_at('right'))}, so the block runs off the "
-                          f"page. Widen the margin, or put it below.", stacklevel=3)
+                          f"page. Widen the margin, drop margin_right to let it be measured, or "
+                          f"put the block below.", stacklevel=3)
         canvas.claim("right", x + box_w)      # so a second block beside the figure clears this one
         return x, y
     panel_bottom = h - style.margin_at("bottom")
@@ -139,7 +140,8 @@ def _outside_box(canvas, style, loc: str, box_w: float, box_h: float, who: str) 
         need = round(y + box_h - panel_bottom + gap)
         warnings.warn(f"{who}: loc='below' needs about margin_bottom={need} to hold it; this figure "
                       f"has {round(style.margin_at('bottom'))}, so the block runs off the page. "
-                      f"Widen the margin, or put it to the right.", stacklevel=3)
+                      f"Widen the margin, drop margin_bottom to let it be measured, or put the "
+                      f"block to the right.", stacklevel=3)
     canvas.claim("bottom", y + box_h)         # a second block below stacks under this one
     return x, y
 
