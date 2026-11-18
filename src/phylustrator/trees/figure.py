@@ -12,6 +12,7 @@ contract, so new decorations never touch the figure.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field, replace
 from typing import Callable
 
@@ -36,6 +37,12 @@ _TURNS = ("diagonal",)
 #: one scale a tree of forty tips and branch lengths near 0.1 was drawn flat, eight pixels of an
 #: eight-hundred-pixel panel.
 _ROUND = ("radial", "unrooted")
+
+#: How many times the margin is measured and grown before the figure is drawn. The two settle on
+#: each other rather than one following from the other: growing the margin narrows the panel, which
+#: brings the tips in, which shortens what their names reach past. A name on the panel's own edge
+#: settles in one pass, one further in takes a few, and past four there is no pixel left at stake.
+_FIT_PASSES = 4
 
 #: Layouts that can end every lineage on the furthest tip's row. The unrooted layout has no row to
 #: end on: it places branches by angle from a centre, so there is no tip edge to line them up with.
@@ -139,6 +146,9 @@ class Figure:
         # solid line showing through the gaps.
         self.skeleton = skeleton
         self.layers = tuple(layers)
+        # the style with the automatic margins grown to fit (see _fitted_style); measuring it costs
+        # a drawing, and the drawing, the geometry and the clade boxes all have to agree about it
+        self._fitted: Style | None = None
 
     def __add__(self, layer: Layer) -> "Figure":
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=self.style,
@@ -171,7 +181,7 @@ class Figure:
         """The pixel positions of the tips and of every node for this figure's current style, and
         the x-to-pixel mapping — so a companion panel can line up with the tree without redrawing it."""
         layout = self._lay_out()
-        canvas = Canvas(self.style, layout.xlim, layout.ylim,
+        canvas = Canvas(self._fitted_style(), layout.xlim, layout.ylim,
                         equal_aspect=(self.layout in _ROUND))
         tips = [TipPos(leaf.name or "", canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf)))
                 for leaf in self.tree.leaves]
@@ -188,14 +198,16 @@ class Figure:
         from it, then draw. ``highlight_clade`` with the same ``pad`` outlines exactly this box.
         Rectangular layouts only, where a clade is a box; it raises on the others."""
         layout = self._lay_out()
-        canvas = Canvas(self.style, layout.xlim, layout.ylim,
+        canvas = Canvas(self._fitted_style(), layout.xlim, layout.ylim,
                         equal_aspect=(self.layout in _ROUND))
         x0, y0, x1, y1 = clade_extent(self.tree, layout, clade, pad)
         return CladeBox(clade, canvas.px(x0), canvas.py(y0), canvas.px(x1), canvas.py(y1))
 
-    def _build(self) -> Canvas:
+    def _draw_on(self, style: Style) -> Canvas:
+        """Draw the whole figure at ``style`` and hand back the canvas. Used twice over: once or
+        twice to measure what the layers write past the panel, and once for the drawing kept."""
         layout = self._lay_out()
-        canvas = Canvas(self.style, layout.xlim, layout.ylim,
+        canvas = Canvas(style, layout.xlim, layout.ylim,
                         equal_aspect=(layout.kind in _ROUND))
         # A colouring layer overdraws the skeleton, so it has to know which branches were dashed or
         # it silently paints them solid — a run's extinct lineages disappearing into the colour is
@@ -203,10 +215,56 @@ class Figure:
         # here, and `color_branches(dashed=...)` overrides it when a caller wants something else.
         canvas.dashed = self.dashed
         if self.skeleton:
-            _draw_skeleton(canvas, self.tree, layout, self.style, self.dashed)
+            _draw_skeleton(canvas, self.tree, layout, style, self.dashed)
         for layer in self.layers:
-            layer(canvas, self.tree, layout, self.style)
+            layer(canvas, self.tree, layout, style)
         return canvas
+
+    def _fitted_style(self) -> Style:
+        """This figure's style with the **automatic** margins grown to hold whatever the layers
+        write past the panel — the tip names, chiefly, and the chips and keys past them.
+
+        A side left at ``None`` is automatic: it never comes out narrower than ``margin``, and grows
+        only when something would otherwise be drawn off the page, so a figure that already fits
+        does not move by a pixel. A side given a number is that number, and a figure that wants the
+        panel exactly where it put it says so.
+
+        Measured by drawing: only the layer that wrote the text knows how wide it came out, and it
+        says so through :meth:`Canvas.claim`. The measuring passes are drawn with the warnings off,
+        since a key that does not fit the trial margin is about to be given room."""
+        if self._fitted is not None:
+            return self._fitted
+        automatic = [side for side in ("right", "bottom")
+                     if getattr(self.style, f"margin_{side}") is None]
+        if not automatic or not self.layers:
+            self._fitted = self.style
+            return self._fitted
+        limit = {"right": self.style.width, "bottom": self.style.height}
+
+        def grown(side: str, canvas: Canvas, trial: Style) -> float | None:
+            """The margin ``side`` would need to hold what was drawn past the page, or ``None``
+            when what is there already fits."""
+            if side not in automatic:
+                return None
+            over = canvas.claimed(side, 0.0) - limit[side]
+            return trial.margin_at(side) + over if over > 0.5 else None
+
+        trial = self.style
+        for _ in range(_FIT_PASSES):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                canvas = self._draw_on(trial)
+            right, bottom = grown("right", canvas, trial), grown("bottom", canvas, trial)
+            if right is None and bottom is None:
+                break
+            trial = replace(trial,
+                            margin_right=right if right is not None else trial.margin_right,
+                            margin_bottom=bottom if bottom is not None else trial.margin_bottom)
+        self._fitted = trial
+        return self._fitted
+
+    def _build(self) -> Canvas:
+        return self._draw_on(self._fitted_style())
 
     def as_svg(self) -> str:
         return self._build().as_svg()
@@ -235,7 +293,11 @@ def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
 
     ``align_tips=True`` ends every lineage on the furthest tip's row, which is how a teaching
     diagram lines its taxa up. It changes the drawing and not the tree, so a figure that carries
-    lengths should keep its time axis off."""
+    lengths should keep its time axis off.
+
+    The right and bottom margins are **automatic** unless the style pins them: the panel narrows
+    until the tip names, the chips past them and any key placed beside the figure all fit the page.
+    See :attr:`Style.margin_right`."""
     return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed, skeleton=skeleton,
                   cladogram=cladogram, orientation=orientation, align_tips=align_tips)
 

@@ -1199,17 +1199,27 @@ def test_an_outside_key_never_warns_about_covering_a_branch():
 
 
 def test_a_margin_too_thin_says_how_wide_it_has_to_be():
-    """The canvas size is fixed before any layer runs, so the key cannot widen the margin itself."""
-    style = Style(width=560, height=360, margin=40)
+    """A margin given by hand is honoured exactly, so a key that does not fit it can only say so.
+    Left automatic the figure makes room instead, which the test below pins."""
+    style = Style(width=560, height=360, margin=40, margin_right=40)
     with pytest.warns(UserWarning, match=r"margin_right=\d+") as caught:
         _outside_figure(style, legend("clade", loc="right")).as_svg()
     assert "runs off the page" in str(caught[0].message)
 
 
 def test_a_bottom_margin_too_thin_says_so_too():
-    style = Style(width=560, height=360, margin=30)
+    style = Style(width=560, height=360, margin=30, margin_bottom=30)
     with pytest.warns(UserWarning, match=r"margin_bottom=\d+"):
         _outside_figure(style, time_axis(), legend("clade", loc="below")).as_svg()
+
+
+def test_an_automatic_margin_is_given_room_instead_of_a_warning():
+    """The same figure with the margin left automatic: the panel narrows until the key fits, so
+    there is nothing to warn about (#60)."""
+    style = Style(width=560, height=360, margin=40)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _outside_figure(style, legend("clade", loc="right")).as_svg()
 
 
 def test_a_note_takes_the_two_outside_places_and_a_colorbar_does_not():

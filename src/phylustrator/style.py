@@ -14,9 +14,16 @@ class Style:
     width: float = 800.0
     height: float = 600.0
     margin: float = 50.0
-    #: one side's margin, when it should differ from ``margin``; ``None`` takes ``margin``. A
-    #: composite reserves room on one side — a y axis on the left, a panel underneath — without
-    #: moving the other three. Read a side through :meth:`margin_at`, never the field itself.
+    #: one side's margin, when it should differ from ``margin``. A composite reserves room on one
+    #: side — a y axis on the left, a panel underneath — without moving the other three. Read a
+    #: side through :meth:`margin_at`, never the field itself.
+    #:
+    #: ``None`` is **automatic** on the right and the bottom: that side starts at ``margin`` and is
+    #: widened to hold whatever the layers write past the panel, so a long tip name or a key beside
+    #: the figure is not cut off at the page edge. It only ever grows, and only when something would
+    #: otherwise be drawn off the page, so a figure that already fits does not move. A number is
+    #: that number exactly, for a figure that wants its panel where it put it. Left and top have
+    #: nothing that measures itself, so ``None`` there is simply ``margin``.
     margin_left: float | None = None
     margin_right: float | None = None
     margin_top: float | None = None

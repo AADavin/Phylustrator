@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The right and bottom margins are **automatic** unless the style pins them: the panel narrows
+  until the tip names, the chips past them and any key placed beside the figure fit the page. A
+  long tip label used to be cut off at the right edge, because the canvas size was fixed before any
+  layer ran and only the layer that wrote the text knew how wide it came out. It says so already,
+  through `Canvas.claim`; nothing read it back. So the figure is now drawn to be measured, and drawn
+  again on the page it needs — a pass or two, since narrowing the panel brings the tips in and
+  shortens what their names reach past. It only ever grows, and only when something would otherwise
+  be drawn off the page, so a figure that already fits does not move by a pixel, and
+  `margin_right=` given a number is still that number exactly. `geometry()` and `clade_box()`
+  report the fitted page, or a companion panel would line up against margins the drawing never
+  used. A key asked to sit outside the panel is given room instead of warning about the margin to
+  set by hand, which it still does when that margin was pinned (#60).
+
 ## [0.19.0] - 2026-11-18
 
 ### Added
