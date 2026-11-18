@@ -11,7 +11,7 @@ draws through :func:`phylustrator.skeleton.draw_branches`.
 
 from __future__ import annotations
 
-from ...color import map_values
+from ...color import Colormap, map_values
 from ..skeleton import draw_branches
 
 
@@ -26,7 +26,7 @@ def _dashed_or_figure(dashed, canvas) -> set:
     return set(getattr(canvas, "dashed", None) or ())
 
 
-def color_branches(values, *, cmap: str = "viridis", palette: dict | None = None, width=None,
+def color_branches(values, *, cmap: Colormap = "viridis", palette: dict | None = None, width=None,
                    dashed=None, limits: tuple[float, float] | None = None,
                    gradient: bool | None = None, others: str = "repaint"):
     """Colour every branch by ``values`` (``{node name: value}``). Numeric → colormap gradient;
@@ -97,7 +97,7 @@ def _paint(canvas, x0, y0, x1, y1, state, colors, base, width, dash) -> None:
         canvas.gradient_line(x0, y0, x1, y1, c0, c1, width)
 
 
-def color_history(history, *, palette: dict | None = None, cmap: str = "viridis", width=None,
+def color_history(history, *, palette: dict | None = None, cmap: Colormap = "viridis", width=None,
                   default: str | None = None, dashed=None,
                   limits: tuple[float, float] | None = None):
     """Paint each branch as coloured **segments** from its per-lineage state history — a list of

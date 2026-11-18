@@ -2,12 +2,25 @@
 
 Matplotlib-free: the viridis ramp is a small embedded lookup table sampled by interpolation, and the
 categorical palette is Paul Tol's colour-blind-safe "bright" set.
+
+Every ``cmap=`` in the library takes a :data:`Colormap`: one of the built-in names, or a list of
+colours of your own, which is what a figure needs when none of the built-ins says the right thing.
+:func:`register` gives such a list a name, so one ramp can be defined once and asked for by name
+everywhere — including by the colour bar that explains it.
 """
 
 from __future__ import annotations
 
 import math
-from typing import Callable, Iterable
+import re
+from typing import Callable, Iterable, Sequence, Union
+
+#: What every ``cmap=`` takes: a built-in name (optionally with ``_r``), a name added by
+#: :func:`register`, or the colours themselves — hex strings or ``(R, G, B)`` triples in 0–255,
+#: read as evenly spaced anchors along the ramp.
+Colormap = Union[str, Sequence[Union[str, tuple[int, int, int], tuple[float, float, float]]]]
+
+_HEX = re.compile(r"^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 
 # 16 anchor colours (R, G, B in 0–255) per map, sampled evenly from matplotlib. The three sequential
 # maps are perceptually uniform; `coolwarm` is diverging, for a value read against a midpoint. A
@@ -66,8 +79,8 @@ def to_hex(rgb: tuple[float, float, float]) -> str:
     return "#{:02x}{:02x}{:02x}".format(*(int(max(0, min(255, round(c)))) for c in rgb))
 
 
-def colormap(name: str = "viridis") -> Callable[[float], tuple[float, float, float]]:
-    """Return a sampler ``t in [0, 1] -> (R, G, B)`` that interpolates the named colormap."""
+def colormap(name: Colormap = "viridis") -> Callable[[float], tuple[float, float, float]]:
+    """Return a sampler ``t in [0, 1] -> (R, G, B)`` that interpolates the colormap."""
     anchors = _colormap_anchors(name)
     n = len(anchors)
 
@@ -84,21 +97,114 @@ def colormap(name: str = "viridis") -> Callable[[float], tuple[float, float, flo
     return sample
 
 
-def colormap_hex(name: str = "viridis") -> list[str]:
+def colormap_hex(name: Colormap = "viridis") -> list[str]:
     """The colormap's anchor colours as hex — for a gradient bar."""
     return [to_hex(rgb) for rgb in _colormap_anchors(name)]
 
 
-def _colormap_anchors(name: str) -> list[tuple[int, int, int]]:
-    """The named colormap's anchors. A trailing ``_r`` reverses any of them, as it does in
-    matplotlib — the convention everyone arrives with, and the one a scale wants whenever the low
-    values are the interesting ones. The error still lists the base names, not a doubled set."""
-    wanted = name.lower()
+def colormaps() -> list[str]:
+    """Every colormap name there is, the built-in ones and any :func:`register` has added. Each of
+    them also answers to ``_r``, which runs it the other way."""
+    return sorted(_COLORMAPS)
+
+
+def register(name: str, colors: Sequence, *, overwrite: bool = False) -> None:
+    """Give a ramp of your own a name, so every ``cmap=`` in the library can ask for it.
+
+    ``colors`` is at least two colours — hex strings or ``(R, G, B)`` triples in 0–255 — read as
+    evenly spaced anchors and interpolated between, exactly as a built-in map is. The name is
+    registered for the rest of the session, so a project's own ramp belongs in one place near the
+    top of the script that draws with it::
+
+        ph.color.register("warm", ["#fff7bc", "#fec44f", "#d95f0e", "#993404"])
+        ph.trees.plot(tree) + ph.trees.ring(values, cmap="warm")
+
+    A name already taken is refused unless ``overwrite=True``: silently redefining ``viridis``
+    halfway through a script would leave two figures that disagree about what a colour means. A
+    name ending in ``_r`` is refused outright, because that is how a map is asked for backwards —
+    ``"warm"`` already gives you ``"warm_r"``."""
+    key = name.strip().lower()
+    if not key:
+        raise ValueError("a colormap needs a name")
+    if key.endswith("_r"):
+        raise ValueError(f"a name ending in '_r' is how a map is asked for backwards, so {name!r} "
+                         f"could never be reached; register {key[:-2]!r} and '_r' comes with it")
+    if key in _COLORMAPS and not overwrite:
+        raise ValueError(f"the colormap {key!r} is already registered; pass overwrite=True to "
+                         f"redefine it, or choose another name")
+    _COLORMAPS[key] = _anchors_from(colors, f"register({name!r})")
+
+
+def _parse_color(color, who: str) -> tuple[int, int, int]:
+    """One colour as ``(R, G, B)`` in 0–255, from a hex string or a triple."""
+    if isinstance(color, str):
+        if not _HEX.match(color.strip()):
+            raise ValueError(f"{who}: {color!r} is not a colour; a hex string such as '#d95f0e' "
+                             f"or '#fc0', or an (R, G, B) triple in 0-255")
+        digits = color.strip().lstrip("#")
+        if len(digits) == 3:
+            digits = "".join(d * 2 for d in digits)
+        return (int(digits[0:2], 16), int(digits[2:4], 16), int(digits[4:6], 16))
+    try:
+        r, g, b = (float(c) for c in color)
+    except (TypeError, ValueError):
+        raise ValueError(f"{who}: {color!r} is not a colour; a hex string such as '#d95f0e', or "
+                         f"an (R, G, B) triple in 0-255") from None
+    if not all(0.0 <= c <= 255.0 for c in (r, g, b)):
+        raise ValueError(f"{who}: {color!r} is outside 0-255. A triple is read in 0-255, not 0-1, "
+                         f"because that is what the built-in maps are written in")
+    return (round(r), round(g), round(b))
+
+
+def _written_in_unit_scale(colors: Sequence) -> bool:
+    """Whether the triples in a ramp were written in matplotlib's 0–1 rather than in this library's
+    0–255.
+
+    Worth asking, because the mistake is otherwise silent: ``(0.9, 0.4, 0.1)`` is inside 0–255 and
+    rounds to ``(1, 0, 0)``, so the figure comes out black instead of orange. Every component under
+    1 would be a ramp running from black to very slightly less black, which nobody draws on
+    purpose. A ramp of hex strings has no triples to ask about, and one that is all zeros says
+    black and means it."""
+    seen: list[float] = []
+    for color in colors:
+        if isinstance(color, str):
+            continue
+        try:
+            seen.extend(float(v) for v in color)
+        except (TypeError, ValueError):
+            return False                     # not a triple at all; _parse_color says so properly
+    return bool(seen) and all(v <= 1.0 for v in seen) and any(v > 0.0 for v in seen)
+
+
+def _anchors_from(colors: Sequence, who: str) -> list[tuple[int, int, int]]:
+    """A sequence of colours as colormap anchors, checked."""
+    given = list(colors)
+    if len(given) < 2:
+        raise ValueError(f"{who}: a ramp needs at least two colours to run between; got "
+                         f"{len(given)}")
+    if _written_in_unit_scale(given):
+        raise ValueError(f"{who}: these colours look like matplotlib's 0-1; a triple here is read "
+                         f"in 0-255, as the built-in maps are written, so they would all come out "
+                         f"black. Multiply them by 255, or give hex strings")
+    return [_parse_color(c, who) for c in given]
+
+
+def _colormap_anchors(name: Colormap) -> list[tuple[int, int, int]]:
+    """The colormap's anchors, from a name or from the colours themselves.
+
+    A trailing ``_r`` reverses any name, as it does in matplotlib — the convention everyone arrives
+    with, and the one a scale wants whenever the low values are the interesting ones. The error
+    still lists the base names, not a doubled set."""
+    if not isinstance(name, str):
+        return _anchors_from(name, "cmap")
+    wanted = name.strip().lower()
     reverse = wanted.endswith("_r")
     anchors = _COLORMAPS.get(wanted[:-2] if reverse else wanted)
     if anchors is None:
         raise ValueError(f"unknown colormap {name!r}; available: {sorted(_COLORMAPS)} "
-                         f"(any of them with '_r' appended runs the other way)")
+                         f"(any of them with '_r' appended runs the other way). A ramp of your own "
+                         f"goes in as the colours themselves — cmap=['#fff7bc', '#993404'] — or "
+                         f"through color.register()")
     return list(reversed(anchors)) if reverse else anchors
 
 
@@ -125,7 +231,7 @@ def _is_number(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
-def map_values(values: dict, *, cmap: str = "viridis", palette: dict | None = None,
+def map_values(values: dict, *, cmap: Colormap = "viridis", palette: dict | None = None,
                limits: tuple[float, float] | None = None) -> tuple[dict, dict | None]:
     """Turn ``{key: value}`` into ``({key: hex colour}, scale)``, dispatching on the data: numbers get
     the colormap (and a ``continuous`` scale for a colour bar), labels get a palette (and a

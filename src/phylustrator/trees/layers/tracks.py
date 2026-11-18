@@ -5,13 +5,13 @@ from __future__ import annotations
 import math
 import warnings
 
-from ...color import map_values
+from ...color import Colormap, map_values
 
 #: Which way "past the tip" points, per orientation — the direction a chip is pushed out in.
 _OUTWARD = {"right": (1.0, 0.0), "left": (-1.0, 0.0), "down": (0.0, 1.0), "up": (0.0, -1.0)}
 
 
-def tip_track(values, *, cmap: str = "viridis", palette: dict | None = None,
+def tip_track(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
               size: float = 11.0, offset: float = 8.0, shape: str = "square",
               stroke: str = "white", stroke_width: float = 0.5,
               label: str = "", label_angle: float = -90.0, label_size: float | None = None):
@@ -78,7 +78,7 @@ def _header(canvas, style, chips, label, angle, fsize, chip, layout) -> None:
     canvas.raw_text(x, y, label, anchor=anchor, size=fs, rotate=angle)
 
 
-def ring(values, *, cmap: str = "viridis", palette: dict | None = None,
+def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
          gap: float | None = None, width: float | None = None, radius_pct: float = 100.0,
          opacity: float = 1.0, edge: str | None = None, edge_width: float = 0.6):
     """An outer ring of coloured arcs — one contiguous segment per tip at a fixed radius — the
@@ -129,7 +129,7 @@ def ring(values, *, cmap: str = "viridis", palette: dict | None = None,
     return layer
 
 
-def rubberband(values, *, cmap: str = "viridis", palette: dict | None = None,
+def rubberband(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
                gap: float | None = None, width: float | None = None,
                smooth: float = 0.18, opacity: float = 1.0):
     """A smooth, round population band wrapped around the tree, instead of sitting on a fixed-radius

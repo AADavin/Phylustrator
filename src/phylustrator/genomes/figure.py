@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from ..color import Colormap
 from ..render import Canvas
 from ..style import Style
 from .layout import Layout, circular, linear, stacked
@@ -146,7 +147,7 @@ class GridFigure(Figure):
     behind it, and a solid block of identical values reads as criss-crossed rather than solid.
     """
 
-    def __init__(self, matrix, *, cmap: str = "viridis", palette=None, vmin=None, vmax=None,
+    def __init__(self, matrix, *, cmap: Colormap = "viridis", palette=None, vmin=None, vmax=None,
                  row_labels: bool = False, col_labels: bool = False,
                  borders: "str | bool | None" = None,
                  style: Style | None = None, layers: tuple = ()) -> None:

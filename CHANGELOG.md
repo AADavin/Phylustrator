@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Every `cmap=` in the library takes a ramp of your own, not only one of the six built-in names: the
+  colours themselves — `cmap=["#fff7bc", "#fec44f", "#d95f0e", "#993404"]`, hex strings or
+  `(R, G, B)` triples in 0–255, read as evenly spaced anchors — or a name given to such a list once
+  through `color.register("warm", […])`. The colour bar follows either, so a figure cannot end up
+  explaining a colouring that is not on it. `color.colormaps()` lists the names there are. A ramp
+  written in matplotlib's 0–1 is refused rather than drawn: `(0.9, 0.4, 0.1)` is inside 0–255 and
+  rounds to `(1, 0, 0)`, so the silent version of that mistake is a black figure (#70).
+
 ### Fixed
 - The right and bottom margins are **automatic** unless the style pins them: the panel narrows
   until the tip names, the chips past them and any key placed beside the figure fit the page. A

@@ -486,7 +486,7 @@ class Canvas:
                                      by - head * math.sin(ang - s), stroke=color,
                                      stroke_width=width, stroke_linecap="round", **fade))
 
-    def gradient_bar(self, cmap: str, x, y, w, h) -> None:
+    def gradient_bar(self, cmap, x, y, w, h) -> None:
         """A horizontal rectangle filled with the multi-stop gradient of ``cmap``."""
         grad = draw.LinearGradient(x, y, x + w, y, gradientUnits="userSpaceOnUse")
         stops = colormap_hex(cmap)
