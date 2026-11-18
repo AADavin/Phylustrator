@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.plot(layout="unrooted", daylight=True)` — Felsenstein's **equal-daylight** refinement,
+  which spreads an unrooted tree over the whole circle. Equal-angle gives each subtree a wedge in
+  proportion to its leaves, measured at the root; further out that wedge is no longer where the
+  subtree sits, so a tree with a long backbone bent into a half circle and left one whole side of
+  the picture empty. This looks at each internal node in turn, measures the arc each of its
+  subtrees really covers *as seen from that node*, and turns them until the daylight between them
+  is shared equally. On the ladder tree from the issue the widest empty angle falls from 85° to
+  18° and the drawing goes from a 0.77 box to a 0.93 one. The first subtree at each node is held,
+  so the tree spreads rather than spins, and the passes stop early once nothing moves. Pass a
+  number for that many rounds instead of the usual five. It costs a sweep of every subtree of every
+  node per round — 0.1 s at 200 tips, 0.4 s at 400, 2.5 s at 1000 — which is why it is asked for
+  rather than always done (#71).
 - `trees.branch_events(curve=…)`, and a per-event `"curve"` — how far a transfer arrow bows out, in
   pixels. `curve=0` draws it straight, which is what a rectangular tree wants: a transfer happens
   at one time, so a straight arrow at that time shows the donor and the recipient both standing
@@ -89,6 +101,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounds to `(1, 0, 0)`, so the silent version of that mistake is a black figure (#70).
 
 ### Fixed
+- A figure works its layout out once and keeps it. It is laid out for the margin's measuring pass,
+  for the drawing itself and again for any `geometry()` a companion panel asks for, which was three
+  times the work and, with equal-daylight, three times a couple of seconds.
 - `trees.tube` left a zero-length path at the open end of the stem instead of a line across it: the
   cap was measured between the root's corner and its start, which for a root are the same point, so
   it had no direction to lie across. Every orientation, and visible as a stray dot in the PNG.
