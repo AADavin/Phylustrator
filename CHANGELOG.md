@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drawing path is used unchanged, so no existing figure moves by a pixel (#42).
 
 ### Fixed
+- The `diagonal` layout was drawn at **one scale for both axes**, so a tree of many tips came out
+  flat: forty tips and branch lengths near 0.1 spanned eight pixels of an eight-hundred-pixel
+  panel, because one tip took one unit across and one unit of branch length took the same pixels
+  down. Each axis gets the panel to itself now, as `rectangular` has always had it — the diagonal
+  layout carries the rectangular coordinates, so it belongs with them. One scale stays where a
+  circle has to come out round, which is `radial` and `unrooted` (#63).
 - `trees.gene_path` ends a segment with both `from` and `to` at the requested depth,
   measured from the original branch rather than from its shortened start (#76).
 - The margin a guide outside the panel asks for now covers the blocks already placed beside it, and

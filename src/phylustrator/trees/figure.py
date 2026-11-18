@@ -30,6 +30,13 @@ _LAYOUTS = {"rectangular": rectangular, "radial": radial, "unrooted": unrooted,
 #: Layouts that take an ``orientation``; the others always grow to the right.
 _TURNS = ("diagonal",)
 
+#: The layouts drawn at one scale for both axes, where a circle has to come out round. The others
+#: give each axis the whole panel: tip order fills one and depth fills the other, as a phylogram is
+#: drawn. The diagonal layout carries the rectangular coordinates, so it belongs with those — at
+#: one scale a tree of forty tips and branch lengths near 0.1 was drawn flat, eight pixels of an
+#: eight-hundred-pixel panel.
+_ROUND = ("radial", "unrooted")
+
 #: Layouts that can end every lineage on the furthest tip's row. The unrooted layout has no row to
 #: end on: it places branches by angle from a centre, so there is no tip edge to line them up with.
 _ALIGNS = ("rectangular", "radial", "diagonal")
@@ -165,7 +172,7 @@ class Figure:
         the x-to-pixel mapping — so a companion panel can line up with the tree without redrawing it."""
         layout = self._lay_out()
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
-                        equal_aspect=(self.layout != "rectangular"))
+                        equal_aspect=(self.layout in _ROUND))
         tips = [TipPos(leaf.name or "", canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf)))
                 for leaf in self.tree.leaves]
         tip_x = max((t.x for t in tips), default=canvas.size[0])
@@ -182,14 +189,14 @@ class Figure:
         Rectangular layouts only, where a clade is a box; it raises on the others."""
         layout = self._lay_out()
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
-                        equal_aspect=(self.layout != "rectangular"))
+                        equal_aspect=(self.layout in _ROUND))
         x0, y0, x1, y1 = clade_extent(self.tree, layout, clade, pad)
         return CladeBox(clade, canvas.px(x0), canvas.py(y0), canvas.px(x1), canvas.py(y1))
 
     def _build(self) -> Canvas:
         layout = self._lay_out()
         canvas = Canvas(self.style, layout.xlim, layout.ylim,
-                        equal_aspect=(layout.kind != "rectangular"))
+                        equal_aspect=(layout.kind in _ROUND))
         # A colouring layer overdraws the skeleton, so it has to know which branches were dashed or
         # it silently paints them solid — a run's extinct lineages disappearing into the colour is
         # exactly how that has gone wrong. The figure knows; the layers see the canvas; so it goes

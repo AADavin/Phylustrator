@@ -611,3 +611,73 @@ def test_a_family_is_probed_once(monkeypatch):
     render.font_is_available("No Such Family 8f3a")
     assert len(calls) == first, "the answer is remembered"
     render._FONT_SEEN.clear()
+
+
+# --- each axis gets its own scale, as a phylogram does (issue #63) -------------------------------
+
+_MANY = "((" + ",".join(f"t{i}:0.1" for i in range(40)) + "):0.2,x:0.3);"
+
+
+def _spans(figure):
+    """How much of the panel the tree uses, along each axis, in pixels."""
+    nodes = figure.geometry().nodes
+    return (max(p.x for p in nodes) - min(p.x for p in nodes),
+            max(p.y for p in nodes) - min(p.y for p in nodes))
+
+
+def test_a_diagonal_tree_of_many_tips_fills_the_panel():
+    """At one scale for both axes, forty tips and branch lengths near 0.1 drew a tree eight pixels
+    deep in an eight-hundred-pixel panel: one tip took one unit across, and one unit of branch
+    length took the same pixels down."""
+    style = Style(width=1000, height=600, margin=50)
+    across, deep = _spans(plot(loads(_MANY), layout="diagonal", orientation="down", stem=False,
+                               style=style))
+    assert deep > 400, "the depth axis uses the panel's height"
+    assert across > 800, "and the tip order its width"
+
+
+def test_the_two_axes_are_scaled_apart():
+    """A tall panel stretches the depth and leaves the tip order alone, which one scale cannot do."""
+    short = _spans(plot(loads(_MANY), layout="diagonal", orientation="down", stem=False,
+                        style=Style(width=800, height=300, margin=40)))
+    tall = _spans(plot(loads(_MANY), layout="diagonal", orientation="down", stem=False,
+                       style=Style(width=800, height=900, margin=40)))
+    assert tall[1] > short[1] * 2
+    assert tall[0] == pytest.approx(short[0], abs=1.0)
+
+
+def _pixels_per_unit(figure):
+    """How many pixels one layout unit takes, along each axis."""
+    from phylustrator.trees.figure import _LAYOUTS
+    layout = _LAYOUTS[figure.layout](figure.tree, stem=figure.stem)
+    xs = [layout.x(n) for n in figure.tree.walk()]
+    ys = [layout.y(n) for n in figure.tree.walk()]
+    across, deep = _spans(figure)
+    return across / (max(xs) - min(xs)), deep / (max(ys) - min(ys))
+
+
+def test_a_round_layout_keeps_one_scale_for_both_axes():
+    """Equal aspect is not a square drawing — it is one scale, so a circle comes out round whatever
+    shape the tree is."""
+    tree = loads("((a:1,b:1):1,(c:1,d:1):1);")
+    for layout in ("radial", "unrooted"):
+        figure = plot(tree, layout=layout, style=Style(width=900, height=400, margin=40))
+        x_scale, y_scale = _pixels_per_unit(figure)
+        assert x_scale == pytest.approx(y_scale, rel=0.01), f"{layout} was stretched"
+
+
+def test_a_diagonal_tree_scales_each_axis_on_its_own():
+    tree = loads(_MANY)
+    figure = plot(tree, layout="diagonal", stem=False, style=Style(width=900, height=400, margin=40))
+    x_scale, y_scale = _pixels_per_unit(figure)
+    assert x_scale > y_scale * 10, "depth is in tenths and tip order in whole rows"
+
+
+def test_geometry_and_the_drawing_agree_about_the_scale():
+    """They lay the tree out through the same place, so a zoom line still points where the tree is."""
+    style = Style(width=900, height=500, margin=40)
+    figure = plot(loads(_MANY), layout="diagonal", orientation="down", stem=False, style=style)
+    svg = figure.as_svg()
+    drawn = [float(y) for _, y in re.findall(r"([-\d.]+),([-\d.]+)", svg)]
+    nodes = [p.y for p in figure.geometry().nodes]
+    assert max(drawn) == pytest.approx(max(nodes), abs=1.0)
