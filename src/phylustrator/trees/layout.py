@@ -46,6 +46,11 @@ class Layout:
     #: in. A turned layout has no one axis that carries time, so a layer that needs a distance
     #: along the tree (an event part-way down a branch, a tick on the time axis) asks for it here.
     depths: dict | None = None
+    #: the length every branch was capped at, or ``None`` when the tree is drawn to scale.
+    cut: float | None = None
+    #: the nodes whose own branch is longer than :attr:`cut`, so is drawn shortened. A figure laid
+    #: out like this has to say so on the branch, or it misstates its own data.
+    cut_at: frozenset = frozenset()
 
     def x(self, node: Node) -> float:
         return self.coords[node][0]
@@ -76,16 +81,64 @@ def _ranks(tree: Tree) -> dict[Node, int]:
     return rank
 
 
-def _distance_from_crown(tree: Tree, cladogram: bool, align_tips: bool = False) -> dict[Node, float]:
+def _cut_depths(tree: Tree, cut: float) -> dict[Node, float]:
+    """Each node's distance from the crown with every branch capped at ``cut``.
+
+    Capped branch by branch and accumulated, not capped at the end: one long branch deep in the
+    tree holds up everything beyond it, and clipping the totals instead would pile those clades on
+    top of each other at the cut."""
+    depth = {tree.root: 0.0}
+    for node in tree.walk():                                   # preorder: a parent before its child
+        if node.parent is not None:
+            depth[node] = depth[node.parent] + min(float(node.length or 0.0), cut)
+    return depth
+
+
+def cut_branches(tree: Tree, cut: float | None) -> frozenset:
+    """The nodes whose own branch is longer than ``cut``, so is drawn shortened."""
+    if cut is None:
+        return frozenset()
+    return frozenset(n for n in tree.walk()
+                     if n.parent is not None and float(n.length or 0.0) > cut)
+
+
+def along_branch(layout: "Layout", node: Node, at: float) -> tuple[float, float]:
+    """Where a fraction ``at`` of the way along ``node``'s branch falls, in layout coordinates.
+
+    The fraction runs from the parent (0) to the node (1), along the branch **as it is drawn**: the
+    run of a rectangular branch, the radial step of a circular one, the slanted segment of a
+    diagonal or unrooted one. A turned rectangular tree carries its depth down the page, so its run
+    does too."""
+    x, y = layout.x(node), layout.y(node)
+    if node.parent is None:
+        return x, y
+    if layout.kind == "rectangular":
+        if layout.grows_along_x:
+            return layout.x(node.parent) + at * (x - layout.x(node.parent)), y
+        return x, layout.y(node.parent) + at * (y - layout.y(node.parent))
+    if layout.kind == "radial" and layout.angle is not None:
+        a = layout.angle[node]
+        r_parent = math.hypot(layout.x(node.parent), layout.y(node.parent))
+        r = r_parent + at * (math.hypot(x, y) - r_parent)
+        return r * math.cos(a), r * math.sin(a)
+    return (layout.x(node.parent) + at * (x - layout.x(node.parent)),
+            layout.y(node.parent) + at * (y - layout.y(node.parent)))
+
+
+def _distance_from_crown(tree: Tree, cladogram: bool, align_tips: bool = False,
+                         cut: float | None = None) -> dict[Node, float]:
     """Each node's distance from the crown (root node at 0): branch-length distance, or edge-rank when
     the tree carries no lengths (or a cladogram is asked for).
+
+    ``cut`` caps every branch at that length, so one absurd branch does not take the whole page.
 
     ``align_tips`` then pushes every leaf out to the furthest one, so the tips end on a single row
     and the internal nodes keep their own depth. That is how a teaching diagram is drawn — the
     picture is about the topology, and a tip left short reads as a shallower lineage rather than as
     a shorter branch. It says nothing about the lengths, so it is a drawing choice and not a
     transformation of the tree."""
-    depths = {node: tree.depth(node) for node in tree.walk()}
+    depths = (_cut_depths(tree, cut) if cut is not None
+              else {node: tree.depth(node) for node in tree.walk()})
     if cladogram or max(depths.values(), default=0.0) == 0.0:
         depths = {node: float(r) for node, r in _ranks(tree).items()}
     if align_tips:
@@ -110,7 +163,7 @@ ORIENTATIONS = ("right", "down", "left", "up")
 
 
 def _turned(kind: str, tree: Tree, *, stem: bool, cladogram: bool, orientation: str,
-            align_tips: bool) -> Layout:
+            align_tips: bool, cut: float | None = None) -> Layout:
     """The coordinates of a rooted tree facing any of the four ways: depth along one axis of the
     page, tip order along the other.
 
@@ -121,7 +174,7 @@ def _turned(kind: str, tree: Tree, *, stem: bool, cladogram: bool, orientation: 
         raise ValueError(f"orientation must be one of {', '.join(ORIENTATIONS)}, not {orientation!r}")
     offset = float(tree.root.length) if stem else 0.0
     depth = {node: d + offset
-             for node, d in _distance_from_crown(tree, cladogram, align_tips).items()}
+             for node, d in _distance_from_crown(tree, cladogram, align_tips, cut).items()}
     order = _tip_order_y(tree)
     # the depth axis points away from the root; the order axis is the page's other one. Flipping
     # depth (left/up) rather than reversing the tip order keeps the tips in the order they were
@@ -136,11 +189,13 @@ def _turned(kind: str, tree: Tree, *, stem: bool, cladogram: bool, orientation: 
     xs = [p[0] for p in coords.values()] + ([0.0] if along_x else [])
     ys = [p[1] for p in coords.values()] + ([] if along_x else [0.0])
     return Layout(kind, coords, (min(xs), max(xs)), (min(ys), max(ys)),
-                  root_branch=offset, orientation=orientation, depths=depth)
+                  root_branch=offset, orientation=orientation, depths=depth,
+                  cut=cut, cut_at=cut_branches(tree, cut))
 
 
 def rectangular(tree: Tree, *, stem: bool = True, cladogram: bool = False,
-                orientation: str = "right", align_tips: bool = False) -> Layout:
+                orientation: str = "right", align_tips: bool = False,
+                cut: float | None = None) -> Layout:
     """Phylogram: distance from the origin along one axis, tip order along the other, with each
     branch drawn as a connector and a run meeting at a right angle. With ``stem`` (the default) the
     origin is the start of the root branch and the crown sits at ``root.length``; otherwise the
@@ -151,18 +206,18 @@ def rectangular(tree: Tree, *, stem: bool = True, cladogram: bool = False,
     another), ``"left"`` or ``"up"``. Text stays upright in all four, which is why this is a layout
     and not a rotation of the finished drawing."""
     return _turned("rectangular", tree, stem=stem, cladogram=cladogram, orientation=orientation,
-                   align_tips=align_tips)
+                   align_tips=align_tips, cut=cut)
 
 
 def radial(tree: Tree, *, stem: bool = False, start: float = 0.0, end: float = 350.0,
-           cladogram: bool = False, align_tips: bool = False) -> Layout:
+           cladogram: bool = False, align_tips: bool = False, cut: float | None = None) -> Layout:
     """Circular phylogram: **radius** = distance from the crown at the centre, **angle** = tip order
     over ``[start, end)`` degrees. Leaving a small gap (the default ``end=350``) keeps the first and
     last tips from colliding at the seam.
 
     The root sits at the centre — a stem would become a spurious little circle there — so ``stem`` is
     ignored (kept for a uniform layout interface). ``align_tips`` puts every tip on one circle."""
-    base = _distance_from_crown(tree, cladogram, align_tips)
+    base = _distance_from_crown(tree, cladogram, align_tips, cut)
     leaves = tree.leaves
     n = len(leaves)
     denom = max(n - 1, 1)
@@ -175,11 +230,12 @@ def radial(tree: Tree, *, stem: bool = False, start: float = 0.0, end: float = 3
     xs = [p[0] for p in coords.values()]
     ys = [p[1] for p in coords.values()]
     return Layout("radial", coords, (min(xs), max(xs)), (min(ys), max(ys)),
-                  root_branch=0.0, angle=angle)
+                  root_branch=0.0, angle=angle, cut=cut, cut_at=cut_branches(tree, cut))
 
 
 def diagonal(tree: Tree, *, stem: bool = True, cladogram: bool = False,
-             orientation: str = "right", align_tips: bool = False) -> Layout:
+             orientation: str = "right", align_tips: bool = False,
+             cut: float | None = None) -> Layout:
     """Rooted tree whose branches are straight slanted segments from parent to child — the shape of a
     textbook or TikZ diagram, rather than the right-angle connectors of ``rectangular``.
 
@@ -194,7 +250,7 @@ def diagonal(tree: Tree, *, stem: bool = True, cladogram: bool = False,
     (root at the top, the usual teaching diagram), ``"left"`` or ``"up"``. Text stays upright in all
     four, which is why this is a layout and not a rotation of the finished drawing."""
     return _turned("diagonal", tree, stem=stem, cladogram=cladogram, orientation=orientation,
-                   align_tips=align_tips)
+                   align_tips=align_tips, cut=cut)
 
 
 def _leaf_counts(tree: Tree) -> dict[Node, int]:
@@ -204,7 +260,8 @@ def _leaf_counts(tree: Tree) -> dict[Node, int]:
     return counts
 
 
-def unrooted(tree: Tree, *, stem: bool = False, cladogram: bool = False) -> Layout:
+def unrooted(tree: Tree, *, stem: bool = False, cladogram: bool = False,
+             cut: float | None = None) -> Layout:
     """Equal-angle layout: place the root at the origin and give each subtree an angular wedge
     proportional to its leaf count, stepping out along each branch. Rootless by nature, so ``stem`` is
     ignored (kept in the signature for a uniform layout interface)."""
@@ -218,10 +275,13 @@ def unrooted(tree: Tree, *, stem: bool = False, cladogram: bool = False) -> Layo
             span = (a1 - a0) * counts[child] / counts[node]
             mid = a + span / 2
             length = 1.0 if cladogram else (child.length or 1.0)
+            if cut is not None:
+                length = min(length, cut)
             place(child, x + length * math.cos(mid), y + length * math.sin(mid), a, a + span)
             a += span
 
     place(tree.root, 0.0, 0.0, 0.0, 2 * math.pi)
     xs = [p[0] for p in coords.values()]
     ys = [p[1] for p in coords.values()]
-    return Layout("unrooted", coords, (min(xs), max(xs)), (min(ys), max(ys)), root_branch=0.0)
+    return Layout("unrooted", coords, (min(xs), max(xs)), (min(ys), max(ys)), root_branch=0.0,
+                  cut=cut, cut_at=cut_branches(tree, cut))

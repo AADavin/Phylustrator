@@ -514,6 +514,15 @@ def time_axis(label: str = "Time", *, ticks: int = 5, step: float | None = None,
             return
         if layout.kind not in ("rectangular", "diagonal"):
             return
+        # A cut branch holds up everything past it, so an axis reads wrong for those clades. A cut
+        # tip branch moves nothing but itself, which is the usual case and worth no warning.
+        deep = sorted(n.name or "?" for n in layout.cut_at if not n.is_leaf)
+        if deep:
+            shown = ", ".join(deep[:3]) + (", …" if len(deep) > 3 else "")
+            warnings.warn(f"time_axis: {len(deep)} cut branch(es) with descendants ({shown}) hold "
+                          f"up everything beyond them, so the axis does not give those clades' "
+                          f"real distances. The break marks say the tree is not to scale; the axis "
+                          f"says it is. Drop one of them, or cut only tip branches.", stacklevel=2)
         _, height = canvas.size
         ts = tick_size if tick_size is not None else style.font_size * 0.85
         ls = label_size if label_size is not None else style.font_size
