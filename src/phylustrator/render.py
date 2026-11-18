@@ -84,7 +84,8 @@ class Canvas:
     def __init__(self, style: Style, xlim: tuple[float, float], ylim: tuple[float, float],
                  *, equal_aspect: bool = False) -> None:
         self.style = style
-        self.scale = None  # set by a colouring layer; read by colorbar()/legend()
+        self._scale: dict | None = None
+        self._scales: dict[str, dict] = {}  # most recent scale of each kind, for guides
         # How far into each margin the layers drawn so far have written: the names beside the tips,
         # the chips past them, the axis under the tree. A key asked to sit **outside** the panel
         # starts past this, so it lands beside the figure instead of on top of its own tip labels.
@@ -118,6 +119,27 @@ class Canvas:
             cy = (style.margin_at("top") + style.height - self._bottom) / 2
             self._equal = (s, cx - s * (self._x0 + self._x1) / 2,
                            cy - s * (self._y0 + self._y1) / 2)
+
+    @property
+    def scale(self) -> dict | None:
+        """The most recently recorded scale, available to custom and genome layers."""
+        return self._scale
+
+    @scale.setter
+    def scale(self, value: dict | None) -> None:
+        self._scale = value
+        if value is None:
+            self._scales.clear()
+        elif "kind" in value:
+            self._scales[value["kind"]] = value
+
+    def get_scale(self, kind: str) -> dict | None:
+        """Return the last scale of ``kind``, or None if none has been recorded.
+
+        Continuous and categorical layers keep independent guide scales. Assigning
+        ``scale = None`` clears them all.
+        """
+        return self._scales.get(kind)
 
     def obstruct(self, x0: float, y0: float, x1: float, y1: float) -> None:
         """Record a pixel box that a key placed later must not cover."""
