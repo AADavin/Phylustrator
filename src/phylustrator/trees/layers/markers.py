@@ -10,30 +10,7 @@ from __future__ import annotations
 import math
 
 from ...color import Colormap, map_values
-
-
-def _along(layout, node, at: float):
-    """Where a fraction ``at`` of the way along ``node``'s branch falls, in layout coordinates.
-
-    The fraction runs from the parent (0) to the node (1), along the branch **as it is drawn**: the
-    horizontal run of a rectangular branch, the radial step of a circular one, the slanted segment
-    of a diagonal or unrooted one."""
-    x, y = layout.x(node), layout.y(node)
-    if node.parent is None:
-        return x, y
-    if layout.kind == "rectangular":
-        # the drawn branch is the run along the depth axis at this node's row; the connector belongs
-        # to the parent. A turned tree carries its depth down the page, so the run does too.
-        if layout.grows_along_x:
-            return layout.x(node.parent) + at * (x - layout.x(node.parent)), y
-        return x, layout.y(node.parent) + at * (y - layout.y(node.parent))
-    if layout.kind == "radial":
-        a = layout.angle[node]
-        r_parent = math.hypot(layout.x(node.parent), layout.y(node.parent))
-        r = r_parent + at * (math.hypot(x, y) - r_parent)
-        return r * math.cos(a), r * math.sin(a)
-    return (layout.x(node.parent) + at * (x - layout.x(node.parent)),
-            layout.y(node.parent) + at * (y - layout.y(node.parent)))
+from ..layout import along_branch
 
 
 def _spread(points, gap: float, rounds: int = 60):
@@ -139,7 +116,7 @@ def branch_markers(values, *, at: float = 0.8, cmap: Colormap = "viridis", palet
             raise ValueError(f"branch_markers: {len(missing)} name(s) not in the tree: {shown}")
 
         marked = [(name, by_name[name]) for name in values if colors.get(name) is not None]
-        spots = [_along(layout, node, at) for _, node in marked]
+        spots = [along_branch(layout, node, at) for _, node in marked]
         pixels = [(canvas.px(x), canvas.py(y)) for x, y in spots]
         if spread and len(pixels) > 1:
             pixels = _spread(pixels, gap if gap is not None else size * 2.2)

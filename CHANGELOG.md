@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `trees.plot(cut=3.0)`, and `phyl --cut` — every branch is capped at that length for the drawing.
+  One branch of 10 in a tree whose others run 0.1 to 1 sets the scale and collapses the rest, which
+  is what a gene tree looks like whenever the program that inferred it caps a branch; in the figure
+  from the issue, twenty tips shared 5% of the width and now share 42%. Capped branch by branch and
+  accumulated, not capped at the end: clipping the totals would pile every clade beyond a long
+  branch on top of each other at the cut rather than carrying on from it. The tree itself is not
+  touched, so the lengths are still there to be written. Every layout takes it, the unrooted one
+  included, which steps out along each branch itself.
+
+  Each branch it shortens is **marked**: two leaning strokes across the branch with its true length
+  beside them, drawn by the figure after every layer, because a tree drawn out of scale that does
+  not say so misstates its own data and a mark a tube could cover would be no better. A `time_axis`
+  under a tree whose cut branch has descendants now warns: that branch holds up every clade past
+  it, so the break marks say the tree is not to scale while the axis says it is. A cut *tip* branch
+  moves nothing but itself, which is the usual case, and is not warned about (#64).
 - `trees.plot(layout="rectangular", orientation=…)` — the rectangular layout turns, as the diagonal
   one already did: `"right"` (the default), `"down"` for the root at the top and the tips along the
   bottom, `"left"` or `"up"`. That is how a tree goes into a multi-panel figure beside another one,

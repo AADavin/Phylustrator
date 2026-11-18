@@ -40,6 +40,9 @@ def _parser() -> argparse.ArgumentParser:
                    help="shortcut for --layout unrooted")
     p.add_argument("--tikz", action="store_true",
                    help="draw it as a LaTeX/TikZ diagram: serif text, fine black lines, flat ends")
+    p.add_argument("--cut", type=float, metavar="LEN",
+                   help="draw any branch longer than LEN cut short, with a break mark and its "
+                        "true length; one huge branch otherwise collapses all the others")
     p.add_argument("--no-labels", action="store_true", help="hide tip labels")
     p.add_argument("--node-labels", action="store_true", help="also label internal nodes")
     p.add_argument("--no-stem", action="store_true", help="start at the crown (hide the root stem)")
@@ -72,7 +75,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.orientation != "right" and args.layout not in ("rectangular", "diagonal"):
         parser.error(f"--orientation is for --layout rectangular or diagonal; {args.layout} places "
                      f"its branches by angle from a centre and always grows right")
-    figure = plot(tree, layout=args.layout, stem=not args.no_stem,
+    if args.cut is not None and args.cut <= 0:
+        parser.error(f"--cut is the length to cap a branch at, so it has to be positive; "
+                     f"got {args.cut}")
+    figure = plot(tree, layout=args.layout, stem=not args.no_stem, cut=args.cut,
                   orientation=args.orientation, style=tikz() if args.tikz else None)
     if not args.no_labels:
         figure = figure + tip_labels()
@@ -80,6 +86,9 @@ def main(argv: list[str] | None = None) -> int:
         figure = figure + node_labels()
     # the axis runs along the bottom, so it reads only on a tree whose time runs across the page
     across = args.layout in ("rectangular", "diagonal") and args.orientation in ("right", "left")
+    if args.cut is not None and any(not n.is_leaf and (n.length or 0.0) > args.cut
+                                    for n in tree.walk() if n.parent is not None):
+        across = False                      # the axis would contradict the break marks; show a bar
     # a turned tree has a tip at every bottom corner, so its bar goes outside the panel
     turned = args.layout in ("rectangular", "diagonal") and not across
     figure = figure + (time_axis() if across else

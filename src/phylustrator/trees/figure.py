@@ -18,6 +18,7 @@ from typing import Callable
 
 from ..render import Canvas
 from ..style import Style
+from .layers.breaks import draw_break_marks
 from .layers.clades import clade_extent
 from .layout import Layout, diagonal, radial, rectangular, unrooted
 from .skeleton import draw_branches
@@ -120,12 +121,15 @@ class Figure:
     def __init__(self, tree: Tree, *, layout: str = "rectangular", stem: bool = True,
                  style: Style | None = None, dashed=None, skeleton: bool = True,
                  cladogram: bool = False, orientation: str = "right", align_tips: bool = False,
-                 layers: tuple[Layer, ...] = ()) -> None:
+                 cut: float | None = None, layers: tuple[Layer, ...] = ()) -> None:
         if layout not in _LAYOUTS:
             raise ValueError(f"unknown layout {layout!r}; choose from {sorted(_LAYOUTS)}")
         if orientation != "right" and layout not in _TURNS:
             raise ValueError(f"the {layout} layout places its branches by angle from a centre, so "
                              f"it has no orientation to take; {' and '.join(_TURNS)} do")
+        if cut is not None and not (float(cut) > 0.0):
+            raise ValueError(f"cut= is the length to cap a branch at, so it has to be positive; "
+                             f"got {cut}")
         if align_tips and layout not in _ALIGNS:
             raise ValueError(f"the {layout} layout has no tip row to line the tips up on: it places "
                              f"branches by angle from a centre. align_tips is for "
@@ -142,6 +146,9 @@ class Figure:
         # end every lineage on the furthest tip's row, as a teaching diagram does: the picture is
         # about the topology, and a tip left short reads as a shallower lineage
         self.align_tips = align_tips
+        # cap every branch at this length, so one absurd branch does not take the whole page. The
+        # figure marks what it cut: a tree drawn out of scale has to say so.
+        self.cut = float(cut) if cut is not None else None
         self.style = style or Style()
         self.dashed = dashed  # node names whose branch is drawn dashed (e.g. extinct lineages)
         # whether to draw the default-colour base skeleton first. Turn OFF when a colouring layer
@@ -157,7 +164,7 @@ class Figure:
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=self.style,
                       dashed=self.dashed, skeleton=self.skeleton, cladogram=self.cladogram,
                       orientation=self.orientation, align_tips=self.align_tips,
-                      layers=self.layers + (layer,))
+                      cut=self.cut, layers=self.layers + (layer,))
 
     def with_size(self, width: float, height: float) -> "Figure":
         """A copy of this figure rendered at a given pixel size (same tree, layers, style otherwise).
@@ -169,7 +176,7 @@ class Figure:
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=style,
                       dashed=self.dashed, skeleton=self.skeleton, cladogram=self.cladogram,
                       orientation=self.orientation, align_tips=self.align_tips,
-                      layers=self.layers)
+                      cut=self.cut, layers=self.layers)
 
     def _lay_out(self) -> Layout:
         """This figure's layout. One place, so an option reaches the drawing, ``geometry()`` and
@@ -178,7 +185,8 @@ class Figure:
         extra: dict = {"orientation": self.orientation} if self.layout in _TURNS else {}
         if self.layout in _ALIGNS:
             extra["align_tips"] = self.align_tips
-        return _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram, **extra)
+        return _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram,
+                                     cut=self.cut, **extra)
 
     def geometry(self) -> Geometry:
         """The pixel positions of the tips and of every node for this figure's current style, and
@@ -221,6 +229,8 @@ class Figure:
             _draw_skeleton(canvas, self.tree, layout, style, self.dashed)
         for layer in self.layers:
             layer(canvas, self.tree, layout, style)
+        # last, so nothing drawn on the tree covers it: a figure that cut a branch has to say so
+        draw_break_marks(canvas, self.tree, layout, style)
         return canvas
 
     def _fitted_style(self) -> Style:
@@ -280,7 +290,7 @@ class Figure:
 def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
          style: Style | None = None, dashed=None, skeleton: bool = True,
          cladogram: bool = False, orientation: str = "right",
-         align_tips: bool = False) -> Figure:
+         align_tips: bool = False, cut: float | None = None) -> Figure:
     """Start a figure for ``tree``. Add layers with ``+``, then :meth:`Figure.save`. ``dashed`` is an
     optional set of node names whose branches are drawn dashed (e.g. extinct lineages). Set
     ``skeleton=False`` when a colouring layer paints every branch itself (so dashed branches are not
@@ -300,11 +310,16 @@ def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
     diagram lines its taxa up. It changes the drawing and not the tree, so a figure that carries
     lengths should keep its time axis off.
 
+    ``cut`` caps every branch at that length. One branch of 10 in a tree whose others are 0.1 to 1
+    sets the scale and collapses the rest, which is what a gene tree with a capped branch looks
+    like. Each branch it shortens is marked on the drawing with a break and its true length, since
+    a figure out of scale that does not say so misstates its data.
+
     The right and bottom margins are **automatic** unless the style pins them: the panel narrows
     until the tip names, the chips past them and any key placed beside the figure all fit the page.
     See :attr:`Style.margin_right`."""
     return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed, skeleton=skeleton,
-                  cladogram=cladogram, orientation=orientation, align_tips=align_tips)
+                  cladogram=cladogram, orientation=orientation, align_tips=align_tips, cut=cut)
 
 
 def _draw_skeleton(canvas: Canvas, tree: Tree, layout: Layout, style: Style, dashed=None) -> None:
