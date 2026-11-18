@@ -50,22 +50,31 @@ def _branch(canvas, x1, y1, x2, y2, c_from, c_to, width, gradient, dash=False) -
 
 
 def _rectangular(canvas, tree, layout, color, width, gradient, dashed, keep) -> None:
+    """A right-angle pair per branch: the run along the depth axis at this node's place in the tip
+    order, and the connector along the order axis at the parent's depth.
+
+    Which axis is which is the orientation's business, not this function's: a tree facing down
+    carries its depth along y and its tip order along x, so the run and the connector swap over."""
+    flat = layout.grows_along_x
     for node in tree.walk():
         x, y, cn = layout.x(node), layout.y(node), color(node)
         d = node.name in dashed
         if node.is_root:
             if layout.root_branch > 0 and keep(node):
-                canvas.line(x - layout.root_branch, y, x, y, cn, width(node), dash=d)     # stem
+                back = -layout.root_branch if layout.orientation in ("right", "down") else layout.root_branch
+                sx, sy = (x + back, y) if flat else (x, y + back)
+                canvas.line(sx, sy, x, y, cn, width(node), dash=d)                        # stem
         elif keep(node):
-            _branch(canvas, layout.x(node.parent), y, x, y, color(node.parent), cn, width(node),
-                    gradient, dash=d)
+            px, py = (layout.x(node.parent), y) if flat else (x, layout.y(node.parent))
+            _branch(canvas, px, py, x, y, color(node.parent), cn, width(node), gradient, dash=d)
         if not node.is_leaf:
-            # Split the vertical connector per child: the segment descending into an extinct
-            # (dashed) clade is dashed too, instead of one solid bar drawn straight across an
-            # extinction. Each segment runs from this node's y to the child's y (they meet at y).
+            # Split the connector per child: the segment descending into an extinct (dashed) clade
+            # is dashed too, instead of one solid bar drawn straight across an extinction. Each
+            # segment runs from this node's place in the tip order to the child's.
             for c in node.children:
                 if keep(c):                # the drop is the child's, so it follows the child's width
-                    canvas.line(x, y, x, layout.y(c), _drop(color, node, c, cn, gradient), width(c),
+                    cx, cy = (x, layout.y(c)) if flat else (layout.x(c), y)
+                    canvas.line(x, y, cx, cy, _drop(color, node, c, cn, gradient), width(c),
                                 dash=(c.name in dashed))                               # connector
 
 

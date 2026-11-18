@@ -124,7 +124,9 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
 
         by_name = {n.name: n for n in tree.walk() if n.name}
         radial = layout.kind == "radial"
-        slanted = layout.kind == "diagonal"
+        # the one case where a branch is drawn as a horizontal run across the page, so a mark on it
+        # needs no turning and sits at the distance read straight off the x axis
+        level = layout.kind == "rectangular" and layout.grows_along_x
         # events carry distance on the stem-inclusive scale (the rectangular default); the radial
         # layout drops the stem (its radius starts at the crown), so shift by the stem's length
         stem_off = float(tree.root.length or 0.0) if radial else 0.0
@@ -144,18 +146,20 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
             if radial:
                 a = layout.angle[node]                   # the distance is the radius
                 return t * math.cos(a), t * math.sin(a)
-            if not slanted:
-                return t, layout.y(node)
-            # a slanted branch has no axis to read the distance off, so walk the segment itself:
-            # the fraction of the branch's depth that `t` stands at is the fraction of the segment
+            # No axis carries the distance in general — a turned tree runs its depth down the
+            # page, a left-facing one counts it backwards — so walk this node's own drawn branch:
+            # the fraction of its depth range that `t` stands at is the fraction of the segment.
             lo, hi = span(node)
             f = (t - lo) / ((hi - lo) or 1.0)
             if node.parent is None:                      # along the stem, back from the root
                 back = -layout.root_branch if layout.orientation in ("right", "down") else layout.root_branch
                 sx, sy = ((layout.x(node) + back, layout.y(node)) if layout.grows_along_x
                           else (layout.x(node), layout.y(node) + back))
-            else:
+            elif layout.kind == "diagonal":              # one straight segment, parent to child
                 sx, sy = layout.x(node.parent), layout.y(node.parent)
+            else:                                        # rectangular: the run, at this node's row
+                sx, sy = ((layout.x(node.parent), layout.y(node)) if layout.grows_along_x
+                          else (layout.x(node), layout.y(node.parent)))
             ex, ey = layout.x(node), layout.y(node)
             return sx + f * (ex - sx), sy + f * (ey - sy)
 
@@ -235,7 +239,7 @@ def branch_events(events, *, styles: dict | None = None, size: float = 5.5,
                     lo, hi = span(node)
                     x = min(max(x, lo), hi)
                 mx, my = place(node, x)
-                if radial or slanted:
+                if not level:
                     # the glyph's "forward" must follow the branch: rotate by the branch
                     # direction in PIXEL space (py may flip y, so measure it there)
                     lo_b, _ = span(node)

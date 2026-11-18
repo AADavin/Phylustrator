@@ -25,14 +25,16 @@ def _branch_corner(canvas, layout, node):
     ex, ey = canvas.px(layout.x(node)), canvas.py(layout.y(node))
     if node.parent is None:
         back = layout.root_branch
-        if layout.kind == "diagonal" and not layout.grows_along_x:
+        if not layout.grows_along_x:
             sx, sy = ex, canvas.py(layout.y(node) - back)
         else:
             sx, sy = canvas.px(layout.x(node) - back), ey
         return (sx, sy), (sx, sy), (ex, ey)
     px_, py_ = canvas.px(layout.x(node.parent)), canvas.py(layout.y(node.parent))
     if layout.kind == "rectangular":
-        return (px_, py_), (px_, ey), (ex, ey)      # down the connector, then across
+        if layout.grows_along_x:
+            return (px_, py_), (px_, ey), (ex, ey)  # along the connector, then out the run
+        return (px_, py_), (ex, py_), (ex, ey)      # turned: the two swap over
     return (px_, py_), (px_, py_), (ex, ey)         # diagonal: one straight segment
 
 
@@ -103,8 +105,11 @@ def tube(*, width: float = 16.0, fill: str = "#f2f2f2", stroke: str = "#1a1a1a",
                 _, corner, end = _branch_corner(canvas, layout, node)
                 caps.append((corner, end))
             elif node.parent is None and layout.root_branch > 0:
-                start, corner, _ = _branch_corner(canvas, layout, node)
-                caps.append((corner, start))
+                # the stem's inner point is the root itself, not its corner: a root branch has no
+                # turn, so `corner` *is* `start`, and a cap measured between those two is a
+                # zero-length path with no direction to lie across
+                start, _, root = _branch_corner(canvas, layout, node)
+                caps.append((root, start))
         for d in paths:                             # every outline first, so none cuts a neighbour
             canvas.raw_path(d, stroke=stroke, stroke_width=width, cap="butt", opacity=opacity)
         for x, y in joints:

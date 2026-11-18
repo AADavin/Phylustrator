@@ -124,9 +124,12 @@ def test_every_segment_ends_on_its_parent():
     assert (*nodes["ab"], *nodes["A"]) in seen
 
 
-def test_only_the_diagonal_layout_turns():
-    with pytest.raises(ValueError, match="always grows to the right"):
-        plot(loads(_NWK), layout="rectangular", orientation="down")
+def test_only_a_flat_layout_turns():
+    """A round layout places its branches by angle from a centre, so it has no orientation to take.
+    The flat ones — rectangular and diagonal — both do (#68)."""
+    for layout in ("radial", "unrooted"):
+        with pytest.raises(ValueError, match="no orientation to take"):
+            plot(loads(_NWK), layout=layout, orientation="down")
     with pytest.raises(ValueError, match="orientation must be one of"):
         plot(loads(_NWK), layout="diagonal", orientation="sideways").as_svg()
 

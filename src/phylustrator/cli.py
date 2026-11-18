@@ -3,6 +3,7 @@
     phyl tree.nwk                 # render to a temporary PDF and open it
     phyl tree.nwk -o fig.svg      # save instead (format from the extension)
     phyl tree.nwk --radial --no-labels
+    phyl tree.nwk --orientation down
     phyl tree.nwk --layout diagonal --orientation down --tikz
 
 Deliberately tiny: it reads a Newick file, draws it, and shows or saves it. Anything richer
@@ -68,8 +69,9 @@ def main(argv: list[str] | None = None) -> int:
     except (FileNotFoundError, ValueError) as exc:
         parser.error(str(exc))
 
-    if args.orientation != "right" and args.layout != "diagonal":
-        parser.error(f"--orientation is for --layout diagonal; {args.layout} always grows right")
+    if args.orientation != "right" and args.layout not in ("rectangular", "diagonal"):
+        parser.error(f"--orientation is for --layout rectangular or diagonal; {args.layout} places "
+                     f"its branches by angle from a centre and always grows right")
     figure = plot(tree, layout=args.layout, stem=not args.no_stem,
                   orientation=args.orientation, style=tikz() if args.tikz else None)
     if not args.no_labels:
@@ -77,11 +79,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.node_labels:
         figure = figure + node_labels()
     # the axis runs along the bottom, so it reads only on a tree whose time runs across the page
-    flat = args.layout == "rectangular" or (args.layout == "diagonal"
-                                            and args.orientation in ("right", "left"))
+    across = args.layout in ("rectangular", "diagonal") and args.orientation in ("right", "left")
     # a turned tree has a tip at every bottom corner, so its bar goes outside the panel
-    figure = figure + (time_axis() if flat else
-                       scale_bar(loc="below" if args.layout == "diagonal" else "bottom-right"))
+    turned = args.layout in ("rectangular", "diagonal") and not across
+    figure = figure + (time_axis() if across else
+                       scale_bar(loc="below" if turned else "bottom-right"))
 
     if args.output:
         out = figure.save(args.output)

@@ -48,10 +48,14 @@ def _branch_points(canvas, tree, layout, steps: int = 12) -> list:
         if node.parent is None:
             continue
         name = node.name or "?"
-        if layout.kind == "rectangular":
+        if layout.kind == "rectangular" and layout.grows_along_x:
             y, yp = layout.y(node), layout.y(node.parent)
             walk(layout.x(node.parent), y, layout.x(node), y, name)            # the branch itself
             walk(layout.x(node.parent), yp, layout.x(node.parent), y, name)    # and its drop
+        elif layout.kind == "rectangular":                                     # turned: both swap
+            x, xp = layout.x(node), layout.x(node.parent)
+            walk(x, layout.y(node.parent), x, layout.y(node), name)
+            walk(xp, layout.y(node.parent), x, layout.y(node.parent), name)
         elif layout.kind == "radial" and layout.angle is not None:
             a, ap = layout.angle[node], layout.angle[node.parent]
             r = math.hypot(layout.x(node.parent), layout.y(node.parent))
@@ -503,7 +507,7 @@ def time_axis(label: str = "Time", *, ticks: int = 5, step: float | None = None,
         raise ValueError("labels= needs at=, so that each label has a tick of its own")
 
     def layer(canvas, tree, layout, style):
-        if layout.kind == "diagonal" and not layout.grows_along_x:
+        if not layout.grows_along_x:
             warnings.warn(f"time_axis: a {layout.orientation} tree carries its time down the page, "
                           f"and the axis is drawn along the bottom. Nothing was drawn. Use "
                           f"orientation='right' or 'left' for a tree with a time axis.", stacklevel=2)
