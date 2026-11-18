@@ -52,6 +52,9 @@ _FIT_PASSES = 4
 #: end on: it places branches by angle from a centre, so there is no tip edge to line them up with.
 _ALIGNS = ("rectangular", "radial", "diagonal")
 
+#: Layouts that take the equal-daylight refinement. Only the one it is a refinement of.
+_DAYLIGHT = ("unrooted",)
+
 
 @dataclass
 class TipPos:
@@ -121,12 +124,18 @@ class Figure:
     def __init__(self, tree: Tree, *, layout: str = "rectangular", stem: bool = True,
                  style: Style | None = None, dashed=None, skeleton: bool = True,
                  cladogram: bool = False, orientation: str = "right", align_tips: bool = False,
-                 cut: float | None = None, layers: tuple[Layer, ...] = ()) -> None:
+                 cut: float | None = None, daylight: bool | int = False,
+                 layers: tuple[Layer, ...] = ()) -> None:
         if layout not in _LAYOUTS:
             raise ValueError(f"unknown layout {layout!r}; choose from {sorted(_LAYOUTS)}")
         if orientation != "right" and layout not in _TURNS:
             raise ValueError(f"the {layout} layout places its branches by angle from a centre, so "
                              f"it has no orientation to take; {' and '.join(_TURNS)} do")
+        if daylight and layout not in _DAYLIGHT:
+            raise ValueError(f"daylight= is the equal-daylight refinement of the unrooted layout, "
+                             f"which spreads it over the whole circle; the {layout} layout places "
+                             f"its branches along an axis or an angle of its own, so there is no "
+                             f"daylight to share out")
         if cut is not None and not (float(cut) > 0.0):
             raise ValueError(f"cut= is the length to cap a branch at, so it has to be positive; "
                              f"got {cut}")
@@ -149,6 +158,8 @@ class Figure:
         # cap every branch at this length, so one absurd branch does not take the whole page. The
         # figure marks what it cut: a tree drawn out of scale has to say so.
         self.cut = float(cut) if cut is not None else None
+        # spread an unrooted tree over the whole circle rather than leaving one side of it empty
+        self.daylight = daylight
         self.style = style or Style()
         self.dashed = dashed  # node names whose branch is drawn dashed (e.g. extinct lineages)
         # whether to draw the default-colour base skeleton first. Turn OFF when a colouring layer
@@ -159,12 +170,16 @@ class Figure:
         # the style with the automatic margins grown to fit (see _fitted_style); measuring it costs
         # a drawing, and the drawing, the geometry and the clade boxes all have to agree about it
         self._fitted: Style | None = None
+        # the laid-out tree. Kept because the figure is drawn more than once — a measuring pass,
+        # the drawing itself, a geometry a companion panel asks for — and equal-daylight takes a
+        # couple of seconds on a thousand tips, which would otherwise be paid each time
+        self._layout: Layout | None = None
 
     def __add__(self, layer: Layer) -> "Figure":
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=self.style,
                       dashed=self.dashed, skeleton=self.skeleton, cladogram=self.cladogram,
                       orientation=self.orientation, align_tips=self.align_tips,
-                      cut=self.cut, layers=self.layers + (layer,))
+                      cut=self.cut, daylight=self.daylight, layers=self.layers + (layer,))
 
     def with_size(self, width: float, height: float) -> "Figure":
         """A copy of this figure rendered at a given pixel size (same tree, layers, style otherwise).
@@ -176,17 +191,22 @@ class Figure:
         return Figure(self.tree, layout=self.layout, stem=self.stem, style=style,
                       dashed=self.dashed, skeleton=self.skeleton, cladogram=self.cladogram,
                       orientation=self.orientation, align_tips=self.align_tips,
-                      cut=self.cut, layers=self.layers)
+                      cut=self.cut, daylight=self.daylight, layers=self.layers)
 
     def _lay_out(self) -> Layout:
         """This figure's layout. One place, so an option reaches the drawing, ``geometry()`` and
         ``clade_box()` alike — a figure whose box was computed from a different layout than the one
         drawn is a figure whose zoom lines point at nothing."""
+        if self._layout is not None:
+            return self._layout
         extra: dict = {"orientation": self.orientation} if self.layout in _TURNS else {}
         if self.layout in _ALIGNS:
             extra["align_tips"] = self.align_tips
-        return _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram,
-                                     cut=self.cut, **extra)
+        if self.layout in _DAYLIGHT:
+            extra["daylight"] = self.daylight
+        self._layout = _LAYOUTS[self.layout](self.tree, stem=self.stem, cladogram=self.cladogram,
+                                             cut=self.cut, **extra)
+        return self._layout
 
     def geometry(self) -> Geometry:
         """The pixel positions of the tips and of every node for this figure's current style, and
@@ -290,7 +310,8 @@ class Figure:
 def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
          style: Style | None = None, dashed=None, skeleton: bool = True,
          cladogram: bool = False, orientation: str = "right",
-         align_tips: bool = False, cut: float | None = None) -> Figure:
+         align_tips: bool = False, cut: float | None = None,
+         daylight: bool | int = False) -> Figure:
     """Start a figure for ``tree``. Add layers with ``+``, then :meth:`Figure.save`. ``dashed`` is an
     optional set of node names whose branches are drawn dashed (e.g. extinct lineages). Set
     ``skeleton=False`` when a colouring layer paints every branch itself (so dashed branches are not
@@ -310,6 +331,10 @@ def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
     diagram lines its taxa up. It changes the drawing and not the tree, so a figure that carries
     lengths should keep its time axis off.
 
+    ``daylight=True`` spreads an **unrooted** tree over the whole circle, by Felsenstein's
+    equal-daylight refinement. Equal-angle alone measures every wedge at the root, so a tree with a
+    long backbone bends into a half circle and leaves one side of the picture empty.
+
     ``cut`` caps every branch at that length. One branch of 10 in a tree whose others are 0.1 to 1
     sets the scale and collapses the rest, which is what a gene tree with a capped branch looks
     like. Each branch it shortens is marked on the drawing with a break and its true length, since
@@ -319,7 +344,8 @@ def plot(tree: Tree, *, layout: str = "rectangular", stem: bool = True,
     until the tip names, the chips past them and any key placed beside the figure all fit the page.
     See :attr:`Style.margin_right`."""
     return Figure(tree, layout=layout, stem=stem, style=style, dashed=dashed, skeleton=skeleton,
-                  cladogram=cladogram, orientation=orientation, align_tips=align_tips, cut=cut)
+                  cladogram=cladogram, orientation=orientation, align_tips=align_tips, cut=cut,
+                  daylight=daylight)
 
 
 def _draw_skeleton(canvas: Canvas, tree: Tree, layout: Layout, style: Style, dashed=None) -> None:
