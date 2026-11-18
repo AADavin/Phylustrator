@@ -35,6 +35,68 @@ _FALLBACK_FACES = frozenset({"helvetica", "arial", "dejavu sans", "liberation sa
                              "sans", "sans-serif", "freesans"})
 
 
+#: Measured advance widths, keyed by (text, family, style, weight) at one point. A figure writes
+#: the same names over and over, and every measurement crosses into the font machinery.
+_WIDTH_SEEN: dict[tuple, float] = {}
+
+#: What a character is worth when nothing can be measured — the rough average the margin and the
+#: obstacle boxes have always used. Wrong by a factor of two either way on a run of ``i`` or of
+#: ``m``, which is why it is the fallback and not the method.
+_ROUGH_EM = 0.58
+
+
+def _xml_escape(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _advance_per_point(text: str, family: str, style: str, weight: str) -> float | None:
+    """The advance of ``text`` at one point, from cairo itself, or ``None`` if it cannot be had.
+
+    cairo is already here — it is what cairosvg draws through — and it will say how wide a string
+    is without drawing it. Asked through the *toy* font interface, which is the one cairosvg
+    resolves family names through, so the number is the one the rendering will use."""
+    import cairocffi
+
+    slant = cairocffi.FONT_SLANT_ITALIC if style == "italic" else cairocffi.FONT_SLANT_NORMAL
+    heavy = cairocffi.FONT_WEIGHT_BOLD if weight == "bold" else cairocffi.FONT_WEIGHT_NORMAL
+    context = cairocffi.Context(cairocffi.ImageSurface(cairocffi.FORMAT_ARGB32, 1, 1))
+    context.select_font_face(family, slant, heavy)
+    context.set_font_size(1.0)
+    return float(context.text_extents(text)[4])          # x_advance
+
+
+def text_width(text: str, *, family: str, size: float, style: str = "normal",
+               weight: str = "normal") -> float:
+    """How wide ``text`` is when drawn, in pixels — its **advance**, trailing spaces included.
+
+    The advance and not the ink: ink stops at the last mark, so a piece ending in a space would
+    measure as though the space were not there, and whatever is written after it would sit on top.
+
+    Falls back to a flat :data:`_ROUGH_EM` per character when cairo is not installed or the
+    measuring fails, which is wrong by a factor of two on a run of ``i`` or of ``m``. A caller that
+    needs the real number asks :func:`can_measure_text` whether it is getting one."""
+    if not text:
+        return 0.0
+    key = (text, family, style, weight)
+    if key not in _WIDTH_SEEN:
+        try:
+            per_point = _advance_per_point(text, family, style, weight)
+        except Exception:
+            per_point = None
+        if per_point is None:
+            return len(text) * size * _ROUGH_EM
+        _WIDTH_SEEN[key] = per_point
+    return _WIDTH_SEEN[key] * size
+
+
+def can_measure_text() -> bool:
+    """Whether :func:`text_width` measures rather than guesses."""
+    try:
+        return _advance_per_point("M", "Helvetica", "normal", "normal") is not None
+    except Exception:
+        return False
+
+
 def font_is_available(family: str) -> bool:
     """Whether the PNG/PDF renderer can actually find ``family``.
 
@@ -270,6 +332,62 @@ class Canvas:
                                  fill=color or self.style.label_color,
                                  font_family=family or self.style.font_family,
                                  text_anchor=anchor, dominant_baseline=baseline, font_weight=weight, **extra))
+
+    def rich_text(self, x, y, pieces, *, anchor="start", baseline="central",
+                  color: str | None = None, size: float | None = None, weight="normal",
+                  rotate: float = 0.0, family: str | None = None) -> float:
+        """Write one label made of differently-styled ``pieces`` — ``[(text, style), …]``, where
+        ``style`` is ``"normal"`` or ``"italic"``. Returns how wide it came out.
+
+        Each piece is drawn as **its own** text element at a measured offset, rather than as
+        ``<tspan>``s inside one. Two reasons, both about the file that goes into the paper: cairosvg
+        anchors a label containing tspans by its *last* chunk alone, so an end-anchored name slides
+        most of its own width to the right; and a family with no italic face of its own needs the
+        hand-drawn lean of :meth:`raw_text`, which is a transform, and a tspan takes none.
+
+        Where cairo cannot be asked how wide a piece is, laying them out by hand would space them
+        by a guess that is wrong by a factor of two on a run of ``i``. There it falls back to one
+        element with tspans, which the renderer spaces correctly — and the anchoring bug above is
+        cairosvg's, so it cannot arise where cairosvg is absent."""
+        fs = size or self.style.font_size
+        face = family or self.style.font_family
+        shown = [(s, st) for s, st in pieces if s]
+        if not shown:
+            return 0.0
+        if len(shown) == 1:
+            self.raw_text(x, y, shown[0][0], anchor=anchor, baseline=baseline, color=color,
+                          size=fs, weight=weight, rotate=rotate, style=shown[0][1], family=face)
+            return text_width(shown[0][0], family=face, size=fs, style=shown[0][1], weight=weight)
+        widths = [text_width(s, family=face, size=fs, style=st, weight=weight) for s, st in shown]
+        total = sum(widths)
+        if not can_measure_text():
+            self._tspan_text(x, y, shown, anchor=anchor, baseline=baseline, color=color, size=fs,
+                             weight=weight, rotate=rotate, family=face)
+            return total
+        # the pieces run along the label, which is not the page's x when the label is turned: a
+        # name on a radial tree's left side is written at 297 degrees, and its species would
+        # otherwise be laid out due east of its genus while each piece faced south-west
+        step = math.radians(rotate)
+        ux, uy = math.cos(step), math.sin(step)
+        start = 0.0 if anchor == "start" else (-total if anchor == "end" else -total / 2)
+        for (s, st), w in zip(shown, widths):
+            self.raw_text(x + ux * start, y + uy * start, s, anchor="start", baseline=baseline,
+                          color=color, size=fs, weight=weight, rotate=rotate, style=st,
+                          family=face)
+            start += w
+        return total
+
+    def _tspan_text(self, x, y, pieces, *, anchor, baseline, color, size, weight, rotate,
+                    family) -> None:
+        """One text element with a tspan per piece — the fallback when nothing can be measured."""
+        inner = "".join(f'<tspan font-style="{st}">{_xml_escape(s)}</tspan>' if st != "normal"
+                        else _xml_escape(s) for s, st in pieces)
+        turn = f' transform="rotate({rotate} {x} {y})"' if rotate else ""
+        self._d.append(draw.Raw(
+            f'<text x="{x:g}" y="{y:g}" font-size="{size:g}" '
+            f'fill="{color or self.style.label_color}" font-family="{family}" '
+            f'text-anchor="{anchor}" dominant-baseline="{baseline}" '
+            f'font-weight="{weight}"{turn} xml:space="preserve">{inner}</text>'))
 
     def raw_rect(self, x, y, w, h, *, fill, stroke="none", stroke_width=0.0, opacity=1.0,
                  rx=0.0) -> None:

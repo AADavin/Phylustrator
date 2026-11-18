@@ -20,6 +20,45 @@ def _as_text(value) -> str | None:
     return f"{value:g}"
 
 
+#: What marks a stretch of a label as italic. One character, doubled around the words, as it is in
+#: every plain-text convention a reader already knows. ``\*`` writes one.
+_MARK = "*"
+
+
+def split_markup(written: str) -> list[tuple[str, str]]:
+    """``"gene 1 (*Escherichia coli*)"`` as ``[("gene 1 (", "normal"), ("Escherichia coli",
+    "italic"), (")", "normal")]``.
+
+    A lone ``*`` with no partner closes nothing and is written as itself, so a label that happens
+    to carry one — a footnote mark, a significance star — comes out as it was handed over rather
+    than turning the rest of the name italic."""
+    pieces: list[tuple[str, str]] = []
+    buf: list[str] = []
+    style = "normal"
+    i = 0
+    while i < len(written):
+        c = written[i]
+        if c == "\\" and i + 1 < len(written) and written[i + 1] == _MARK:
+            buf.append(_MARK)                             # an asterisk the label wanted
+            i += 2
+            continue
+        if c == _MARK:
+            closing = style == "italic"
+            # an opening mark needs a partner, or it is just a character
+            if closing or _MARK in written[i + 1:]:
+                pieces.append(("".join(buf), style))
+                buf = []
+                style = "normal" if closing else "italic"
+                i += 1
+                continue
+        buf.append(c)
+        i += 1
+    if style == "italic":                                 # never closed: it was not markup at all
+        return [(written.replace("\\" + _MARK, _MARK), "normal")]
+    pieces.append(("".join(buf), style))
+    return [(s, st) for s, st in pieces if s]
+
+
 def _labeller(values, text):
     """What to write at a node: ``text`` if given, else ``values`` by name, else the node's name."""
     if text is not None:
@@ -68,7 +107,8 @@ def _leader(canvas, layout, leaf, at_x, at_y, ox, oy, gap, color, width, dash) -
 
 
 def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=None,
-               upright: bool = False, aligned: bool = False, leader: bool = True,
+               upright: bool = False, markup: bool = False, aligned: bool = False,
+               leader: bool = True,
                leader_color: str = "#bbbbbb", leader_width: float = 0.7,
                leader_dash: str = "1,3"):
     """Write each leaf's name just past its tip. On a rectangular tree the names sit to the right; on
@@ -81,6 +121,11 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
     ``upright=True`` keeps a radial or unrooted tree's names horizontal instead of turning them
     along the branch. A turned name is what a large circular tree needs, where the names make a
     fan; a small diagram of five taxa wants them read straight, as a LaTeX figure sets them.
+
+    ``markup=True`` reads ``*…*`` in the text as italic, so part of a name can be set apart from
+    the rest: ``"gene 1 (*Escherichia coli*)"`` writes the species in italics and the gene upright.
+    ``\\*`` writes a literal asterisk, and a lone one is left as it is. Off by default, so a label
+    that already carries an asterisk is not re-read as markup.
 
     ``aligned=True`` writes every name in **one column** past the furthest tip, and joins each
     shorter tip to its name with a thin dotted leader. On a tree drawn to scale the tips are ragged
@@ -114,13 +159,18 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
                 if aligned and leader:
                     _leader(canvas, layout, leaf, at_x, at_y, ox, oy, gap,
                             leader_color, leader_width, leader_dash)
-                canvas.text(at_x, at_y, written, dx=ox * gap, dy=oy * gap,
-                            anchor=anchor, size=size, color=color)
+                fs = size or style.font_size
+                tx, ty = canvas.px(at_x) + ox * gap, canvas.py(at_y) + oy * gap
+                if markup:
+                    wide = canvas.rich_text(tx, ty, split_markup(written), anchor=anchor,
+                                            size=fs, color=color, family=style.label_family)
+                else:
+                    canvas.text(at_x, at_y, written, dx=ox * gap, dy=oy * gap,
+                                anchor=anchor, size=size, color=color)
+                    wide = len(written) * fs * 0.58
                 # a key placed beside the figure has to clear these, and only this layer knows how
                 # long they are
-                fs = size or style.font_size
-                wide, tall = len(written) * fs * 0.58, fs
-                tx, ty = canvas.px(at_x) + ox * gap, canvas.py(at_y) + oy * gap
+                tall = fs
                 if ox > 0:
                     canvas.claim("right", tx + wide)
                 elif oy > 0:
@@ -142,24 +192,28 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
             if upright:
                 # the name still steps outward from the tree, it just does not turn with it; the
                 # anchor follows the side, so the text always grows away from the tip
-                canvas.raw_text(ox, oy, written, anchor="start" if dx >= 0 else "end",
-                                size=size, color=color, style=style.label_style, family=style.label_family)
+                place, turn = ("start" if dx >= 0 else "end"), 0.0
             elif -90 <= angle <= 90:
-                canvas.raw_text(ox, oy, written, anchor="start", rotate=angle, size=size,
-                                color=color, style=style.label_style, family=style.label_family)
+                place, turn = "start", angle
             else:
-                canvas.raw_text(ox, oy, written, anchor="end", rotate=angle + 180, size=size,
+                place, turn = "end", angle + 180
+            if markup:
+                canvas.rich_text(ox, oy, split_markup(written), anchor=place, rotate=turn,
+                                 size=size, color=color, family=style.label_family)
+            else:
+                canvas.raw_text(ox, oy, written, anchor=place, rotate=turn, size=size,
                                 color=color, style=style.label_style, family=style.label_family)
 
     return layer
 
 
 def node_labels(*, size=None, color="#888888", offset: float = 4.0, values=None, text=None,
-                leaves: bool = False):
+                leaves: bool = False, markup: bool = False):
     """Write each internal node's name just above-left of the node. ``values``
     (``{node name: value}``) or ``text`` (``text(node) -> str``) writes something else — an
     ancestral estimate, a support value, a node age — and a node with no value is left unlabelled.
-    ``leaves`` also labels the tips, for a value that every node carries. Returns a layer."""
+    ``leaves`` also labels the tips, for a value that every node carries. ``markup=True`` reads
+    ``*…*`` as italic, as :func:`tip_labels` does. Returns a layer."""
     say = _labeller(values, text)
 
     def layer(canvas, tree, layout, style):
@@ -172,11 +226,16 @@ def node_labels(*, size=None, color="#888888", offset: float = 4.0, values=None,
             if not layout.grows_along_x:
                 # the tree runs down the page, so above-left of the node is on top of its own
                 # branch: put the name beside it, clear of the fork
-                canvas.text(layout.x(node), layout.y(node), written, dx=offset, dy=-offset,
-                            anchor="start", size=size or style.font_size * 0.85, color=color)
+                dx, place = offset, "start"
             else:
-                canvas.text(layout.x(node), layout.y(node), written,
-                            dx=-offset, dy=-offset, anchor="end",
-                            size=size or style.font_size * 0.85, color=color)
+                dx, place = -offset, "end"
+            fs = size or style.font_size * 0.85
+            if markup:
+                canvas.rich_text(canvas.px(layout.x(node)) + dx, canvas.py(layout.y(node)) - offset,
+                                 split_markup(written), anchor=place, size=fs, color=color,
+                                 family=style.label_family)
+            else:
+                canvas.text(layout.x(node), layout.y(node), written, dx=dx, dy=-offset,
+                            anchor=place, size=fs, color=color)
 
     return layer
