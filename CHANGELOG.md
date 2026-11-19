@@ -101,6 +101,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounds to `(1, 0, 0)`, so the silent version of that mistake is a black figure (#70).
 
 ### Fixed
+- `trees.ring` draws on the unrooted layout its own docstring recommends. It read the angle the
+  radial layout works out and keeps, which no other layout has, so it raised a bare `TypeError`
+  from the middle of a layer on three layouts out of four. On an unrooted tree the angle is now
+  read back off the coordinates, which is where the tip really sits — a more useful figure now
+  that `daylight=True` spreads such a tree over the whole circle — and a flat layout is refused in
+  words, having no centre to draw a circle around. A band that straddles the point where a closed
+  ring joins is one band and is named once, rather than twice at opposite ends of the same arc
+  (#97).
 - A figure works its layout out once and keeps it. It is laid out for the margin's measuring pass,
   for the drawing itself and again for any `geometry()` a companion panel asks for, which was three
   times the work and, with equal-daylight, three times a couple of seconds.
