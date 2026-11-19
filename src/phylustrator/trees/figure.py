@@ -287,6 +287,8 @@ class Figure:
         span = {"left": self.style.width, "right": self.style.width,
                 "top": self.style.height, "bottom": self.style.height}
 
+        asked: dict[str, float] = {}        # what a side wanted, capped or not
+
         def grown(side: str, canvas: Canvas, trial: Style) -> float | None:
             """The margin ``side`` would need to hold what was drawn past the page, or ``None``
             when what is there already fits."""
@@ -295,7 +297,9 @@ class Figure:
             over = (canvas.claimed(side, edge[side]) - edge[side]) * OUTWARD[side]
             if over <= 0.5:
                 return None
-            return min(trial.margin_at(side) + over, _FIT_CAP * span[side])
+            want = trial.margin_at(side) + over
+            asked[side] = max(want, asked.get(side, want))
+            return min(want, _FIT_CAP * span[side])
 
         trial = self.style
         for _ in range(_FIT_PASSES):
@@ -313,7 +317,26 @@ class Figure:
                             margin_top=wider.get("top", trial.margin_top),
                             margin_bottom=wider.get("bottom", trial.margin_bottom))
         self._fitted = trial
+        self._warn_if_clipped(asked, span)
         return self._fitted
+
+    def _warn_if_clipped(self, asked: dict[str, float], span: dict[str, float]) -> None:
+        """Say so when a side wanted more room than the cap allows, rather than clipping quietly.
+
+        The page size is fixed before any layer runs, so the fit cannot widen the page — only the
+        caller can, and the warning says to what."""
+        short = {side: want for side, want in asked.items() if want > _FIT_CAP * span[side] + 0.5}
+        if not short:
+            return
+        named = ", ".join(f"{side} {round(want)}" for side, want in sorted(short.items()))
+        need = {"width": self.style.width, "height": self.style.height}
+        for side, want in short.items():
+            which = "width" if side in ("left", "right") else "height"
+            need[which] = max(need[which], round(want / _FIT_CAP))
+        warnings.warn(f"the automatic margin stops at {round(_FIT_CAP * 100)}% of the page on each "
+                      f"side, and this figure asked for more ({named}), so what is past it is "
+                      f"clipped. A page of about {need['width']}x{need['height']} would hold it, or "
+                      f"write shorter labels in a smaller font.", stacklevel=3)
 
     def _build(self) -> Canvas:
         return self._draw_on(self._fitted_style())

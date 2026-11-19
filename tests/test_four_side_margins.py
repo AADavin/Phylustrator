@@ -29,7 +29,9 @@ from phylustrator.trees import (
 _NWK = ("((Aaaaaaaaaaaaaaaaaaaa:1,Bbbbbbbbbbbbbbbbbbbb:1)x:1,"
         "(Cccccccccccccccccccc:1,Dddddddddddddddddddd:1)y:1)r;")
 _SMALL = "((A:1,B:1)x:1,(C:1,D:1)y:1)r;"
-_STYLE = Style(width=360, height=360, margin=30)
+# roomy on purpose: the fit stops at a cap, and a page small enough to hit it would make these
+# checks about the cap rather than about the claim
+_STYLE = Style(width=560, height=560, margin=30)
 _SIDES = ("left", "right", "top", "bottom")
 
 
@@ -130,7 +132,7 @@ def test_a_figure_that_already_fits_keeps_every_margin():
 
 
 def test_a_pinned_side_is_left_where_it_was_put():
-    style = Style(width=360, height=360, margin=30, margin_left=12, margin_top=12)
+    style = Style(width=560, height=560, margin=30, margin_left=12, margin_top=12)
     figure = plot(loads(_NWK), layout="radial", style=style) + tip_labels()
     margins = _margins(figure)
     assert (margins["left"], margins["top"]) == (12, 12)
@@ -143,8 +145,9 @@ def test_a_name_wider_than_the_page_does_not_squeeze_the_panel_away():
 
     huge = loads("(" + ",".join(f"{'W' * 90}{n}:1" for n in "AB") + ");")
     figure = plot(huge, layout="radial", style=_STYLE) + tip_labels()
-    margins = _margins(figure)
-    assert max(margins.values()) <= _FIT_CAP * 360 + 0.5
+    with pytest.warns(UserWarning, match="clipped"):
+        margins = _margins(figure)
+    assert max(margins.values()) <= _FIT_CAP * _STYLE.width + 0.5
     assert _STYLE.width - margins["left"] - margins["right"] > 0, "a panel is left to draw in"
 
 
@@ -216,3 +219,20 @@ def test_the_anchor_says_which_side_of_the_point_the_text_lies():
     assert label_box(100.0, 100.0, anchor="end", **at)[0] == pytest.approx(60.0)
     assert label_box(100.0, 100.0, anchor="middle", **at)[0] == pytest.approx(80.0)
     assert label_box(100.0, 100.0, anchor="start", **at)[2] == pytest.approx(140.0)
+
+
+def test_the_cap_says_what_page_would_have_held_the_figure():
+    """Clipping quietly is the one thing the automatic margin must not do."""
+    huge = loads("(" + ",".join(f"{'W' * 90}{n}:1" for n in "AB") + ");")
+    with pytest.warns(UserWarning) as said:
+        (plot(huge, layout="radial", style=_STYLE) + tip_labels())._fitted_style()
+    message = str(said[0].message)
+    assert "45%" in message and "clipped" in message
+    wider = int(re.search(r"page of about (\d+)x", message).group(1))
+    assert wider > _STYLE.width, "it names a page that would hold it"
+
+
+def test_a_figure_that_fits_says_nothing():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        (plot(loads(_NWK), layout="radial", style=_STYLE) + tip_labels()).as_svg()

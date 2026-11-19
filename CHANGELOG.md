@@ -111,7 +111,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ring`'s band names and a track's column header each claim the box they actually wrote, measured
   with `render.text_width` rather than guessed at 0.58 em a character. Two opposite sides growing
   at once could squeeze the panel away, so each stops at 45% of the page, where the name is clipped
-  as it always was (#89).
+  as it always was — and the figure says so, naming the page size that would have held it, rather
+  than clipping quietly (#89).
 - `trees.ring` draws on the unrooted layout its own docstring recommends. It read the angle the
   radial layout works out and keeps, which no other layout has, so it raised a bare `TypeError`
   from the middle of a layer on three layouts out of four. On an unrooted tree the angle is now
