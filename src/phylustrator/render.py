@@ -176,6 +176,35 @@ def font_has_italic(family: str) -> bool:
     return _ITALIC_SEEN[family]
 
 
+#: Where a label's box starts along its own direction, relative to the point it is anchored at.
+_FROM = {"start": 0.0, "end": -1.0, "middle": -0.5}
+
+
+def label_box(x: float, y: float, wide: float, tall: float, *, anchor: str = "start",
+              rotate: float = 0.0) -> tuple[float, float, float, float]:
+    """The upright pixel box a label covers, as ``(x0, y0, x1, y1)``.
+
+    The text runs along its own direction, which on a round tree is not the page's x: a name at
+    297 degrees reaches up and to the left of where it is anchored. So the four corners of the
+    turned rectangle are taken back to an upright box — the automatic margin and the obstacle list
+    both work in page coordinates."""
+    step = math.radians(rotate)
+    ux, uy = math.cos(step), math.sin(step)
+    vx, vy = -uy, ux                                   # across the text, from its baseline
+    along = _FROM[anchor] * wide
+    corners = [(x + a * ux + b * vx, y + a * uy + b * vy)
+               for a in (along, along + wide) for b in (-tall / 2, tall / 2)]
+    xs = [c[0] for c in corners]
+    ys = [c[1] for c in corners]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+#: Which way each margin grows, as the sign of the pixel coordinate that moves away from the panel.
+#: The page's origin is its top-left corner, so right and bottom run out to larger numbers and left
+#: and top to smaller ones. Read by :meth:`Canvas.claim` and by the figure's automatic margin fit.
+OUTWARD = {"left": -1, "top": -1, "right": 1, "bottom": 1}
+
+
 class Canvas:
     """A pixel canvas with a data→pixel transform fixed by the layout's extent."""
 
@@ -248,12 +277,39 @@ class Canvas:
         return list(self._obstacles)
 
     def claim(self, side: str, edge: float) -> None:
-        """Record that something has been drawn out to pixel ``edge`` in the ``"right"`` (or
-        ``"bottom"``) margin. The furthest claim wins, so the order the layers were added in does
-        not change where a key beside the figure ends up."""
-        if side not in ("right", "bottom"):
-            raise ValueError(f"a margin claim is for 'right' or 'bottom', not {side!r}")
-        self._claimed[side] = max(edge, self._claimed.get(side, edge))
+        """Record that something has been drawn out to pixel ``edge`` in ``side``'s margin. The
+        furthest claim wins, so the order the layers were added in does not change where a key
+        beside the figure ends up.
+
+        "Furthest" is away from the panel, which is a larger pixel coordinate on the right and the
+        bottom and a smaller one on the left and the top — the page's origin is its top-left
+        corner, so a label that runs off the left edge is claiming a negative x."""
+        if side not in OUTWARD:
+            raise ValueError(f"a margin claim is for one of {', '.join(sorted(OUTWARD))}, "
+                             f"not {side!r}")
+        further = max if OUTWARD[side] > 0 else min
+        self._claimed[side] = further(edge, self._claimed.get(side, edge))
+
+    def claim_box(self, x0: float, y0: float, x1: float, y1: float) -> None:
+        """Claim all four sides at once, for a layer that knows the pixel box it wrote.
+
+        A name beside a tip is a box on the page whichever way the tree faces, and which of the
+        four margins it reaches into is the geometry's business rather than the layer's."""
+        self.claim("left", min(x0, x1))
+        self.claim("right", max(x0, x1))
+        self.claim("top", min(y0, y1))
+        self.claim("bottom", max(y0, y1))
+
+    def claim_text(self, x: float, y: float, wide: float, tall: float, *, anchor: str = "start",
+                   rotate: float = 0.0) -> None:
+        """Record a label that was just written: the page has to hold it, and a key must not be
+        dropped on it.
+
+        Both at once, because they are the same box. Only the layer that wrote the text knows how
+        wide it came out, so it is the layer that says so."""
+        box = label_box(x, y, wide, tall, anchor=anchor, rotate=rotate)
+        self.claim_box(*box)
+        self.obstruct(*box)
 
     def claimed(self, side: str, default: float) -> float:
         """The furthest edge claimed on ``side``, or ``default`` when nothing has claimed it."""

@@ -1251,8 +1251,16 @@ def test_a_margin_claim_is_the_furthest_one():
     canvas.claim("right", 100.0)
     canvas.claim("right", 60.0)
     assert canvas.claimed("right", 42.0) == 100.0
-    with pytest.raises(ValueError, match="'right' or 'bottom'"):
-        canvas.claim("left", 10.0)
+    # left and top grow the other way, so there "furthest" is the smallest number (issue #89)
+    canvas.claim("left", 30.0)
+    canvas.claim("left", 10.0)
+    canvas.claim("left", 20.0)
+    assert canvas.claimed("left", 42.0) == 10.0
+    canvas.claim_box(-5.0, -7.0, 900.0, 800.0)
+    assert (canvas.claimed("left", 0.0), canvas.claimed("top", 0.0)) == (-5.0, -7.0)
+    assert (canvas.claimed("right", 0.0), canvas.claimed("bottom", 0.0)) == (900.0, 800.0)
+    with pytest.raises(ValueError, match="bottom, left, right, top"):
+        canvas.claim("sideways", 10.0)
 
 
 # --- an arbitrary path, for the shapes nothing here names (issue #42) ---------------------------

@@ -14,6 +14,7 @@ import warnings
 import pytest
 
 from phylustrator import Style
+from phylustrator.render import text_width
 from phylustrator.trees import (
     color_branches,
     legend,
@@ -33,9 +34,14 @@ def _texts(svg):
             re.findall(r'<text x="([-\d.]+)"[^>]*>([^<]+)</text>', svg)]
 
 
+def _wide(text, size):
+    """How wide a label comes out, measured the way the layer measures it."""
+    return text_width(text, family="Helvetica", size=size)
+
+
 def _right_end(figure, size):
-    """How far right the widest label reaches, measured the way the layer measures it."""
-    return max(x + len(text) * size * 0.58 for x, text in _texts(figure.as_svg()))
+    """How far right the widest label reaches."""
+    return max(x + _wide(text, size) for x, text in _texts(figure.as_svg()))
 
 
 # --- the bug in the issue -------------------------------------------------------------------------
@@ -127,13 +133,23 @@ def test_adding_a_layer_measures_the_new_figure_not_the_old_one():
     assert wide > narrow
 
 
-def test_a_round_layout_has_nothing_to_claim_and_is_left_alone():
-    """Radial and unrooted names point outward on every side, and none of them claims a margin, so
-    the fit has nothing to go on and must not pretend otherwise."""
+@pytest.mark.parametrize("layout", ["radial", "unrooted"])
+def test_a_round_layout_gets_room_on_whichever_side_it_needs_it(layout):
+    """Radial and unrooted names point outward on every side, so the fit has to work on all four.
+    It used to have nothing to go on at all (issue #89) and the names ran off the page."""
     style = Style(width=500, height=500, margin=40)
-    for layout in ("radial", "unrooted"):
-        figure = plot(loads(_NWK), layout=layout, style=style) + tip_labels(values=_LONG, size=9)
-        assert figure._fitted_style().margin_at("right") == pytest.approx(40.0)
+    figure = plot(loads(_NWK), layout=layout, style=style) + tip_labels(values=_LONG, size=9)
+    fitted = figure._fitted_style()
+    assert max(fitted.margin_at(side) for side in ("left", "right", "top", "bottom")) > 40.0
+    assert min(fitted.margin_at(side) for side in ("left", "right", "top", "bottom")) >= 40.0
+
+
+@pytest.mark.parametrize("layout", ["radial", "unrooted"])
+def test_a_round_tree_s_names_all_land_on_the_page(layout):
+    style = Style(width=500, height=500, margin=40)
+    figure = plot(loads(_NWK), layout=layout, style=style) + tip_labels(values=_LONG, size=9)
+    for x, text in _texts(figure.as_svg()):
+        assert -0.5 <= x <= style.width + 0.5, f"{text!r} is anchored off the page"
 
 
 # --- the key that no longer needs a margin by hand ------------------------------------------------
@@ -181,7 +197,7 @@ def test_a_key_and_long_names_both_get_room():
               + tip_labels(values=_LONG, size=9)
               + legend("clade", loc="right"))
     svg = figure.as_svg()
-    names = max(x + len(text) * 9 * 0.58 for x, text in _texts(svg) if text in _LONG.values())
+    names = max(x + _wide(text, 9) for x, text in _texts(svg) if text in _LONG.values())
     key = min(x for x, text in _texts(svg) if text in _KEY_TEXT)
     assert names <= key + 0.5, "the names stop before the key"
     assert key < style.width

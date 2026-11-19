@@ -101,6 +101,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounds to `(1, 0, 0)`, so the silent version of that mistake is a black figure (#70).
 
 ### Fixed
+- Tip names no longer run off the page on a **round** or a **turned** tree. A radial or unrooted
+  tree writes its names outward in every direction, and a `"down"` tree centres each one under its
+  tip, so the first and the last hang off the sides. Neither claimed a margin, and the round branch
+  recorded no obstacle either, so a key could be dropped on top of the names. The margin claim
+  itself took only `"right"` and `"bottom"`, so there was nowhere to say it. It now takes all four
+  sides — "furthest" being away from the panel, which is a smaller pixel coordinate on the left and
+  the top — and the automatic fit grows all four. `tip_labels`, the chips of `tip_track`, a
+  `ring`'s band names and a track's column header each claim the box they actually wrote, measured
+  with `render.text_width` rather than guessed at 0.58 em a character. Two opposite sides growing
+  at once could squeeze the panel away, so each stops at 45% of the page, where the name is clipped
+  as it always was — and the figure says so, naming the page size that would have held it, rather
+  than clipping quietly (#89).
 - `trees.ring` draws on the unrooted layout its own docstring recommends. It read the angle the
   radial layout works out and keeps, which no other layout has, so it raised a bare `TypeError`
   from the middle of a layer on three layouts out of four. On an unrooted tree the angle is now

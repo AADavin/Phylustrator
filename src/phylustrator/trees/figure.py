@@ -16,7 +16,7 @@ import warnings
 from dataclasses import dataclass, field, replace
 from typing import Callable
 
-from ..render import Canvas
+from ..render import OUTWARD, Canvas
 from ..style import Style
 from .layers.breaks import draw_break_marks
 from .layers.clades import clade_extent
@@ -47,6 +47,12 @@ _ROUND = ("radial", "unrooted")
 #: brings the tips in, which shortens what their names reach past. A name on the panel's own edge
 #: settles in one pass, one further in takes a few, and past four there is no pixel left at stake.
 _FIT_PASSES = 4
+
+#: The most of one dimension an automatic margin will ever take, as a fraction. A round tree claims
+#: on both sides at once, and a name wider than the page would otherwise squeeze the panel out of
+#: existence between two margins that each keep growing. At the cap the name is clipped, which is
+#: the old behaviour and the honest one: the page is too small for the figure that was asked for.
+_FIT_CAP = 0.45
 
 #: Layouts that can end every lineage on the furthest tip's row. The unrooted layout has no row to
 #: end on: it places branches by angle from a centre, so there is no tip edge to line them up with.
@@ -262,39 +268,75 @@ class Figure:
         does not move by a pixel. A side given a number is that number, and a figure that wants the
         panel exactly where it put it says so.
 
+        All four sides, because a round tree's names point outward in every direction and a turned
+        tree's are centred under its tips, so the first and the last reach past the panel sideways.
+        Two opposite sides growing at once could squeeze the panel away, so each stops at
+        :data:`_FIT_CAP` of the page, where the name is clipped as it always was.
+
         Measured by drawing: only the layer that wrote the text knows how wide it came out, and it
         says so through :meth:`Canvas.claim`. The measuring passes are drawn with the warnings off,
         since a key that does not fit the trial margin is about to be given room."""
         if self._fitted is not None:
             return self._fitted
-        automatic = [side for side in ("right", "bottom")
-                     if getattr(self.style, f"margin_{side}") is None]
+        automatic = [side for side in OUTWARD if getattr(self.style, f"margin_{side}") is None]
         if not automatic or not self.layers:
             self._fitted = self.style
             return self._fitted
-        limit = {"right": self.style.width, "bottom": self.style.height}
+        # where each margin's own page edge is, and the dimension it eats into
+        edge = {"left": 0.0, "top": 0.0, "right": self.style.width, "bottom": self.style.height}
+        span = {"left": self.style.width, "right": self.style.width,
+                "top": self.style.height, "bottom": self.style.height}
+
+        asked: dict[str, float] = {}        # what a side wanted, capped or not
 
         def grown(side: str, canvas: Canvas, trial: Style) -> float | None:
             """The margin ``side`` would need to hold what was drawn past the page, or ``None``
             when what is there already fits."""
             if side not in automatic:
                 return None
-            over = canvas.claimed(side, 0.0) - limit[side]
-            return trial.margin_at(side) + over if over > 0.5 else None
+            over = (canvas.claimed(side, edge[side]) - edge[side]) * OUTWARD[side]
+            if over <= 0.5:
+                return None
+            want = trial.margin_at(side) + over
+            asked[side] = max(want, asked.get(side, want))
+            return min(want, _FIT_CAP * span[side])
 
         trial = self.style
         for _ in range(_FIT_PASSES):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 canvas = self._draw_on(trial)
-            right, bottom = grown("right", canvas, trial), grown("bottom", canvas, trial)
-            if right is None and bottom is None:
+            wider = {side: grown(side, canvas, trial) for side in OUTWARD}
+            wider = {side: v for side, v in wider.items()
+                     if v is not None and v > trial.margin_at(side) + 0.5}
+            if not wider:
                 break
             trial = replace(trial,
-                            margin_right=right if right is not None else trial.margin_right,
-                            margin_bottom=bottom if bottom is not None else trial.margin_bottom)
+                            margin_left=wider.get("left", trial.margin_left),
+                            margin_right=wider.get("right", trial.margin_right),
+                            margin_top=wider.get("top", trial.margin_top),
+                            margin_bottom=wider.get("bottom", trial.margin_bottom))
         self._fitted = trial
+        self._warn_if_clipped(asked, span)
         return self._fitted
+
+    def _warn_if_clipped(self, asked: dict[str, float], span: dict[str, float]) -> None:
+        """Say so when a side wanted more room than the cap allows, rather than clipping quietly.
+
+        The page size is fixed before any layer runs, so the fit cannot widen the page — only the
+        caller can, and the warning says to what."""
+        short = {side: want for side, want in asked.items() if want > _FIT_CAP * span[side] + 0.5}
+        if not short:
+            return
+        named = ", ".join(f"{side} {round(want)}" for side, want in sorted(short.items()))
+        need = {"width": self.style.width, "height": self.style.height}
+        for side, want in short.items():
+            which = "width" if side in ("left", "right") else "height"
+            need[which] = max(need[which], round(want / _FIT_CAP))
+        warnings.warn(f"the automatic margin stops at {round(_FIT_CAP * 100)}% of the page on each "
+                      f"side, and this figure asked for more ({named}), so what is past it is "
+                      f"clipped. A page of about {need['width']}x{need['height']} would hold it, or "
+                      f"write shorter labels in a smaller font.", stacklevel=3)
 
     def _build(self) -> Canvas:
         return self._draw_on(self._fitted_style())
