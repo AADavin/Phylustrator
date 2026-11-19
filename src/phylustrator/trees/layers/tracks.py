@@ -78,12 +78,35 @@ def _header(canvas, style, chips, label, angle, fsize, chip, layout) -> None:
     canvas.raw_text(x, y, label, anchor=anchor, size=fs, rotate=angle)
 
 
-def _bands(ordered, colors, values):
+#: The layouts that put the tree around a centre, so a ring has somewhere to go.
+_ROUND = ("radial", "unrooted")
+
+
+def _tip_angles(layout, leaves) -> dict:
+    """Each tip's angle around the tree's centre, in radians, keyed by name.
+
+    The ``radial`` layout works the angles out itself and keeps them: monotonic over the tips with
+    no ``atan2`` wrap, so a tip near the 9 o'clock direction sorts where it belongs rather than
+    jumping to the other end. The ``unrooted`` layout keeps none — it places each branch along its
+    own direction, and no node is ever given an angle — so the angle is read back off the
+    coordinates, which is where the tip really sits. Its root is at the origin, so that is what the
+    angle is measured from."""
+    if layout.angle is not None:
+        return {lf.name: layout.angle[lf] for lf in leaves}
+    return {lf.name: math.atan2(layout.y(lf), layout.x(lf)) % (2 * math.pi) for lf in leaves}
+
+
+def _bands(ordered, colors, values, *, closed: bool = False):
     """The contiguous runs of one value, as ``(value, first index, last index)``.
 
     A band is a run and not a value: two groups of tips that happen to carry the same name are two
-    bands on the ring, and naming them once between them would put the name in the gap."""
-    runs = []
+    bands on the ring, and naming them once between them would put the name in the gap.
+
+    ``closed`` says the ring's last sector reaches round to its first, which an unrooted tree's
+    does. Then the run at the end and the run at the start are neighbours like any other pair, so
+    a band straddling that point is one band and is named once. Its last index runs past the end of
+    the list to say so, and the caller adds a turn to the angle it reads there."""
+    runs: list[list] = []
     for i, leaf in enumerate(ordered):
         here = values.get(leaf.name)
         if here is None or colors.get(leaf.name) is None:
@@ -92,6 +115,9 @@ def _bands(ordered, colors, values):
             runs[-1][2] = i
         else:
             runs.append([here, i, i])
+    if (closed and len(runs) > 1 and runs[0][0] == runs[-1][0]
+            and runs[0][1] == 0 and runs[-1][2] == len(ordered) - 1):
+        runs[-1][2] = runs.pop(0)[2] + len(ordered)     # one band, carrying on past the wrap
     return [tuple(r) for r in runs]
 
 
@@ -101,9 +127,11 @@ def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
          labels=None, label_size: float | None = None, label_color: str | None = None,
          label_offset: float = 10.0):
     """An outer ring of coloured arcs — one contiguous segment per tip at a fixed radius — the
-    classic circular-tree "population ring". Best with a ``radial`` (or ``unrooted``) layout: each
-    tip's arc spans the angle halfway to its neighbours, so same-coloured neighbours merge into a
-    band. ``edge`` outlines every sector in one colour (so a white sector still shows). ``radius_pct`` sets the ring's radius as that percentile of the tip distances (100 = at the
+    classic circular-tree "population ring". Needs a round layout — ``radial`` or ``unrooted``,
+    and a flat one refuses, having no centre to draw a circle around. Each tip's arc spans the
+    angle halfway to its neighbours, so same-coloured neighbours merge into a band. On an unrooted
+    tree the angle is the tip's own direction from the root, which is where the tip sits; with
+    ``daylight=True`` such a tree spreads over the whole circle and the ring closes. ``edge`` outlines every sector in one colour (so a white sector still shows). ``radius_pct`` sets the ring's radius as that percentile of the tip distances (100 = at the
     outermost tip; lower brings it in, so a few long branches can extend past it instead of blowing
     the ring outward). Colours ``values`` like :func:`color_branches` and records the scale for a
     ``legend``.
@@ -117,16 +145,20 @@ def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
     Returns a layer."""
 
     def layer(canvas, tree, layout, style):
+        if layout.kind not in _ROUND:
+            raise ValueError(f"ring draws a circle of arcs around the tree's centre, which needs a "
+                             f"round layout: a {layout.kind} tree has no centre, and its tips are a "
+                             f"row rather than a fan. Use layout='radial' or layout='unrooted'.")
         colors, scale = map_values(values, cmap=cmap, palette=palette)
         if scale is not None:
             canvas.scale = scale
         cx0, cy0 = canvas.px(0.0), canvas.py(0.0)
         leaves = list(tree.leaves)
-        ang, radii = {}, []
+        # angle from the layout (canonical where it has one); radius from the pixel transform
+        ang = _tip_angles(layout, leaves)
+        radii = []
         for lf in leaves:
             cx, cy = canvas.px(layout.x(lf)), canvas.py(layout.y(lf))
-            # angle from the layout (canonical); radius from the pixel transform
-            ang[lf.name] = layout.angle[lf]
             radii.append(math.hypot(cx - cx0, cy - cy0))
         radii.sort()
         k = min(len(radii) - 1, max(0, int(round((radius_pct / 100.0) * (len(radii) - 1)))))
@@ -157,12 +189,19 @@ def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
         said = labels if isinstance(labels, dict) else None
         fs = label_size if label_size is not None else style.font_size * 0.95
         by_name = {str(k): v for k, v in values.items()}
-        for value, first, last in _bands(ordered, colors, {lf.name: by_name.get(lf.name)
-                                                           for lf in ordered}):
+        closed = b[n] - b[0] >= 2 * math.pi - 1e-9      # the last sector reaches round to the first
+
+        def bound(i):
+            """Boundary ``i``, with a turn added for an index that has run past the wrap."""
+            return b[i] if i <= n else b[i - n] + 2 * math.pi
+
+        for value, first, last in _bands(ordered, colors,
+                                         {lf.name: by_name.get(lf.name) for lf in ordered},
+                                         closed=closed):
             written = said.get(value) if said is not None else value
             if written is None or written == "":
                 continue
-            mid = (b[first] + b[last + 1]) / 2
+            mid = (bound(first) + bound(last + 1)) / 2
             r = r_out + label_offset
             x, y = cx0 + r * math.cos(mid), cy0 + r * math.sin(mid)
             # upright, and growing away from the tree rather than back across it
