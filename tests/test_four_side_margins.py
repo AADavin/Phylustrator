@@ -34,23 +34,26 @@ _SIDES = ("left", "right", "top", "bottom")
 
 
 def _labels(svg):
-    """Every drawn label as (x, y, text, the rotation in degrees)."""
+    """Every drawn label as (x, y, text, rotation in degrees, text-anchor)."""
     out = []
     for tag in re.findall(r"<text [^>]*>[^<]*</text>", svg):
         x = float(re.search(r'\bx="([-\d.]+)"', tag).group(1))
         y = float(re.search(r'\by="([-\d.]+)"', tag).group(1))
         turn = re.search(r"rotate\(([-\d.]+)", tag)
+        place = re.search(r'text-anchor="([a-z]+)"', tag)
         text = re.search(r">([^<]*)</text>", tag).group(1)
-        out.append((x, y, text, float(turn.group(1)) if turn else 0.0))
+        out.append((x, y, text, float(turn.group(1)) if turn else 0.0,
+                    place.group(1) if place else "start"))
     return out
 
 
-def _reach(x, y, text, turn, size, anchor_end=False):
-    """The far corner of a label, along its own direction — where it actually stops."""
+def _ends(x, y, text, turn, place, size):
+    """Both ends of a label on the page: it runs along its own direction, from wherever its anchor
+    puts it. Read off the SVG the renderer wrote, so this does not just restate `label_box`."""
     wide = text_width(text, family="Helvetica", size=size)
-    step = math.radians(turn)
-    run = -wide if anchor_end else wide
-    return x + run * math.cos(step), y + run * math.sin(step)
+    first = {"start": 0.0, "end": -wide, "middle": -wide / 2}[place]
+    ux, uy = math.cos(math.radians(turn)), math.sin(math.radians(turn))
+    return [(x + run * ux, y + run * uy) for run in (first, first + wide)]
 
 
 def _margins(figure):
@@ -86,8 +89,8 @@ def test_the_sides_are_named_the_way_the_page_is_laid_out():
 def test_a_round_tree_s_names_stop_before_the_page_edge(layout):
     figure = plot(loads(_NWK), layout=layout, style=_STYLE) + tip_labels()
     page = (_STYLE.width, _STYLE.height)
-    for x, y, text, turn in _labels(figure.as_svg()):
-        for px, py in ((x, y), _reach(x, y, text, turn, _STYLE.font_size)):
+    for x, y, text, turn, place in _labels(figure.as_svg()):
+        for px, py in _ends(x, y, text, turn, place, _STYLE.font_size):
             assert -1.0 <= px <= page[0] + 1.0, f"{text!r} runs off the page sideways"
             assert -1.0 <= py <= page[1] + 1.0, f"{text!r} runs off the page vertically"
 
@@ -113,9 +116,10 @@ def test_a_turned_tree_gets_room_for_its_outermost_names():
     figure = (plot(loads(_NWK), orientation="down", style=_STYLE) + tip_labels())
     margins = _margins(figure)
     assert margins["left"] > _STYLE.margin and margins["right"] > _STYLE.margin
-    for x, _, text, _ in _labels(figure.as_svg()):
-        half = text_width(text, family="Helvetica", size=_STYLE.font_size) / 2
-        assert x - half >= -1.0 and x + half <= _STYLE.width + 1.0
+    for x, y, text, turn, place in _labels(figure.as_svg()):
+        assert place == "middle", "a down tree centres its names under the tips"
+        for px, _ in _ends(x, y, text, turn, place, _STYLE.font_size):
+            assert -1.0 <= px <= _STYLE.width + 1.0, f"{text!r} hangs off the side"
 
 
 # --- what must not change -------------------------------------------------------------------------
@@ -152,7 +156,7 @@ def test_a_key_beside_the_figure_still_starts_at_the_panel_edge():
               + color_branches({"A": "one", "B": "one", "C": "two", "D": "two"},
                                palette={"one": "#0072B2", "two": "#D55E00"})
               + tip_labels() + legend("clade", loc="right"))
-    key = min(x for x, _, text, _ in _labels(figure.as_svg()) if text in {"clade", "one", "two"})
+    key = min(x for x, _, text, *_ in _labels(figure.as_svg()) if text in {"clade", "one", "two"})
     assert key >= style.width - 120, "the key is outside the panel, where it was asked to be"
 
 
@@ -189,9 +193,9 @@ def test_a_ring_s_band_name_asks_for_room_of_its_own():
               + ring(sides, palette={"a long band name": "#2B64A8", "another one": "#2E7D3A"},
                      labels=True))
     assert max(_margins(figure).values()) > 8
-    for x, _, text, _ in _labels(figure.as_svg()):
-        wide = text_width(text, family="Helvetica", size=style.font_size * 0.95)
-        assert -1.0 <= x - wide and x + wide <= style.width + 1.0, f"{text!r} is off the page"
+    for x, y, text, turn, place in _labels(figure.as_svg()):
+        for px, _ in _ends(x, y, text, turn, place, style.font_size * 0.95):
+            assert -1.0 <= px <= style.width + 1.0, f"{text!r} is off the page"
 
 
 # --- the box itself ---------------------------------------------------------------------------------
