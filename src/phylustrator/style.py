@@ -18,12 +18,13 @@ class Style:
     #: side — a y axis on the left, a panel underneath — without moving the other three. Read a
     #: side through :meth:`margin_at`, never the field itself.
     #:
-    #: ``None`` is **automatic** on the right and the bottom: that side starts at ``margin`` and is
-    #: widened to hold whatever the layers write past the panel, so a long tip name or a key beside
-    #: the figure is not cut off at the page edge. It only ever grows, and only when something would
-    #: otherwise be drawn off the page, so a figure that already fits does not move. A number is
-    #: that number exactly, for a figure that wants its panel where it put it. Left and top have
-    #: nothing that measures itself, so ``None`` there is simply ``margin``.
+    #: ``None`` is **automatic**, on all four sides: that side starts at ``margin`` and is widened
+    #: to hold whatever the layers write past the panel, so a long tip name or a key beside the
+    #: figure is not cut off at the page edge. A round tree's names point outward in every
+    #: direction and a turned tree's are centred under its tips, so all four sides are needed and
+    #: not only the two the tips of a plain tree face. It only ever grows, and only when something
+    #: would otherwise be drawn off the page, so a figure that already fits does not move. A number
+    #: is that number exactly, for a figure that wants its panel where it put it.
     margin_left: float | None = None
     margin_right: float | None = None
     margin_top: float | None = None

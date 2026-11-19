@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import math
 
+from ...render import text_width
+
 
 def _as_text(value) -> str | None:
     """A value as label text. Numbers are written plainly — 81, not 81.0."""
@@ -57,6 +59,11 @@ def split_markup(written: str) -> list[tuple[str, str]]:
         return [(written.replace("\\" + _MARK, _MARK), "normal")]
     pieces.append(("".join(buf), style))
     return [(s, st) for s, st in pieces if s]
+
+
+def _face(style) -> str:
+    """The family a label is actually drawn in, which is what it has to be measured in."""
+    return str(style.label_family or style.font_family)
 
 
 def _labeller(values, text):
@@ -167,17 +174,13 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
                 else:
                     canvas.text(at_x, at_y, written, dx=ox * gap, dy=oy * gap,
                                 anchor=anchor, size=size, color=color)
-                    wide = len(written) * fs * 0.58
-                # a key placed beside the figure has to clear these, and only this layer knows how
-                # long they are
-                tall = fs
-                if ox > 0:
-                    canvas.claim("right", tx + wide)
-                elif oy > 0:
-                    canvas.claim("bottom", ty + fs * 0.5)
-                # a key dropped in a corner has to clear these as well as the branches
-                x0 = tx if anchor == "start" else (tx - wide if anchor == "end" else tx - wide / 2)
-                canvas.obstruct(x0, ty - tall / 2, x0 + wide, ty + tall / 2)
+                    wide = text_width(written, family=_face(style), size=fs,
+                                      style=style.label_style)
+                # the page has to hold these and a key must not be dropped on them, and only this
+                # layer knows how long they came out. A "down" tree centres its names under the
+                # tips, so the first and the last reach past the panel sideways: the box is claimed
+                # on every side it touches, not only the one the tips face.
+                canvas.claim_text(tx, ty, wide, fs, anchor=anchor)
                 continue
             # radial/unrooted: point outward — from the centre (radial) or the parent (unrooted).
             lx, ly = canvas.px(layout.x(leaf)), canvas.py(layout.y(leaf))
@@ -197,12 +200,15 @@ def tip_labels(*, size=None, color=None, offset: float = 6.0, values=None, text=
                 place, turn = "start", angle
             else:
                 place, turn = "end", angle + 180
+            fs = size or style.font_size
             if markup:
-                canvas.rich_text(ox, oy, split_markup(written), anchor=place, rotate=turn,
-                                 size=size, color=color, family=style.label_family)
+                wide = canvas.rich_text(ox, oy, split_markup(written), anchor=place, rotate=turn,
+                                        size=size, color=color, family=style.label_family)
             else:
                 canvas.raw_text(ox, oy, written, anchor=place, rotate=turn, size=size,
                                 color=color, style=style.label_style, family=style.label_family)
+                wide = text_width(written, family=_face(style), size=fs, style=style.label_style)
+            canvas.claim_text(ox, oy, wide, fs, anchor=place, rotate=turn)
 
     return layer
 

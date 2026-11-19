@@ -125,7 +125,9 @@ def _outside_box(canvas, style, loc: str, box_w: float, box_h: float, who: str) 
     gap = 10.0
     if loc == "right":
         panel_edge = w - style.margin_at("right")
-        x = canvas.claimed("right", panel_edge) + gap
+        # never inside the panel: a layer may claim a box that sits well within it — a centred tip
+        # name on a turned tree does — and a block placed *outside* starts at the panel edge
+        x = max(canvas.claimed("right", panel_edge), panel_edge) + gap
         # centred on the plotting area, which is how a key beside a figure reads
         top, bottom = style.margin_at("top"), h - style.margin_at("bottom")
         y = (top + bottom) / 2 - box_h / 2
@@ -138,7 +140,7 @@ def _outside_box(canvas, style, loc: str, box_w: float, box_h: float, who: str) 
         canvas.claim("right", x + box_w)      # so a second block beside the figure clears this one
         return x, y
     panel_bottom = h - style.margin_at("bottom")
-    y = canvas.claimed("bottom", panel_bottom) + gap
+    y = max(canvas.claimed("bottom", panel_bottom), panel_bottom) + gap
     x = (style.margin_at("left") + (w - style.margin_at("right"))) / 2 - box_w / 2
     if y + box_h > h:
         need = round(y + box_h - panel_bottom + gap)

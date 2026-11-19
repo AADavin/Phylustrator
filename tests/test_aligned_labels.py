@@ -13,6 +13,7 @@ import re
 import pytest
 
 from phylustrator import Style
+from phylustrator.render import text_width
 from phylustrator.trees import loads, plot, tip_labels
 
 _NWK = "(((A:1,B:1)ab:1,(C:1,D:1)cd:1)abcd:1,(E:1,F:1)ef:1)r;"   # E and F end one unit short
@@ -128,7 +129,8 @@ def test_the_automatic_margin_measures_the_column_and_not_the_tips():
     them off — which is the bug #60 fixed, reached a different way."""
     long_names = {name: f"{name} a rather long name indeed" for name in "ABCDEF"}
     figure = _figure() + tip_labels(aligned=True, values=long_names, size=9)
-    ends = [x + len(text) * 9 * 0.58 for text, (x, _) in _written(figure.as_svg()).items()]
+    ends = [x + text_width(text, family="Helvetica", size=9)
+            for text, (x, _) in _written(figure.as_svg()).items()]
     assert max(ends) <= _STYLE.width + 0.5
 
 

@@ -6,6 +6,7 @@ import math
 import warnings
 
 from ...color import Colormap, map_values
+from ...render import text_width
 
 #: Which way "past the tip" points, per orientation — the direction a chip is pushed out in.
 _OUTWARD = {"right": (1.0, 0.0), "left": (-1.0, 0.0), "down": (0.0, 1.0), "up": (0.0, -1.0)}
@@ -53,7 +54,9 @@ def tip_track(values, *, cmap: Colormap = "viridis", palette: dict | None = None
                 cx += offset * dx / d
                 cy += offset * dy / d
             canvas.raw_marker(cx, cy, shape, color, size / 2, stroke=stroke, stroke_width=stroke_width)
-            canvas.claim("right", cx + size / 2)
+            # the chip is a box, and on a round tree it is pushed out in whatever direction its own
+            # tip faces, so every side it reaches into has to know about it (#89)
+            canvas.claim_box(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
             chips.append((cx, cy))
         if label and chips:
             _header(canvas, style, chips, label, label_angle, label_size, size, layout)
@@ -76,6 +79,8 @@ def _header(canvas, style, chips, label, angle, fsize, chip, layout) -> None:
     # grows upward; flat, it reads best centred over the column
     anchor = "middle" if angle == 0 else "start"
     canvas.raw_text(x, y, label, anchor=anchor, size=fs, rotate=angle)
+    canvas.claim_text(x, y, text_width(label, family=style.font_family, size=fs), fs,
+                      anchor=anchor, rotate=angle)
 
 
 #: The layouts that put the tree around a centre, so a ring has somewhere to go.
@@ -205,9 +210,14 @@ def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
             r = r_out + label_offset
             x, y = cx0 + r * math.cos(mid), cy0 + r * math.sin(mid)
             # upright, and growing away from the tree rather than back across it
-            canvas.raw_text(x, y, str(written), anchor="start" if math.cos(mid) >= 0 else "end",
-                            size=fs, color=label_color or colors[ordered[first].name],
+            place = "start" if math.cos(mid) >= 0 else "end"
+            canvas.raw_text(x, y, str(written), anchor=place, size=fs,
+                            color=label_color or colors[ordered[first].name],
                             family=style.label_family)
+            # the outermost thing on the figure, so the page has to be told about it (#89)
+            canvas.claim_text(x, y, text_width(str(written),
+                                               family=style.label_family or style.font_family,
+                                               size=fs), fs, anchor=place)
 
     return layer
 
