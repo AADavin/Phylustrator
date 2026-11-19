@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-19
+
 ### Added
 - `trees.plot(layout="unrooted", daylight=True)` — Felsenstein's **equal-daylight** refinement,
   which spreads an unrooted tree over the whole circle. Equal-angle gives each subtree a wedge in
