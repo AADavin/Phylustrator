@@ -18,6 +18,7 @@ class _Recorder:
 
     def __init__(self):
         self.sectors, self.polygons = [], []
+        self.regions = []
 
     def px(self, x):
         return x
@@ -32,7 +33,7 @@ class _Recorder:
         self.polygons.append(list(points))
 
     def region(self, *a, **kw):
-        pass
+        self.regions.append(a)
 
 
 def _drawn(clade, layout_kind):
@@ -121,3 +122,67 @@ def test_an_unrooted_hull_wraps_the_clade_and_nothing_else():
     small, = _drawn("ab", "unrooted").polygons
     large, = _drawn("efgh", "unrooted").polygons
     assert len(small) >= 3 and _area(large) > _area(small)
+
+
+@pytest.mark.parametrize("kind", ["rectangular", "diagonal"])
+@pytest.mark.parametrize("orientation", ["right", "left", "down", "up"])
+@pytest.mark.parametrize("clade", ["a", "ab"])
+def test_clades_start_at_a_shared_cut_in_every_flat_orientation(kind, orientation, clade):
+    from phylustrator.trees import layout as layouts
+
+    tree = loads(NWK)
+    layout = getattr(layouts, kind)(tree, orientation=orientation, stem=False)
+    canvas = _Recorder()
+    highlight_clade(clade, start=0.5)(canvas, tree, layout, Style())
+    x0, y0, x1, y1 = canvas.regions[0]
+    depth_range = (x0, x1) if layout.grows_along_x else (y0, y1)
+    expected = (-3.0, -0.5) if orientation in ("left", "up") else (0.5, 3.0)
+    assert depth_range == pytest.approx(expected)
+    assert x1 > x0 and y1 > y0
+
+
+def test_explicit_radial_start_uses_the_time_marker_stem_scale_without_padding():
+    from phylustrator.trees.layout import radial
+
+    tree = loads(NWK)
+    canvas = _Recorder()
+    highlight_clade("a", start=0.8, pad_px=0.2)(canvas, tree, radial(tree), Style())
+    r_in, r_out, _, _ = canvas.sectors[0]
+    assert r_in == pytest.approx(0.5)  # 0.8 minus the root's 0.3 stem
+    assert r_out == pytest.approx(3.2)
+
+
+def test_clade_box_tracks_the_explicit_start_on_the_page():
+    fig = plot(loads(NWK)) + highlight_clade("a", start=0.5, color="#FDBF6F")
+    box = fig.clade_box("a", start=0.5)
+    drawn = re.search(r'<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" '
+                      r'fill="#FDBF6F"', fig.as_svg())
+    assert drawn
+    x, y, width, height = map(float, drawn.groups())
+    assert (x, y, x + width, y + height) == pytest.approx((box.x0, box.y0, box.x1, box.y1))
+
+
+def test_start_stays_exact_even_when_a_short_tip_ends_before_it():
+    from phylustrator.trees.layout import rectangular
+
+    tree = loads("((a:1,b:3)ab:1,c:4);")
+    canvas = _Recorder()
+    highlight_clade("ab", start=3)(canvas, tree, rectangular(tree), Style())
+    x0, _, x1, _ = canvas.regions[0]
+    assert (x0, x1) == (3, 4)
+
+
+@pytest.mark.parametrize("start", [-1.0, float("inf"), float("nan"), 4.0])
+def test_invalid_start_depth_is_rejected(start):
+    with pytest.raises(ValueError, match="start"):
+        (plot(loads(NWK)) + highlight_clade("a", start=start)).as_svg()
+
+
+def test_radial_start_inside_the_hidden_stem_is_rejected():
+    with pytest.raises(ValueError, match="stem"):
+        (plot(loads(NWK), layout="radial") + highlight_clade("ab", start=0.1)).as_svg()
+
+
+def test_unrooted_start_is_rejected_because_it_has_no_depth_axis():
+    with pytest.raises(ValueError, match="unrooted"):
+        (plot(loads(NWK), layout="unrooted") + highlight_clade("ab", start=0.5)).as_svg()

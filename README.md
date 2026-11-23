@@ -73,6 +73,21 @@ ph.page([[ph.trees.plot(t1) + ph.trees.tip_labels(),
 and `ph.below` still pair one tree with one companion panel, lined up on the tips or on the time
 axis; a composite from either can itself go on a page.
 
+To show groups crossing one cut line, give their highlights the same starting depth. This also
+gives a one-tip group a box with a visible width:
+
+```python
+fig = (ph.trees.plot(tree, stem=False)
+       + ph.trees.highlight_clade("A", start=0.5)
+       + ph.trees.highlight_clade("bc", start=0.5)
+       + ph.trees.time_marker(0.5, label="cut"))
+```
+
+`start` uses the `time_marker` scale. It sets the depth edge on rectangular and diagonal trees
+(including turned trees), or the exact inner radius on radial trees after subtracting the root
+stem. Omit it to start at each clade's own node. `fig.clade_box(..., start=0.5)` supplies the matching
+pixel box for zoom connectors. Unrooted trees have no depth axis and reject this option.
+
 ## Genomes
 
 The same grammar, for genome maps. Plot a genome as a line or a ring, colour genes by family or

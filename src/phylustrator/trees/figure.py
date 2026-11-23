@@ -228,16 +228,17 @@ class Figure:
         x_pixels = (canvas.px(layout.xlim[0]), canvas.px(layout.xlim[1]))
         return Geometry(canvas.size, tips, tip_x, nodes, layout.xlim, x_pixels)
 
-    def clade_box(self, clade: str, *, pad: float = 0.4) -> CladeBox:
+    def clade_box(self, clade: str, *, pad: float = 0.4, start: float | None = None) -> CladeBox:
         """The pixel box around the clade rooted at ``clade``, for this figure's current style.
 
         Computed from the layout, so it is there before anything is drawn: lay out the zoom lines
-        from it, then draw. ``highlight_clade`` with the same ``pad`` outlines exactly this box.
-        Rectangular layouts only, where a clade is a box; it raises on the others."""
+        from it, then draw. ``highlight_clade`` with the same ``pad`` and ``start`` outlines exactly
+        this box. Rectangular and diagonal layouts only, where a clade is a box; it raises on the
+        others."""
         layout = self._lay_out()
         canvas = Canvas(self._fitted_style(), layout.xlim, layout.ylim,
                         equal_aspect=(self.layout in _ROUND))
-        x0, y0, x1, y1 = clade_extent(self.tree, layout, clade, pad)
+        x0, y0, x1, y1 = clade_extent(self.tree, layout, clade, pad, start=start)
         return CladeBox(clade, canvas.px(x0), canvas.py(y0), canvas.px(x1), canvas.py(y1))
 
     def _draw_on(self, style: Style) -> Canvas:
