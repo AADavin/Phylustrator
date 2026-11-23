@@ -12,11 +12,14 @@ places each value at its node's pixel ``x``.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
+from textwrap import wrap
 
 from .render import Canvas
 from .style import Style
-from .trees.layers.guides import draw_time_axis
+from .trees.layers.guides import _round_step, _text_width, draw_time_axis
+from .trees.panels import _TimePanel
 
 
 class Composite:
@@ -70,7 +73,7 @@ def beside(tree, panel, *, width: float = 1100.0, height: float | None = None,
 
 
 def below(tree, panel, *, panel_height: float = 200.0, gap: float = 18.0, axis: str | None = "Time",
-          ticks: int = 5) -> Composite:
+          ticks: int = 5, labels: Sequence[str] | None = None) -> Composite:
     """Render Phylustrator ``tree`` with ``panel`` underneath, both on the tree's x axis.
 
     The x-axis twin of :func:`beside`: a value at a node sits directly under that node (see
@@ -83,13 +86,31 @@ def below(tree, panel, *, panel_height: float = 200.0, gap: float = 18.0, axis: 
     bottom-left ``colorbar``) lands in the panel. The panel's y axis sits in the tree's left margin,
     so widen ``margin_left`` in the tree's ``Style`` for long tick labels or a y label.
 
+    Pass a list or tuple of time panels to overlay several series on one y axis. Its range is
+    the union of their ``r_range()`` bounds, including intervals; the first panel supplies the
+    y label, tick count and zero-line setting. ``labels`` names the series in a colour key below
+    the time axis (default: ``Series 1``, ``Series 2``, ...). The original panels are not changed.
+
     Rectangular trees only, since that is the layout where x is time. The composite is drawn as
     vectors on one canvas, so it needs no cairosvg (unlike :func:`beside`)."""
     if tree.layout != "rectangular":
         raise ValueError(f"below() needs a rectangular tree, where x is time; got layout={tree.layout!r}")
-    if not hasattr(panel, "draw_below"):
-        raise TypeError(f"below() takes a panel lined up with the tree's x axis, such as trees.node_points; "
-                        f"{type(panel).__name__} is not one (a row panel goes in beside())")
+    panels = list(panel) if isinstance(panel, (list, tuple)) else [panel]
+    if not panels:
+        raise ValueError("below() needs at least one panel")
+    if labels is not None and len(labels) != len(panels):
+        raise ValueError("below(): labels must name every panel")
+    for item in panels:
+        if not hasattr(item, "draw_below"):
+            raise TypeError(f"below() takes a panel lined up with the tree's x axis, such as trees.node_points; "
+                            f"{type(item).__name__} is not one (a row panel goes in beside())")
+    if len(panels) > 1:
+        if not all(isinstance(item, _TimePanel) for item in panels):
+            raise TypeError("below(): a shared y axis needs time panels such as node_points or band")
+        ranges = [item.r_range() for item in panels]
+        low, high = min(r[0] for r in ranges), max(r[1] for r in ranges)
+        limits = (low, high, _round_step(high - low, panels[0].ticks))
+        panels = [item._on_axis(limits, show=i == 0) for i, item in enumerate(panels)]
     style = tree.style
     ts, ls = style.font_size * 0.85, style.font_size
     plot_bottom = style.height - style.margin_at("bottom")      # where the lowest tip sits in the tree alone
@@ -104,16 +125,37 @@ def below(tree, panel, *, panel_height: float = 200.0, gap: float = 18.0, axis: 
     else:                                                       # ticks, no label
         axis_room = 14 + ts + 3 + ts / 2 + 6
     height = bottom + max(style.margin_at("bottom"), axis_room)
+    key: list[tuple[float, float, list[str], str]] = []
+    if len(panels) > 1 or labels is not None:
+        names = list(labels) if labels is not None else [f"Series {i + 1}" for i in range(len(panels))]
+        left, right = style.margin_at("left"), style.width - style.margin_at("right")
+        swatch, row_height = ts + 6, ts * 1.5
+        chars = max(1, int((right - left - swatch) / (ts * 0.58)))
+        x, y, line_height = left, height + ts, row_height
+        for item, name in zip(panels, names):
+            lines = wrap(str(name), width=chars) or [""]
+            width = swatch + max(_text_width(line, ts) for line in lines)
+            if x > left and x + width > right:
+                x, y, line_height = left, y + line_height, row_height
+            key.append((x, y, lines, getattr(item, "color", style.label_color)))
+            line_height = max(line_height, len(lines) * row_height)
+            x += width + ts * 1.5
+        height = y + line_height + ts
     # The same tree on a taller page, with all the extra height given to its bottom margin: the
     # nodes keep their pixels, and the panel is drawn into that margin on the same canvas.
     sized = tree.with_style(replace(style, height=height, margin_bottom=height - plot_bottom))
     geom = sized.geometry()
     canvas = sized._build()
-    panel.draw_below(canvas, geom, top, bottom, style)
+    for item in panels:
+        item.draw_below(canvas, geom, top, bottom, style)
     if axis is not None:
         # +14 below the panel, the offset trees.time_axis leaves below a tree
         draw_time_axis(canvas, geom.px, geom.xlim[1], bottom + 14, axis, ticks=ticks,
                        tick_size=ts, label_size=ls)
+    for x, y, lines, color in key:
+        canvas.raw_rect(x, y - ts / 3, ts, ts * 2 / 3, fill=color)
+        for i, line in enumerate(lines):
+            canvas.raw_text(x + ts + 6, y + i * ts * 1.5, line, size=ts)
     return Composite(canvas)
 
 

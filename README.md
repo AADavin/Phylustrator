@@ -56,6 +56,9 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
   `ph.below(tree, panel)`. The panel shares the tree's time axis, so a value measured at a node
   sits directly under that node; `node_points(intervals=…)` adds its uncertainty as a whisker,
   and `band` shades between a low and a high series for a quantity sampled along the tree.
+  `ph.below(tree, [first, second], labels=["Method A", "Method B"])` overlays panels on a
+  shared y axis. Its range includes every series and interval, with one y label from the first
+  panel and a colour key below the time axis; the original panels keep their own ranges.
 
 ## One page, several figures
 
