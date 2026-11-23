@@ -73,6 +73,17 @@ ph.page([[ph.trees.plot(t1) + ph.trees.tip_labels(),
 and `ph.below` still pair one tree with one companion panel, lined up on the tips or on the time
 axis; a composite from either can itself go on a page.
 
+For measurements sampled between tree nodes, use a time-keyed panel:
+
+```python
+measured = {0.0: 12.0, 0.5: 18.0, 1.0: 25.0, 1.5: 31.0, 2.0: 29.0}
+ph.below(fig, ph.trees.time_points(measured, line=True, label="Rate"))
+```
+
+`time_points` uses the same time-to-pixel mapping as `band` and accepts the styling, y limits and
+uncertainty intervals of `node_points`; its `colors` and `intervals` mappings are keyed by time.
+For a line without visible markers, pass `line=True, size=0`.
+
 ## Genomes
 
 The same grammar, for genome maps. Plot a genome as a line or a ring, colour genes by family or

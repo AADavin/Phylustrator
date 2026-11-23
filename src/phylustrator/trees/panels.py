@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from typing import Any
 
+from .figure import Geometry
 from .layers.guides import _round_step, _text_width
 
 
@@ -140,7 +142,7 @@ class NodePoints(_TimePanel):
             reach += [low, high]
         return reach
 
-    def draw_below(self, canvas, geometry, top: float, bottom: float, style) -> None:
+    def _positions(self, geometry: Geometry) -> dict[str, float]:
         at: dict[str, float] = {}
         for node in geometry.nodes:
             if node.name:
@@ -149,7 +151,10 @@ class NodePoints(_TimePanel):
         if missing:
             shown = ", ".join(missing[:5]) + (", …" if len(missing) > 5 else "")
             raise ValueError(f"node_points: {len(missing)} name(s) not in the tree: {shown}")
+        return at
 
+    def draw_below(self, canvas, geometry, top: float, bottom: float, style) -> None:
+        at = self._positions(geometry)
         py, lo, hi = self._draw_axis(canvas, geometry, top, bottom, style)
 
         # the whiskers go under the points, so a point is never half-hidden by its own bar
@@ -174,6 +179,54 @@ def node_points(values: dict, **kw) -> NodePoints:
     """A panel under a tree: one point per named node, placed at the node's time. Pass it to
     :func:`~phylustrator.compose.below`; see :class:`NodePoints` for the options."""
     return NodePoints(values, **kw)
+
+
+class TimePoints(NodePoints):
+    """Points or a connected series sampled on the tree's time scale.
+
+    Args:
+        values: A mapping from numeric time to measurement, including times with no tree node.
+        **kw: The options of :class:`NodePoints`, including ``line``, ``color``, ``size``,
+            ``vmin`` and ``vmax``. ``colors`` and ``intervals`` are keyed by time here.
+            Use ``line=True, size=0`` for a line without visible point markers.
+
+    Time maps to pixels exactly as in :class:`Band`. Samples are joined in increasing time
+    order. Numeric strings are accepted; invalid or nonfinite time keys raise ``ValueError``.
+    """
+
+    def __init__(self, values: dict, **kw: Any) -> None:
+        if not values:
+            raise ValueError("time_points() needs at least one value")
+
+        def keyed(data: dict) -> dict:
+            normalized = {}
+            for key, value in data.items():
+                try:
+                    time = float(key)
+                except (TypeError, ValueError) as error:
+                    raise ValueError(f"time_points: invalid time {key!r}") from error
+                if not math.isfinite(time):
+                    raise ValueError(f"time_points: time {key!r} must be finite")
+                normalized[str(time)] = value
+            return normalized
+
+        for option in ("colors", "intervals"):
+            if kw.get(option) is not None:
+                kw[option] = keyed(kw[option])
+        super().__init__(keyed(values), **kw)
+
+    def _positions(self, geometry: Geometry) -> dict[str, float]:
+        return {time: geometry.px(float(time)) for time in self.values}
+
+
+def time_points(values: dict, **kw: Any) -> TimePoints:
+    """Return a time-keyed point/line panel for :func:`~phylustrator.compose.below`.
+
+    Args:
+        values: Measurements keyed by numeric time on the tree's own scale.
+        **kw: Styling and axis options described in :class:`TimePoints`.
+    """
+    return TimePoints(values, **kw)
 
 
 class Band(_TimePanel):
