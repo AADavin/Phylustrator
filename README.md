@@ -73,6 +73,18 @@ ph.page([[ph.trees.plot(t1) + ph.trees.tip_labels(),
 and `ph.below` still pair one tree with one companion panel, lined up on the tips or on the time
 axis; a composite from either can itself go on a page.
 
+Keep a subset of leaves before plotting a dense tree:
+
+```python
+tree = ph.trees.loads("(((A:1,B:1):1,C:2):1,(D:1.5,E:1.5):1.5);")
+small = tree.prune(keep={"A", "C", "D"})
+print(ph.trees.dumps(small))  # ((A:2,C:2):1,D:3);
+```
+
+Pruning returns a new tree, preserves leaf order and surviving node names, and adds branch lengths
+when collapsing nodes with a single remaining child. If the root collapses, its length is included
+in the new root's stem. Empty selections and unknown leaf names raise `ValueError`.
+
 ## Genomes
 
 The same grammar, for genome maps. Plot a genome as a line or a ring, colour genes by family or

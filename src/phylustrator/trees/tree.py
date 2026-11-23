@@ -7,7 +7,7 @@ them with coordinates without the tree type ever hearing about drawing.
 
 from __future__ import annotations
 
-from typing import Iterator
+from typing import Iterable, Iterator
 
 
 class Node:
@@ -102,6 +102,47 @@ class Tree:
             distance += node.length
             node = node.parent
         return distance
+
+    def prune(self, keep: Iterable[str]) -> "Tree":
+        """Return an independent tree containing only the requested leaves.
+
+        Args:
+            keep: Names of leaves to retain. Duplicate names retain every matching leaf.
+
+        Returns:
+            A new tree in the original leaf order. Nodes left with one child collapse into
+            that child, adding their branch lengths. Surviving nodes keep their names. If
+            the root collapses, its length becomes part of the new root's stem, preserving
+            origin-to-tip distances. The original tree is unchanged.
+
+        Raises:
+            ValueError: If ``keep`` is empty or contains a name that is not a leaf.
+        """
+        names = set(keep)
+        if not names:
+            raise ValueError("keep must contain at least one leaf name")
+        missing = names - {leaf.name for leaf in self.leaves}
+        if missing:
+            raise ValueError(f"no leaf named {', '.join(repr(name) for name in sorted(missing))}")
+
+        copied: dict[Node, Node] = {}
+        # Reverse preorder visits every child before its parent without recursion.
+        for node in reversed(list(self.walk())):
+            if node.is_leaf:
+                if node.name in names:
+                    copied[node] = Node(node.name, node.length)
+                continue
+            children = [copied[child] for child in node.children if child in copied]
+            if len(children) == 1:
+                child = children[0]
+                child.length += node.length
+                copied[node] = child
+            elif children:
+                clone = Node(node.name, node.length)
+                for child in children:
+                    clone.add_child(child)
+                copied[node] = clone
+        return Tree(copied[self.root])
 
     def __repr__(self) -> str:
         return f"Tree(root={self.root!r}, {len(self.leaves)} leaves)"
