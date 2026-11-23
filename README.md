@@ -73,6 +73,18 @@ ph.page([[ph.trees.plot(t1) + ph.trees.tip_labels(),
 and `ph.below` still pair one tree with one companion panel, lined up on the tips or on the time
 axis; a composite from either can itself go on a page.
 
+For rates or counts spanning orders of magnitude, the time panels under a tree accept
+`log=True`:
+
+```python
+rates = ph.trees.node_points({"r": 6, "x": 170, "y": 30000}, line=True, log=True)
+ph.below(fig, rates)
+```
+
+Both `node_points` and `band` use a base-10 y axis with decade ticks. Values, interval endpoints,
+band middle values and fixed `vmin`/`vmax` limits must be positive and finite; an invalid
+measurement raises an error naming its node or time. The default scale remains linear.
+
 ## Genomes
 
 The same grammar, for genome maps. Plot a genome as a line or a ring, colour genes by family or

@@ -22,12 +22,23 @@ class _TimePanel:
     whatever is drawn in the band, and two panels under one tree have to agree about them or they
     cannot be read together."""
 
-    def __init__(self, *, vmin, vmax, label, ticks, zero) -> None:
+    def __init__(self, *, vmin, vmax, label, ticks, zero, log: bool = False) -> None:
         self.vmin = vmin
         self.vmax = vmax
         self.label = label
         self.ticks = ticks
         self.zero = zero
+        self.log = log
+        if log:
+            for key, value in (("vmin", vmin), ("vmax", vmax)):
+                if value is not None:
+                    self._check_log_value(float(value), key)
+            if vmin is not None and vmax is not None and vmin >= vmax:
+                raise ValueError("log: vmin must be smaller than vmax")
+
+    def _check_log_value(self, value: float, key: object) -> None:
+        if self.log and (not math.isfinite(value) or value <= 0):
+            raise ValueError(f"log: value at {key!r} must be finite and positive; got {value:g}")
 
     def _reach(self) -> list:
         """Every number the panel has to fit between its top and its bottom."""
@@ -35,6 +46,8 @@ class _TimePanel:
 
     def r_range(self) -> tuple[float, float, float]:
         """The y range this panel will draw itself on: ``(low, high, tick step)``.
+
+        With ``log=True``, the step is in base-10 exponents (one decade).
 
         Two panels under one tree have to agree about it, and a caller comparing figures may want
         to fix it with ``vmin``/``vmax``, so it is answerable without drawing anything."""
@@ -46,6 +59,22 @@ class _TimePanel:
         reach = self._reach()
         lo = min(reach) if self.vmin is None else self.vmin
         hi = max(reach) if self.vmax is None else self.vmax
+        if self.log:
+            if self.vmin is None:
+                rounded = float(f"1e{math.floor(math.log10(lo))}")
+                lo = rounded if rounded > 0 else lo
+            if self.vmax is None:
+                rounded = float(f"1e{math.ceil(math.log10(hi))}")
+                hi = rounded if math.isfinite(rounded) else hi
+            if hi <= lo:
+                if self.vmin is None:
+                    lo = hi / 10 or hi
+                if self.vmax is None:
+                    widened = max(hi, lo) * 10
+                    hi = widened if math.isfinite(widened) else hi
+                if hi <= lo:
+                    raise ValueError("log: vmin and vmax must leave a finite nonzero range")
+            return lo, hi, 1.0
         if hi <= lo:                              # one value, or all equal: give it a band to sit in
             lo, hi = lo - 1.0, hi + 1.0
         step = _round_step(hi - lo, self.ticks)
@@ -59,9 +88,11 @@ class _TimePanel:
                    style) -> tuple[Callable[[float], float], float, float]:
         """The y axis, its ticks and its label. Returns the value-to-pixel mapping for the body."""
         lo, hi, step = self._range()
+        transform = math.log10 if self.log else float
+        low, high = transform(lo), transform(hi)
 
         def py(v: float) -> float:
-            return bottom - (v - lo) / (hi - lo) * (bottom - top)
+            return bottom - (transform(v) - low) / (high - low) * (bottom - top)
 
         x0, x1 = geometry.x_pixels
         ts, ls = style.font_size * 0.85, style.font_size
@@ -69,9 +100,9 @@ class _TimePanel:
         ax = x0 - 10
         canvas.raw_line(ax, top, ax, bottom, "#333333", 1.2)
         widest = 0.0
-        k = math.ceil(lo / step - 1e-9)
-        while k * step <= hi + step * 1e-9:
-            v = round(k * step, 10) + 0.0                 # + 0.0 turns a -0.0 into 0
+        k = math.ceil(low / step - 1e-9)
+        while k * step <= high + step * 1e-9:
+            v = float(f"1e{k}") if self.log else round(k * step, 10) + 0.0
             text = f"{v:g}"
             canvas.raw_line(ax - 5, py(v), ax, py(v), "#333333", 1.2)
             canvas.raw_text(ax - 8, py(v), text, anchor="end", size=ts)
@@ -80,7 +111,7 @@ class _TimePanel:
         if self.label:
             canvas.raw_text(ax - 8 - widest - ls * 0.8, (top + bottom) / 2, self.label,
                             anchor="middle", size=ls, rotate=-90)
-        if self.zero and lo < 0.0 < hi:
+        if self.zero and not self.log and lo < 0.0 < hi:
             canvas.raw_line(x0, py(0.0), x1, py(0.0), "#b8bec3", 1.0)
         return py, lo, hi
 
@@ -100,7 +131,9 @@ class NodePoints(_TimePanel):
     ``colors`` tints points per node, else the flat ``color``. ``line`` joins the points left to
     right. ``zero`` draws a light line at 0 when the range crosses it — the reference a difference is
     read against. ``vmin`` / ``vmax`` fix the y range; by default it is the values' range, widened
-    to round numbers. ``label`` names the y axis.
+    to round numbers. ``label`` names the y axis. ``log=True`` spaces values by their base-10
+    logarithm and ticks at the decades; values, interval ends and fixed limits must be positive
+    and finite. Invalid measurements identify their node key in the error.
     """
 
     def __init__(self, values: dict, *, color: str = "#3a6ea5", colors: dict | None = None,
@@ -108,14 +141,18 @@ class NodePoints(_TimePanel):
                  line_color: str | None = None, zero: bool = True, vmin: float | None = None,
                  vmax: float | None = None, label: str = "", ticks: int = 5,
                  intervals: dict | None = None, interval_width: float = 1.4,
-                 interval_cap: float = 4.0) -> None:
-        super().__init__(vmin=vmin, vmax=vmax, label=label, ticks=ticks, zero=zero)
+                 interval_cap: float = 4.0, log: bool = False) -> None:
+        super().__init__(vmin=vmin, vmax=vmax, label=label, ticks=ticks, zero=zero, log=log)
         if not values:
             raise ValueError("node_points() needs at least one value")
         self.values = {str(k): float(v) for k, v in values.items()}
+        for name, value in self.values.items():
+            self._check_log_value(value, name)
         self.intervals = {}
         for name, pair in (intervals or {}).items():
             low, high = (float(v) for v in pair)
+            self._check_log_value(low, name)
+            self._check_log_value(high, name)
             if low > high:
                 raise ValueError(f"node_points: the interval for {name!r} is ({low:g}, {high:g}), "
                                  f"which runs backwards. Give it as (low, high).")
@@ -190,17 +227,21 @@ class Band(_TimePanel):
 
     ``color`` fills the band, ``opacity`` fades it, ``line_color`` draws the middle (the fill colour
     by default). The y axis is :class:`NodePoints`'s, so a band and a set of points under the same
-    tree can be read against each other.
+    tree can be read against each other. ``log=True`` gives both the band and its middle a
+    logarithmic scale with decade ticks. Non-positive or nonfinite values identify their time
+    key in an error; ``vmin`` and ``vmax`` must also be positive and finite.
     """
 
     def __init__(self, values: dict, *, middle: dict | None = None, color: str = "#3a6ea5",
                  opacity: float = 0.25, line_color: str | None = None, line_width: float = 1.6,
                  edge: bool = False, vmin: float | None = None, vmax: float | None = None,
-                 label: str = "", ticks: int = 5, zero: bool = True) -> None:
-        super().__init__(vmin=vmin, vmax=vmax, label=label, ticks=ticks, zero=zero)
+                 label: str = "", ticks: int = 5, zero: bool = True, log: bool = False) -> None:
+        super().__init__(vmin=vmin, vmax=vmax, label=label, ticks=ticks, zero=zero, log=log)
         self.values = {}
         for t, pair in values.items():
             low, high = (float(v) for v in pair)
+            self._check_log_value(low, t)
+            self._check_log_value(high, t)
             if low > high:
                 raise ValueError(f"band: the pair at time {float(t):g} is ({low:g}, {high:g}), "
                                  f"which runs backwards. Give it as (low, high).")
@@ -209,6 +250,8 @@ class Band(_TimePanel):
             raise ValueError("band() needs at least two times: one is a bar, not a band. "
                              "node_points(intervals=…) draws a value and its interval at a node.")
         self.middle = {float(t): float(v) for t, v in (middle or {}).items()}
+        for time, value in self.middle.items():
+            self._check_log_value(value, time)
         self.color = color
         self.opacity = opacity
         self.line_color = line_color
