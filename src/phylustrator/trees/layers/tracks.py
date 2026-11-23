@@ -130,7 +130,7 @@ def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
          gap: float | None = None, width: float | None = None, radius_pct: float = 100.0,
          opacity: float = 1.0, edge: str | None = None, edge_width: float = 0.6,
          labels=None, label_size: float | None = None, label_color: str | None = None,
-         label_offset: float = 10.0):
+         label_offset: float = 10.0, label_once: bool = False, min_run: int = 1):
     """An outer ring of coloured arcs — one contiguous segment per tip at a fixed radius — the
     classic circular-tree "population ring". Needs a round layout — ``radial`` or ``unrooted``,
     and a flat one refuses, having no centre to draw a circle around. Each tip's arc spans the
@@ -145,9 +145,13 @@ def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
     and upright, which is how the major clades around a circular tree are usually named — the
     alternative was a key away from the tree. ``labels={value: text}`` writes something else, and a
     value left out of that dict is not labelled. A band is a **run** of neighbouring tips, so a
-    value that appears in two places on the ring is named twice, once on each; naming it once would
-    put the name in the gap between them. ``label_color`` defaults to the band's own colour.
+    value that appears in two places on the ring is named twice by default. ``label_once=True``
+    instead names each value at the midpoint of its largest run (by tip count, with ties going to
+    the first run). ``min_run`` skips labels on runs shorter than that many tips, without removing
+    their coloured sectors. ``label_color`` defaults to the band's own colour.
     Returns a layer."""
+    if not isinstance(min_run, int) or min_run < 1:
+        raise ValueError("min_run must be a positive integer")
 
     def layer(canvas, tree, layout, style):
         if layout.kind not in _ROUND:
@@ -200,9 +204,18 @@ def ring(values, *, cmap: Colormap = "viridis", palette: dict | None = None,
             """Boundary ``i``, with a turn added for an index that has run past the wrap."""
             return b[i] if i <= n else b[i - n] + 2 * math.pi
 
-        for value, first, last in _bands(ordered, colors,
-                                         {lf.name: by_name.get(lf.name) for lf in ordered},
-                                         closed=closed):
+        bands = [run for run in _bands(ordered, colors,
+                                       {lf.name: by_name.get(lf.name) for lf in ordered},
+                                       closed=closed)
+                 if run[2] - run[1] + 1 >= min_run]
+        if label_once:
+            largest: dict = {}
+            for value, first, last in bands:
+                previous = largest.get(value)
+                if previous is None or last - first > previous[2] - previous[1]:
+                    largest[value] = (value, first, last)
+            bands = [run for run in bands if run == largest[run[0]]]
+        for value, first, last in bands:
             written = said.get(value) if said is not None else value
             if written is None or written == "":
                 continue
