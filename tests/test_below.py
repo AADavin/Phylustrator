@@ -7,11 +7,51 @@ from dataclasses import replace
 import pytest
 
 from phylustrator import Style, below
+from phylustrator import trees as tree_api
 from phylustrator.genomes import bars
 from phylustrator.trees import band, loads, node_points, plot, tip_labels
 
 # R's stem is 0.5, so under the default stem-aware layout: R 0.5, E 1.5, H 2.0, C 2.5, A 3.5
 NEWICK = "(((A:1,B:1)C:1,D:2)E:1,(F:1.5,G:1.5)H:1.5)R:0.5;"
+
+
+def test_time_points_place_measurements_on_the_trees_time_scale():
+    fig = plot(loads(NEWICK))
+    values = {2.25: 25, 0: 12, 3.5: 29, 0.75: 18}
+    svg = below(fig, tree_api.time_points(values), axis=None).as_svg()
+    assert [x for x, _ in sorted(_circles(svg))] == pytest.approx(
+        [fig.geometry().px(time) for time in sorted(values)]
+    )
+
+
+def test_time_points_join_samples_in_time_order():
+    fig = plot(loads(NEWICK))
+    panel = tree_api.time_points({2: 20, 0: 1, 1: 10}, line=True, line_color="#123456")
+    svg = below(fig, panel, axis=None).as_svg()
+    segments = _lines(svg, color="#123456")
+    assert len(segments) == 2
+    assert [x0 for x0, _, _, _ in segments] == pytest.approx([fig.geometry().px(0), fig.geometry().px(1)])
+    assert [x1 for _, _, x1, _ in segments] == pytest.approx([fig.geometry().px(1), fig.geometry().px(2)])
+
+
+def test_time_points_accept_numeric_interval_and_color_keys_consistently():
+    panel = tree_api.time_points({0.0: 2, 1: 4}, intervals={0: (1, 3)}, colors={0: "#123456"})
+    assert isinstance(panel, tree_api.TimePoints)
+    assert panel.r_range()[0] <= 1
+    svg = below(plot(loads(NEWICK)), panel).as_svg()
+    assert len(_lines(svg, color="#123456")) == 3
+    assert 'fill="#123456"' in svg
+
+
+@pytest.mark.parametrize("time", [float("nan"), float("inf"), "not-a-time", None])
+def test_time_points_reject_nonfinite_or_nonnumeric_times(time):
+    with pytest.raises(ValueError, match="time_points.*time"):
+        tree_api.time_points({time: 1})
+
+
+def test_time_points_require_at_least_one_measurement():
+    with pytest.raises(ValueError, match="at least one value"):
+        tree_api.time_points({})
 
 
 def _circles(svg):
