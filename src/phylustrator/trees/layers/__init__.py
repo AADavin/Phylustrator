@@ -5,6 +5,7 @@ Each layer is a callable ``(canvas, tree, layout, style) -> None``. Import them 
     from phylustrator.layers import color_branches, tip_labels, colorbar, time_axis
 """
 
+from .bars import tip_bars
 from .clades import highlight_clade
 from .coloring import color_branches, color_history, color_lanes
 from .dots import node_dots
@@ -26,6 +27,7 @@ __all__ = [
     "tip_labels",
     "node_labels",
     "tip_track",
+    "tip_bars",
     "ring",
     "rubberband",
     "branch_events",
