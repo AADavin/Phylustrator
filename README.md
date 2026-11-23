@@ -52,6 +52,10 @@ That is the whole idea: `plot(tree)` starts a figure and each `+ layer` adds one
   the branch's own colour, and `node_halves` puts a two-colour disc on a node.
   An event given to `branch_events` can carry a `weight`, so arcs and marks scale with the count
   they stand for.
+- **Tip bars** — `tip_bars(values, width=220, ticks=(1000, 2000, 3000), label="Genes per genome")`
+  draws proportional bars on one numeric axis, beyond the furthest tip of a rectangular tree.
+  Put it after `tip_labels()` to clear the names. Values must be finite and nonnegative;
+  an explicit `vmax` clips larger values. Right- and left-growing trees are supported.
 - **Panels** — `node_points` and `band`, placed under a rectangular tree with
   `ph.below(tree, panel)`. The panel shares the tree's time axis, so a value measured at a node
   sits directly under that node; `node_points(intervals=…)` adds its uncertainty as a whisker,
