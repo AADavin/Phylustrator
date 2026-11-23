@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from copy import copy
 
 from .layers.guides import _round_step, _text_width
 
@@ -28,6 +29,15 @@ class _TimePanel:
         self.label = label
         self.ticks = ticks
         self.zero = zero
+        self._axis_range: tuple[float, float, float] | None = None
+        self._show_axis = True
+
+    def _on_axis(self, limits: tuple[float, float, float], *, show: bool) -> _TimePanel:
+        """A drawing copy on a shared axis; the caller's panel keeps its own range."""
+        panel = copy(self)
+        panel._axis_range = limits
+        panel._show_axis = show
+        return panel
 
     def _reach(self) -> list:
         """Every number the panel has to fit between its top and its bottom."""
@@ -43,6 +53,8 @@ class _TimePanel:
     def _range(self) -> tuple[float, float, float]:
         """The y range and its tick step. An end the caller did not fix is pushed out to the next
         round tick, so the axis starts and stops on a labelled number."""
+        if self._axis_range is not None:
+            return self._axis_range
         reach = self._reach()
         lo = min(reach) if self.vmin is None else self.vmin
         hi = max(reach) if self.vmax is None else self.vmax
@@ -63,6 +75,8 @@ class _TimePanel:
         def py(v: float) -> float:
             return bottom - (v - lo) / (hi - lo) * (bottom - top)
 
+        if not self._show_axis:
+            return py, lo, hi
         x0, x1 = geometry.x_pixels
         ts, ls = style.font_size * 0.85, style.font_size
         # the y axis stands a little left of time 0, so a point at the crown is not drawn on it
