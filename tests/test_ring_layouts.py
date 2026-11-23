@@ -163,3 +163,66 @@ def test_the_ring_and_the_names_compose_on_an_unrooted_tree():
     svg = (_figure("unrooted", daylight=True) + tip_labels()).as_svg()
     for name in "ABCDEFGH":
         assert f">{name}</text>" in svg
+
+
+_SPLIT_GROUPS = dict(zip("ABCDEFGH", ["Alpha", "Alpha", "Beta", "Alpha", "Alpha", "Alpha", "Beta", "Beta"]))
+_SPLIT_PALETTE = {"Alpha": "#4477AA", "Beta": "#EE6677"}
+
+
+def _split_ring(**kwargs):
+    return (plot(loads(_NWK), layout="radial", style=Style(width=480, height=480))
+            + ring(_SPLIT_GROUPS, palette=_SPLIT_PALETTE, **kwargs)).as_svg()
+
+
+def test_label_once_names_each_value_without_changing_its_colored_sectors():
+    per_run = _split_ring(labels=True)
+    once = _split_ring(labels=True, label_once=True)
+    assert per_run.count(">Alpha</text>") == per_run.count(">Beta</text>") == 2
+    assert once.count(">Alpha</text>") == once.count(">Beta</text>") == 1
+    assert _sectors(once) == _sectors(per_run)
+
+
+def test_label_once_uses_the_largest_run_midpoint():
+    per_run = _split_ring(labels=True)
+    once = _split_ring(labels=True, label_once=True)
+
+    def positions(svg, group):
+        return re.findall(r'<text x="([^"]+)" y="([^"]+)"[^>]*>' + group + r'</text>', svg)
+
+    # Alpha's D..F run and Beta's G..H run both come second in tip order.
+    for group in ("Alpha", "Beta"):
+        assert positions(once, group) == positions(per_run, group)[1:]
+
+
+def test_label_once_keeps_custom_text_and_omitted_groups():
+    svg = _split_ring(labels={"Alpha": "Group A"}, label_once=True)
+    assert svg.count(">Group A</text>") == 1
+    assert ">Beta</text>" not in svg
+
+
+def test_min_run_skips_stray_labels_without_removing_sectors():
+    svg = _split_ring(labels=True, min_run=2)
+    assert svg.count(">Alpha</text>") == 2
+    assert svg.count(">Beta</text>") == 1
+    assert len(_sectors(svg)) == 8
+    assert ">Alpha</text>" not in _split_ring(labels=True, label_once=True, min_run=4)
+
+
+@pytest.mark.parametrize("minimum", [0, -1, 1.5])
+def test_min_run_requires_a_positive_integer(minimum):
+    with pytest.raises(ValueError, match="min_run"):
+        _split_ring(labels=True, min_run=minimum)
+
+
+def test_label_once_on_a_closed_ring_handles_the_wrapped_run():
+    from phylustrator.trees.layout import unrooted
+
+    tree = loads(_NWK)
+    angles = _tip_angles(unrooted(tree, daylight=True), tree.leaves)
+    order = sorted(angles, key=angles.get)
+    # The three-tip run across the seam is larger than the isolated middle tip.
+    one = {order[-2], order[-1], order[0], order[3]}
+    values = {name: ("Alpha" if name in one else "Beta") for name in order}
+    svg = (plot(tree, layout="unrooted", daylight=True)
+           + ring(values, palette=_SPLIT_PALETTE, labels=True, label_once=True)).as_svg()
+    assert svg.count(">Alpha</text>") == svg.count(">Beta</text>") == 1

@@ -73,6 +73,18 @@ ph.page([[ph.trees.plot(t1) + ph.trees.tip_labels(),
 and `ph.below` still pair one tree with one companion panel, lined up on the tips or on the time
 axis; a composite from either can itself go on a page.
 
+For a circular tree with groups split into several runs, name each group once at the centre of its
+largest run:
+
+```python
+fig = (ph.trees.plot(tree, layout="radial")
+       + ph.trees.ring(groups, labels=True, label_once=True, min_run=2))
+```
+
+`min_run` hides labels on runs with fewer than that many tips, while keeping all coloured sectors.
+Both options also work with `labels={group: text}` and on unrooted rings. The defaults still name
+every run, including single tips.
+
 ## Genomes
 
 The same grammar, for genome maps. Plot a genome as a line or a ring, colour genes by family or
