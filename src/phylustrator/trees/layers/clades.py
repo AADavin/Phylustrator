@@ -30,7 +30,12 @@ def clade_node(tree, clade: str):
     return node
 
 
-def clade_extent(tree, layout, clade: str, pad: float = 0.4):
+def _validate_start(start: float, furthest: float) -> None:
+    if not math.isfinite(start) or start < 0 or start > furthest:
+        raise ValueError(f"start must be a finite depth between 0 and the furthest clade tip ({furthest:g})")
+
+
+def clade_extent(tree, layout, clade: str, pad: float = 0.4, *, start: float | None = None):
     """The clade's extent in *layout* coordinates: ``(x0, y0, x1, y1)`` from the clade's node to its
     furthest tip, ``pad`` tip rows to either side.
 
@@ -39,18 +44,25 @@ def clade_extent(tree, layout, clade: str, pad: float = 0.4):
     are spaced along rather than always being y.
 
     :func:`highlight_clade` draws this, and :meth:`~phylustrator.trees.figure.Figure.clade_box` maps
-    it to pixels, so the box a zoom line points at is the box on the page."""
+    it to pixels, so the box a zoom line points at is the box on the page. ``start`` overrides the
+    crown depth on the layout's distance scale; the tip-order extent is unchanged."""
     if layout.kind not in ("rectangular", "diagonal"):
         raise ValueError(f"a clade box needs a layout with a depth axis and a tip-order axis — "
                          f"rectangular or diagonal; got {layout.kind!r}. highlight_clade itself "
                          f"draws on every layout")
     node = clade_node(tree, clade)
     leaves = [n for n in _subtree(node) if n.is_leaf]
+    furthest = max(layout.depth(leaf) for leaf in leaves)
+    if start is not None:
+        _validate_start(start, furthest)
+    sign = -1.0 if layout.orientation in ("left", "up") else 1.0
     if layout.grows_along_x:                     # depth across the page, tips down it
-        deep = [layout.x(node)] + [layout.x(leaf) for leaf in leaves]
+        deep = ([layout.x(node)] + [layout.x(leaf) for leaf in leaves] if start is None
+                else [sign * start, sign * furthest])
         across = [layout.y(leaf) for leaf in leaves]
         return (min(deep), min(across) - pad, max(deep), max(across) + pad)
-    deep = [layout.y(node)] + [layout.y(leaf) for leaf in leaves]
+    deep = ([layout.y(node)] + [layout.y(leaf) for leaf in leaves] if start is None
+            else [sign * start, sign * furthest])
     across = [layout.x(leaf) for leaf in leaves]
     return (min(across) - pad, min(deep), max(across) + pad, max(deep))
 
@@ -75,7 +87,8 @@ def _hull(points):
 
 
 def highlight_clade(clade: str, *, color: str = "#FDBF6F", opacity: float = 0.35, pad: float = 0.4,
-                    stroke: str | None = None, stroke_width: float = 0.8, pad_px: float = 4.0):
+                    stroke: str | None = None, stroke_width: float = 0.8, pad_px: float = 4.0,
+                    start: float | None = None):
     """Mark the clade rooted at the node named ``clade``: a box (rectangular or diagonal), a wedge
     (radial) or a hull around its branches (unrooted). Returns a layer.
 
@@ -85,7 +98,13 @@ def highlight_clade(clade: str, *, color: str = "#FDBF6F", opacity: float = 0.35
 
     ``pad`` is in tip rows (rectangular) or tip angles (radial), the spacing each layout has.
     ``pad_px`` is the room left in the direction that has no such spacing: outwards from the wedge,
-    and all the way around the hull."""
+    and all the way around the hull.
+
+    ``start`` sets an exact starting depth instead of the clade's crown. It uses the same scale as
+    ``time_marker``: layout depth on flat trees, stem-inclusive time on radial trees (whose centre
+    is the crown). The radial inner edge is not padded when ``start`` is given. The value must be
+    finite, nonnegative and no deeper than the furthest clade tip. Unrooted trees have no depth
+    axis and reject ``start``."""
 
     def layer(canvas, tree, layout, style):
         node = clade_node(tree, clade)
@@ -94,7 +113,7 @@ def highlight_clade(clade: str, *, color: str = "#FDBF6F", opacity: float = 0.35
             return
         edge = {"stroke": stroke, "stroke_width": stroke_width} if stroke else {}
         if layout.kind in ("rectangular", "diagonal"):
-            x0, y0, x1, y1 = clade_extent(tree, layout, clade, pad)
+            x0, y0, x1, y1 = clade_extent(tree, layout, clade, pad, start=start)
             canvas.region(x0, y0, x1, y1, fill=color, opacity=opacity, **edge)
             return
         if layout.kind == "radial":
@@ -105,13 +124,22 @@ def highlight_clade(clade: str, *, color: str = "#FDBF6F", opacity: float = 0.35
 
             angles = [layout.angle[leaf] for leaf in leaves]
             step = _tip_step(tree, layout)
-            canvas.raw_annulus_sector(cx, cy, max(r_px(node) - pad_px, 0.0),
+            inner = max(r_px(node) - pad_px, 0.0)
+            if start is not None:
+                stem = float(tree.root.length or 0.0)
+                _validate_start(start, max(layout.depth(leaf) for leaf in leaves) + stem)
+                if start < stem:
+                    raise ValueError("start falls inside the root stem, which the radial layout does not draw")
+                inner = abs(canvas.px(start - stem) - cx)
+            canvas.raw_annulus_sector(cx, cy, inner,
                                       max(r_px(leaf) for leaf in leaves) + pad_px,
                                       min(angles) - pad * step, max(angles) + pad * step,
                                       fill=color, opacity=opacity,
                                       stroke=stroke or "none", stroke_width=stroke_width if stroke else 0.0)
             return
         # unrooted: no axis to box against, so wrap the clade's own branches
+        if start is not None:
+            raise ValueError("start needs a depth axis; the unrooted layout has none")
         pts = [(canvas.px(layout.x(n)), canvas.py(layout.y(n))) for n in _subtree(node)]
         hull = _hull(pts)
         if len(hull) < 3:
